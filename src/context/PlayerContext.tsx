@@ -69,53 +69,108 @@ interface PlayerContextType {
 
 const PlayerContext = createContext<PlayerContextType | null>(null);
 
+// LocalStorage Keys for complete offline / reload state persistence
 const STORAGE_PLAYLISTS_KEY = 'johnmusic_playlists';
 const STORAGE_FAVORITES_KEY = 'johnmusic_favorites';
 const STORAGE_VOL_KEY = 'johnmusic_volume';
+const STORAGE_HISTORY_KEY = 'johnmusic_history';
+const STORAGE_EQ_KEY = 'johnmusic_equalizer';
+const STORAGE_VISUALIZER_KEY = 'johnmusic_visualizer_mode';
+const STORAGE_LAST_TRACK_KEY = 'johnmusic_last_track';
+const STORAGE_REPEAT_KEY = 'johnmusic_repeat_mode';
+const STORAGE_SHUFFLE_KEY = 'johnmusic_shuffle_mode';
 
 export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  // 1. Playlists Persistence
   const [playlists, setPlaylists] = useState<Playlist[]>(() => {
     const saved = localStorage.getItem(STORAGE_PLAYLISTS_KEY);
     if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch (e) {
-        console.error(e);
-      }
+      try { return JSON.parse(saved); } catch (e) { console.error(e); }
     }
     return DEFAULT_PLAYLISTS;
   });
 
+  // 2. Favorites Persistence
   const [favorites, setFavorites] = useState<Track[]>(() => {
     const saved = localStorage.getItem(STORAGE_FAVORITES_KEY);
     if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch (e) {
-        console.error(e);
-      }
+      try { return JSON.parse(saved); } catch (e) { console.error(e); }
     }
     return DEFAULT_TRACKS.filter(t => t.isLiked);
   });
 
-  const [localTracks, setLocalTracks] = useState<Track[]>([]);
-  const [history, setHistory] = useState<Track[]>([]);
-  
-  const [queue, setQueue] = useState<Track[]>(DEFAULT_TRACKS);
-  const [queueIndex, setQueueIndex] = useState<number>(0);
-  const [currentTrack, setCurrentTrack] = useState<Track | null>(DEFAULT_TRACKS[0] || null);
+  // 3. Playback History Persistence
+  const [history, setHistory] = useState<Track[]>(() => {
+    const saved = localStorage.getItem(STORAGE_HISTORY_KEY);
+    if (saved) {
+      try { return JSON.parse(saved); } catch (e) { console.error(e); }
+    }
+    return [];
+  });
 
-  const [isPlaying, setIsPlaying] = useState<boolean>(false);
-  const [currentTime, setCurrentTime] = useState<number>(0);
-  const [duration, setDuration] = useState<number>(184);
+  // 4. Equalizer Persistence
+  const [equalizerGains, setEqualizerGainsState] = useState<number[]>(() => {
+    const saved = localStorage.getItem(STORAGE_EQ_KEY);
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed.gains)) return parsed.gains;
+      } catch (e) { console.error(e); }
+    }
+    return [0, 0, 0, 0, 0];
+  });
 
+  const [activePreset, setActivePreset] = useState<string>(() => {
+    const saved = localStorage.getItem(STORAGE_EQ_KEY);
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (parsed.preset) return parsed.preset;
+      } catch (e) { console.error(e); }
+    }
+    return 'Padrão (Flat)';
+  });
+
+  // 5. Visualizer Mode Persistence
+  const [visualizerMode, setVisualizerMode] = useState<VisualizerMode>(() => {
+    const saved = localStorage.getItem(STORAGE_VISUALIZER_KEY) as VisualizerMode;
+    return saved || 'neon-pulse';
+  });
+
+  // 6. Volume Persistence
   const [volume, setVolumeState] = useState<number>(() => {
     const saved = localStorage.getItem(STORAGE_VOL_KEY);
     return saved ? Number(saved) : 0.8;
   });
+
+  // 7. Repeat & Shuffle Persistence
+  const [repeatMode, setRepeatMode] = useState<RepeatMode>(() => {
+    const saved = localStorage.getItem(STORAGE_REPEAT_KEY) as RepeatMode;
+    return saved || 'off';
+  });
+
+  const [isShuffle, setIsShuffle] = useState<boolean>(() => {
+    const saved = localStorage.getItem(STORAGE_SHUFFLE_KEY);
+    return saved === 'true';
+  });
+
+  // 8. Last Track Persistence
+  const [currentTrack, setCurrentTrack] = useState<Track | null>(() => {
+    const saved = localStorage.getItem(STORAGE_LAST_TRACK_KEY);
+    if (saved) {
+      try { return JSON.parse(saved); } catch (e) { console.error(e); }
+    }
+    return DEFAULT_TRACKS[0] || null;
+  });
+
+  const [localTracks, setLocalTracks] = useState<Track[]>([]);
+  const [queue, setQueue] = useState<Track[]>(DEFAULT_TRACKS);
+  const [queueIndex, setQueueIndex] = useState<number>(0);
+
+  const [isPlaying, setIsPlaying] = useState<boolean>(false);
+  const [currentTime, setCurrentTime] = useState<number>(0);
+  const [duration, setDuration] = useState<number>(184);
   const [isMuted, setIsMuted] = useState<boolean>(false);
-  const [repeatMode, setRepeatMode] = useState<RepeatMode>('off');
-  const [isShuffle, setIsShuffle] = useState<boolean>(false);
 
   const [currentView, setCurrentViewState] = useState<ViewType>('home');
   const [selectedPlaylistId, setSelectedPlaylistId] = useState<string | null>(null);
@@ -129,11 +184,6 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [isQueueOpen, setIsQueueOpen] = useState<boolean>(false);
   const [isLyricsOpen, setIsLyricsOpen] = useState<boolean>(false);
   const [isSpotifyEmbedOpen, setIsSpotifyEmbedOpen] = useState<boolean>(false);
-  const [visualizerMode, setVisualizerMode] = useState<VisualizerMode>('neon-pulse');
-
-  // Equalizer
-  const [equalizerGains, setEqualizerGainsState] = useState<number[]>([0, 0, 0, 0, 0]);
-  const [activePreset, setActivePreset] = useState<string>('Padrão (Flat)');
 
   // Sleep Timer
   const [sleepTimerMinutes, setSleepTimerMinutes] = useState<number | null>(null);
@@ -141,6 +191,7 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   const audioRef = useRef<HTMLAudioElement>(audioEngine.getAudioElement());
 
+  // Save all states to localStorage automatically
   useEffect(() => {
     localStorage.setItem(STORAGE_PLAYLISTS_KEY, JSON.stringify(playlists));
   }, [playlists]);
@@ -150,9 +201,36 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   }, [favorites]);
 
   useEffect(() => {
+    localStorage.setItem(STORAGE_HISTORY_KEY, JSON.stringify(history));
+  }, [history]);
+
+  useEffect(() => {
     localStorage.setItem(STORAGE_VOL_KEY, String(volume));
   }, [volume]);
 
+  useEffect(() => {
+    localStorage.setItem(STORAGE_EQ_KEY, JSON.stringify({ gains: equalizerGains, preset: activePreset }));
+  }, [equalizerGains, activePreset]);
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_VISUALIZER_KEY, visualizerMode);
+  }, [visualizerMode]);
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_REPEAT_KEY, repeatMode);
+  }, [repeatMode]);
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_SHUFFLE_KEY, String(isShuffle));
+  }, [isShuffle]);
+
+  useEffect(() => {
+    if (currentTrack) {
+      localStorage.setItem(STORAGE_LAST_TRACK_KEY, JSON.stringify(currentTrack));
+    }
+  }, [currentTrack]);
+
+  // Handle sleep timer countdown
   useEffect(() => {
     if (sleepTimerMinutes === null) {
       setSleepTimerRemaining(null);
