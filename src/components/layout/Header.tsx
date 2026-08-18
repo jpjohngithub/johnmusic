@@ -5,9 +5,7 @@ import {
   ChevronLeft, 
   ChevronRight, 
   Keyboard, 
-  X, 
-  Sliders,
-  Activity
+  X
 } from 'lucide-react';
 
 export const Header: React.FC = () => {
@@ -16,9 +14,7 @@ export const Header: React.FC = () => {
     setCurrentView, 
     searchQuery, 
     setSearchQuery,
-    toggleEqualizer,
-    toggleVisualizer,
-    isPlaying
+    isPlaying 
   } = usePlayer();
 
   const [showShortcutsModal, setShowShortcutsModal] = useState(false);
@@ -67,7 +63,7 @@ export const Header: React.FC = () => {
             <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
             <input
               type="text"
-              placeholder="O que você quer ouvir hoje? (Ex: Cyberpunk, Lofi, Rock...)"
+              placeholder="O que você quer ouvir hoje? (Ex: Matuê, Taylor Swift, Trap...)"
               value={searchQuery}
               onChange={(e) => {
                 setSearchQuery(e.target.value);
@@ -91,25 +87,6 @@ export const Header: React.FC = () => {
 
         {/* Right Action Icons & User Profile */}
         <div className="flex items-center gap-3">
-          {/* Quick Action buttons */}
-          <button
-            onClick={toggleEqualizer}
-            className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800 text-xs font-semibold text-slate-300 hover:text-emerald-400 hover:border-emerald-500/30 transition-all"
-            title="Abrir Equalizador"
-          >
-            <Sliders className="w-3.5 h-3.5 text-emerald-400" />
-            <span>EQ Pro</span>
-          </button>
-
-          <button
-            onClick={toggleVisualizer}
-            className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800 text-xs font-semibold text-slate-300 hover:text-cyan-400 hover:border-cyan-500/30 transition-all"
-            title="Abrir Visualizador"
-          >
-            <Activity className="w-3.5 h-3.5 text-cyan-400" />
-            <span>Visualizador</span>
-          </button>
-
           {/* Keyboard Shortcuts Button */}
           <button
             onClick={() => setShowShortcutsModal(true)}
@@ -138,7 +115,7 @@ export const Header: React.FC = () => {
                   PRO
                 </span>
               </div>
-              <div className="text-[10px] text-slate-400">johnmusic Studio</div>
+              <div className="text-[10px] text-slate-400">johnmusic Spotify</div>
             </div>
           </div>
         </div>

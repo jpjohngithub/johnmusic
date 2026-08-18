@@ -12,8 +12,6 @@ import {
   VolumeX, 
   Volume1, 
   Heart, 
-  Sliders, 
-  Activity, 
   ListMusic, 
   Mic2, 
   Clock, 
@@ -45,8 +43,6 @@ export const PlayerBar: React.FC = () => {
     toggleShuffle,
     toggleRepeat,
     toggleFavorite,
-    toggleEqualizer,
-    toggleVisualizer,
     toggleQueue,
     toggleLyrics,
     toggleSpotifyEmbed,
@@ -57,6 +53,8 @@ export const PlayerBar: React.FC = () => {
   const [isScrubbing, setIsScrubbing] = useState(false);
   const [scrubValue, setScrubValue] = useState(0);
   const [showSleepMenu, setShowSleepMenu] = useState(false);
+
+  const displayDuration = (currentTrack?.duration && currentTrack.duration > 30) ? currentTrack.duration : (duration || 180);
 
   useEffect(() => {
     if (!isScrubbing) {
@@ -83,10 +81,10 @@ export const PlayerBar: React.FC = () => {
     setIsScrubbing(false);
   };
 
-  const progressPercent = duration > 0 ? ((isScrubbing ? scrubValue : currentTime) / duration) * 100 : 0;
+  const progressPercent = displayDuration > 0 ? ((isScrubbing ? scrubValue : currentTime) / displayDuration) * 100 : 0;
 
   return (
-    <footer className="fixed bottom-0 left-0 right-0 h-24 bg-slate-950/90 backdrop-blur-2xl border-t border-slate-800/80 px-4 md:px-6 z-40 flex items-center justify-between select-none">
+    <footer className="fixed bottom-0 left-0 right-0 h-24 bg-slate-950/95 backdrop-blur-2xl border-t border-slate-800/80 px-4 md:px-6 z-40 flex items-center justify-between select-none shadow-2xl">
       {/* Left: Track Details */}
       <div className="flex items-center gap-3.5 w-1/4 min-w-[200px]">
         {currentTrack ? (
@@ -100,8 +98,8 @@ export const PlayerBar: React.FC = () => {
                 alt={currentTrack.title} 
                 className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
               />
-              <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-                <Mic2 className="w-5 h-5 text-white" />
+              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                <Mic2 className="w-5 h-5 text-pink-400" />
               </div>
             </div>
 
@@ -215,7 +213,7 @@ export const PlayerBar: React.FC = () => {
             <input
               type="range"
               min={0}
-              max={duration || 100}
+              max={displayDuration || 100}
               step={0.1}
               value={isScrubbing ? scrubValue : currentTime}
               onMouseDown={() => setIsScrubbing(true)}
@@ -228,7 +226,7 @@ export const PlayerBar: React.FC = () => {
           </div>
 
           <span className="text-[11px] font-mono text-slate-400 w-9">
-            {formatTime(duration)}
+            {formatTime(displayDuration)}
           </span>
         </div>
       </div>
@@ -243,9 +241,18 @@ export const PlayerBar: React.FC = () => {
               ? 'bg-red-500/20 text-red-400 ring-1 ring-red-500/40 shadow-lg shadow-red-500/20' 
               : 'text-slate-400 hover:text-red-400 hover:bg-slate-800'
           }`}
-          title={isYouTubeMode ? 'Modo 100% Completo Ativado' : 'Ativar Modo 100% Música Completa (Sem cortes)'}
+          title={isYouTubeMode ? 'Modo 100% Completo Ativado' : 'Tocar Música 100% Completa (Sem Cortes)'}
         >
           <Tv className="w-4 h-4" />
+        </button>
+
+        {/* Lyrics Toggle (Letras Karaoke) */}
+        <button
+          onClick={toggleLyrics}
+          className="p-2 rounded-xl text-slate-400 hover:text-pink-400 hover:bg-pink-500/10 transition-colors"
+          title="Ver Letra da Música (Karaokê)"
+        >
+          <Mic2 className="w-4 h-4" />
         </button>
 
         {/* Spotify Web Player Embed Button */}
@@ -310,33 +317,6 @@ export const PlayerBar: React.FC = () => {
             </>
           )}
         </div>
-
-        {/* Visualizer Toggle */}
-        <button
-          onClick={toggleVisualizer}
-          className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
-          title="Visualizador de Áudio"
-        >
-          <Activity className="w-4 h-4" />
-        </button>
-
-        {/* Lyrics Toggle */}
-        <button
-          onClick={toggleLyrics}
-          className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
-          title="Letras (Karaokê)"
-        >
-          <Mic2 className="w-4 h-4" />
-        </button>
-
-        {/* Equalizer Toggle */}
-        <button
-          onClick={toggleEqualizer}
-          className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
-          title="Equalizador de 5 Bandas"
-        >
-          <Sliders className="w-4 h-4" />
-        </button>
 
         {/* Queue Toggle */}
         <button

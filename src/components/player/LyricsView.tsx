@@ -1,6 +1,7 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { usePlayer } from '../../context/PlayerContext';
-import { X, Mic2, Play, Pause, SkipBack, SkipForward } from 'lucide-react';
+import { LyricsService } from '../../services/lyricsService';
+import { X, Mic2, Play, Pause, SkipBack, SkipForward, Loader2 } from 'lucide-react';
 import type { LyricLine } from '../../types/music';
 
 export const LyricsView: React.FC = () => {
@@ -16,16 +17,43 @@ export const LyricsView: React.FC = () => {
     prevTrack 
   } = usePlayer();
 
+  const [lyricsData, setLyricsData] = useState<LyricLine[] | string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+
   const activeLineRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  const lyrics = currentTrack?.lyrics;
-  const isSynced = Array.isArray(lyrics) && lyrics.length > 0 && typeof lyrics[0] === 'object';
+  // Fetch live lyrics from LyricsService when currentTrack changes
+  useEffect(() => {
+    if (!currentTrack) {
+      setLyricsData(null);
+      return;
+    }
+
+    if (currentTrack.lyrics) {
+      setLyricsData(currentTrack.lyrics);
+      return;
+    }
+
+    setIsLoading(true);
+    LyricsService.fetchLyrics(currentTrack.title, currentTrack.artist)
+      .then(res => {
+        setLyricsData(res);
+      })
+      .catch(() => {
+        setLyricsData(null);
+      })
+      .finally(() => {
+        setIsLoading(false);
+      });
+  }, [currentTrack]);
+
+  const isSynced = Array.isArray(lyricsData) && lyricsData.length > 0;
 
   // Find active line index
   let activeIndex = -1;
   if (isSynced) {
-    const lines = lyrics as LyricLine[];
+    const lines = lyricsData as LyricLine[];
     for (let i = 0; i < lines.length; i++) {
       if (currentTime >= lines[i].time) {
         activeIndex = i;
@@ -49,7 +77,7 @@ export const LyricsView: React.FC = () => {
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-slate-950/95 backdrop-blur-2xl text-white animate-fade-in overflow-hidden">
-      {/* Background Glow */}
+      {/* Background Cover Glow */}
       {currentTrack?.coverUrl && (
         <div 
           className="absolute inset-0 bg-cover bg-center opacity-25 blur-3xl scale-125 pointer-events-none transition-all duration-1000"
@@ -59,21 +87,26 @@ export const LyricsView: React.FC = () => {
 
       {/* Top Bar */}
       <div className="relative z-10 flex items-center justify-between p-6 border-b border-white/10">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-2xl bg-pink-500/20 border border-pink-500/30 flex items-center justify-center text-pink-400">
-            <Mic2 className="w-5 h-5" />
-          </div>
+        <div className="flex items-center gap-3.5">
+          <img 
+            src={currentTrack?.coverUrl} 
+            alt={currentTrack?.title} 
+            className="w-12 h-12 rounded-xl object-cover shadow border border-white/10"
+          />
           <div>
-            <h2 className="text-base font-bold text-white">Letras em Tempo Real</h2>
-            <p className="text-xs text-slate-400">
-              {currentTrack?.title} — {currentTrack?.artist}
+            <h2 className="text-base font-bold text-white flex items-center gap-2">
+              <Mic2 className="w-4 h-4 text-pink-400" />
+              Letras Sincronizadas
+            </h2>
+            <p className="text-xs text-slate-300">
+              {currentTrack?.title} — <span className="text-slate-400">{currentTrack?.artist}</span>
             </p>
           </div>
         </div>
 
         <button
           onClick={toggleLyrics}
-          className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-white/10 transition-colors"
+          className="p-2.5 rounded-xl text-slate-400 hover:text-white hover:bg-white/10 transition-colors"
         >
           <X className="w-6 h-6" />
         </button>
@@ -84,17 +117,22 @@ export const LyricsView: React.FC = () => {
         ref={containerRef}
         className="relative z-10 flex-1 overflow-y-auto px-6 py-12 flex flex-col items-center max-w-3xl mx-auto w-full scroll-smooth"
       >
-        {!lyrics || (Array.isArray(lyrics) && lyrics.length === 0) ? (
+        {isLoading ? (
+          <div className="flex-1 flex flex-col items-center justify-center text-center p-8">
+            <Loader2 className="w-10 h-10 text-emerald-400 animate-spin mb-3" />
+            <p className="text-sm font-semibold text-slate-300">Buscando letra sincronizada...</p>
+          </div>
+        ) : !lyricsData || (Array.isArray(lyricsData) && lyricsData.length === 0) ? (
           <div className="flex-1 flex flex-col items-center justify-center text-center p-8">
             <Mic2 className="w-16 h-16 text-slate-600 mb-4 animate-bounce" />
-            <h3 className="text-xl font-bold text-slate-300 mb-2">Sem letras disponíveis para esta faixa</h3>
+            <h3 className="text-xl font-bold text-slate-300 mb-2">Letra não encontrada</h3>
             <p className="text-sm text-slate-500 max-w-sm">
-              Você pode adicionar letras personalizadas ou curtir o ritmo instrumental!
+              Não encontramos letras oficiais cadastradas para "{currentTrack?.title}".
             </p>
           </div>
         ) : isSynced ? (
-          <div className="w-full space-y-6 text-center">
-            {(lyrics as LyricLine[]).map((line, idx) => {
+          <div className="w-full space-y-6 text-center py-10">
+            {(lyricsData as LyricLine[]).map((line, idx) => {
               const isActive = idx === activeIndex;
               const isPassed = idx < activeIndex;
 
@@ -103,9 +141,9 @@ export const LyricsView: React.FC = () => {
                   key={idx}
                   ref={isActive ? activeLineRef : null}
                   onClick={() => seek(line.time)}
-                  className={`cursor-pointer transition-all duration-300 px-4 py-2 rounded-2xl ${
+                  className={`cursor-pointer transition-all duration-300 px-4 py-2 rounded-2xl select-none ${
                     isActive 
-                      ? 'text-3xl sm:text-4xl font-extrabold text-white scale-105 drop-shadow-[0_0_25px_rgba(16,185,129,0.7)]' 
+                      ? 'text-3xl sm:text-4xl font-extrabold text-white scale-105 drop-shadow-[0_0_25px_rgba(16,185,129,0.8)]' 
                       : isPassed
                       ? 'text-lg sm:text-xl font-medium text-slate-400/80 hover:text-slate-200'
                       : 'text-lg sm:text-xl font-medium text-slate-600 hover:text-slate-400'
@@ -117,8 +155,8 @@ export const LyricsView: React.FC = () => {
             })}
           </div>
         ) : (
-          <div className="whitespace-pre-line text-lg sm:text-xl font-medium text-slate-300 text-center leading-relaxed max-w-xl">
-            {typeof lyrics === 'string' ? lyrics : ''}
+          <div className="whitespace-pre-line text-lg sm:text-xl font-medium text-slate-300 text-center leading-relaxed max-w-xl py-8">
+            {typeof lyricsData === 'string' ? lyricsData : ''}
           </div>
         )}
       </div>

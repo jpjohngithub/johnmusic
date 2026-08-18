@@ -4,8 +4,6 @@ import { Sidebar } from './components/layout/Sidebar';
 import { Header } from './components/layout/Header';
 import { MainContent } from './components/layout/MainContent';
 import { PlayerBar } from './components/player/PlayerBar';
-import { EqualizerModal } from './components/player/EqualizerModal';
-import { AudioVisualizer } from './components/player/AudioVisualizer';
 import { QueueDrawer } from './components/player/QueueDrawer';
 import { LyricsView } from './components/player/LyricsView';
 import { SpotifyEmbedModal } from './components/player/SpotifyEmbedModal';
@@ -103,8 +101,6 @@ export const AppContent: React.FC = () => {
       <PlayerBar />
 
       {/* Modals and Overlays */}
-      <EqualizerModal />
-      <AudioVisualizer />
       <QueueDrawer />
       <LyricsView />
       <SpotifyEmbedModal 
