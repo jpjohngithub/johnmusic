@@ -1,6 +1,6 @@
-# 🎵 johnmusic — Tocador de Música Profissional
+# 🎵 johnmusic — Tocador de Música Profissional & Spotify Hub
 
-**johnmusic** é um player de música moderno, responsivo e poderoso inspirado no Spotify, desenvolvido com **React 18**, **TypeScript**, **Tailwind CSS** e a **Web Audio API**.
+**johnmusic** é um tocador de música web completo, veloz e moderno integrado ao ecossistema do **Spotify**, desenvolvido com **React 19**, **TypeScript**, **Tailwind CSS** e **Web Audio API**.
 
 ![johnmusic Preview](https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?auto=format&fit=crop&w=1200&q=80)
 
@@ -8,34 +8,38 @@
 
 ## ✨ Principais Funcionalidades
 
-### 1. 🎛️ Motor de Áudio Web Audio API & Equalizador
-- **Equalizador de 5 Bandas**: Ajuste de frequências (60Hz, 230Hz, 910Hz, 3.6kHz, 14kHz) com curva de resposta desenhada em tempo real no Canvas.
-- **Presets Rápidos**: Bass Boost, Eletrônica/EDM, Rock, Pop Hits, Vocal Claro, Jazz, Chillout/Lofi e Flat.
-- **Visualizador de Frequências em Tempo Real**:
+### 1. 🌐 Integração Completa com o Spotify
+- **🔥 Novos Lançamentos (Live Feed)**: Novos álbuns e músicas lançados no Spotify aparecem automaticamente na tela inicial.
+- **🌟 Playlists Oficiais do Spotify**: Explore *Today's Top Hits*, *Top Brasil*, *New Music Friday*, *Mega Hits*, etc.
+- **⚡ Importador Universal de Links do Spotify**: Cole qualquer URL de música, playlist ou álbum do Spotify (ex: `https://open.spotify.com/playlist/...`) para carregar e tocar na hora!
+- **📻 Player Oficial Spotify Embed**: Modal incorporado oficial do Spotify para reprodução de faixas e álbuns completos.
+- **🔑 Spotify Connect (OAuth 2.0 PKCE)**: Conecte sua conta do Spotify Developer com segurança para acessar todo o catálogo global.
+
+### 2. 🎛️ Motor de Áudio Web Audio API & Equalizador
+- **Equalizador de 5 Bandas**: Ajuste de frequências (60Hz, 230Hz, 910Hz, 3.6kHz, 14kHz) com curva gráfica de resposta em tempo real.
+- **Presets Rápidos**: *Bass Boost*, *Eletrônica/EDM*, *Rock*, *Pop Hits*, *Vocal Claro*, *Jazz*, *Chillout/Lofi* e *Flat*.
+- **Visualizador Espectral em Tempo Real (Canvas)**:
   - *Barras Neon* com reflexo espelhado.
   - *Osciloscópio* em tempo real.
   - *Radial Cósmico* com pulso de partículas.
   - *Matrix Digital* no estilo cyberpunk.
 
-### 2. 📂 Importação de Arquivos Locais (Músicas do seu PC)
+### 3. 💾 Persistência Completa Local (`localStorage`)
+- **Músicas Curtidas (Favoritos)**
+- **Playlists Customizadas Criadas**
+- **Histórico de Reprodução**
+- **Presets e Ganhos do Equalizador**
+- **Nível de Volume, Mute, Shuffle e Repeat**
+- **Última Faixa Tocada**
+- **Modo Visual do Player**
+
+### 4. 📂 Arquivos Locais do Computador (PC)
 - Arraste e solte arquivos ou pastas inteiras do seu computador (**MP3, WAV, FLAC, OGG, AAC, M4A**).
-- Leitura automática de tags **ID3** (título, artista, álbum e capa embutida).
-- Reprodução local com 100% de privacidade (nenhum arquivo é enviado para servidores externos).
+- Leitura automática de metadados e capas embutidas (**ID3 tags**).
+- Reprodução local 100% privada e sem limite de tamanho.
 
-### 3. 🌐 Integração com Spotify & Busca Global na Nuvem
-- **Spotify Developer Connect**: Autenticação com OAuth 2.0 PKCE usando seu Client ID do Spotify Developer Dashboard.
-- **Busca Online Global**: Encontre e escute prévias musicais de milhões de artistas e faixas do mundo todo direto no app.
-
-### 4. 🎤 Modo Letras Sincronizadas (Karaokê)
+### 5. 🎤 Modo Letras Sincronizadas (Karaokê)
 - Visualização imersiva em tela cheia com letras sincronizadas no tempo exato da música.
-- Rolagem automática focada no verso atual.
-
-### 5. 📑 Gerenciamento de Playlists & Biblioteca
-- Crie e personalize playlists salvas no `localStorage`.
-- Sistema de **Músicas Curtidas (Favoritos)** com efeito comemorativo.
-- Histórico dinâmico de reprodução da sessão.
-- Fila de reprodução (Queue) interativa e editável.
-- **Temporizador de Sono (Sleep Timer)**: Programe para pausar a música em 15, 30, 45 ou 60 minutos.
 
 ### 6. ⌨️ Atalhos de Teclado
 - `Espaço`: Tocar / Pausar
@@ -55,11 +59,14 @@
 npm install
 ```
 
-### 2. Iniciar o Servidor de Desenvolvimento
+### 2. Iniciar o Servidor
 ```bash
 npm run dev
 ```
-Acesse no navegador: `http://localhost:5173`
+
+O servidor iniciará exposto para toda a rede local:
+- **Local**: `http://localhost:5173/`
+- **Network (Rede Wi-Fi / Celular / Outros Dispositivos)**: `http://<seu-ip-local>:5173/`
 
 ### 3. Gerar Build de Produção
 ```bash
