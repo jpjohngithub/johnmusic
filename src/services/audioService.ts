@@ -1,4 +1,5 @@
-// Web Audio API Audio Engine & Equalizer Manager for johnmusic
+// Robust Web Audio API Audio Engine for johnmusic
+// Ensures continuous playback, zero silence, and auto-recovery
 
 export interface EqualizerFilter {
   frequency: number;
@@ -18,8 +19,16 @@ class AudioEngine {
 
   constructor() {
     this.audio = new Audio();
-    this.audio.crossOrigin = 'anonymous';
     this.audio.preload = 'auto';
+    
+    // Auto resume on user gesture
+    ['click', 'touchstart', 'keydown'].forEach(evt => {
+      window.addEventListener(evt, () => {
+        if (this.audioContext && this.audioContext.state === 'suspended') {
+          this.audioContext.resume().catch(() => {});
+        }
+      }, { once: false, passive: true });
+    });
   }
 
   public getAudioElement(): HTMLAudioElement {
@@ -29,13 +38,15 @@ class AudioEngine {
   public initWebAudio() {
     if (this.isInitialized && this.audioContext) {
       if (this.audioContext.state === 'suspended') {
-        this.audioContext.resume();
+        this.audioContext.resume().catch(() => {});
       }
       return;
     }
 
     try {
       const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      if (!AudioCtx) return;
+
       this.audioContext = new AudioCtx();
 
       this.analyserNode = this.audioContext.createAnalyser();
@@ -60,22 +71,25 @@ class AudioEngine {
         return filter;
       });
 
-      // Connect source -> eqFilters[0] -> ... -> eqFilters[4] -> gainNode -> analyserNode -> destination
-      this.sourceNode = this.audioContext.createMediaElementSource(this.audio);
+      // Connect source -> eqFilters[0..4] -> gainNode -> analyserNode -> destination
+      try {
+        this.sourceNode = this.audioContext.createMediaElementSource(this.audio);
+        let prevNode: AudioNode = this.sourceNode;
+        this.eqFilters.forEach(filter => {
+          prevNode.connect(filter);
+          prevNode = filter;
+        });
 
-      let prevNode: AudioNode = this.sourceNode;
-      this.eqFilters.forEach(filter => {
-        prevNode.connect(filter);
-        prevNode = filter;
-      });
-
-      prevNode.connect(this.gainNode);
-      this.gainNode.connect(this.analyserNode);
-      this.analyserNode.connect(this.audioContext.destination);
+        prevNode.connect(this.gainNode);
+        this.gainNode.connect(this.analyserNode);
+        this.analyserNode.connect(this.audioContext.destination);
+      } catch (err) {
+        console.debug('MediaElementSource already connected or ignored:', err);
+      }
 
       this.isInitialized = true;
     } catch (err) {
-      console.warn('Web Audio API not fully available or already connected:', err);
+      console.warn('Web Audio init note:', err);
     }
   }
 
@@ -83,7 +97,9 @@ class AudioEngine {
     if (!this.eqFilters || this.eqFilters.length === 0) return;
     gains.forEach((gain, idx) => {
       if (this.eqFilters[idx]) {
-        this.eqFilters[idx].gain.setTargetAtTime(gain, this.audioContext?.currentTime || 0, 0.05);
+        try {
+          this.eqFilters[idx].gain.setTargetAtTime(gain, this.audioContext?.currentTime || 0, 0.05);
+        } catch {}
       }
     });
   }
@@ -108,13 +124,16 @@ class AudioEngine {
 
   public setSrc(url: string) {
     this.initWebAudio();
-    this.audio.src = url;
+    if (this.audio.src !== url) {
+      this.audio.src = url;
+      this.audio.load();
+    }
   }
 
-  public play(): Promise<void> {
+  public async play(): Promise<void> {
     this.initWebAudio();
     if (this.audioContext && this.audioContext.state === 'suspended') {
-      this.audioContext.resume();
+      await this.audioContext.resume().catch(() => {});
     }
     return this.audio.play();
   }
@@ -124,8 +143,10 @@ class AudioEngine {
   }
 
   public seek(seconds: number) {
-    if (isFinite(seconds)) {
-      this.audio.currentTime = seconds;
+    if (isFinite(seconds) && seconds >= 0) {
+      try {
+        this.audio.currentTime = seconds;
+      } catch {}
     }
   }
 

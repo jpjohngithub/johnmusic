@@ -43,6 +43,8 @@ interface PlayerContextType {
   nextTrack: () => void;
   prevTrack: () => void;
   seek: (seconds: number) => void;
+  setCurrentTime: (time: number) => void;
+  setDuration: (dur: number) => void;
   setVolume: (vol: number) => void;
   toggleMute: () => void;
   toggleShuffle: () => void;
@@ -260,7 +262,7 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     return () => clearInterval(interval);
   }, [sleepTimerMinutes]);
 
-  // INSTANT 0ms ZERO-LATENCY PLAYBACK
+  // 0ms Instant Playback + Auto Recovery
   const playTrack = useCallback((track: Track, newQueue?: Track[]) => {
     let updatedQueue = queue;
     let index = 0;
@@ -286,22 +288,27 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     setCurrentTrack(track);
     setIsPlaying(true);
 
-    // 1. Instantly trigger audio playback with 0ms delay!
-    if (!isYouTubeMode || track.isLocal) {
-      audioEngine.setSrc(track.audioUrl);
-      audioEngine.play().catch(e => console.warn('Instant play:', e));
+    const isExplicitYt = track.genre === 'YouTube' || track.genre === 'TikTok Viral' || track.audioUrl?.includes('youtube.com') || track.audioUrl?.includes('youtu.be');
 
-      // 2. Background stream enhancer: resolve full track stream seamlessly
-      AudioStreamService.resolveFullAudioUrl(track.title, track.artist, track.audioUrl)
-        .then(resolvedUrl => {
-          if (resolvedUrl && resolvedUrl !== track.audioUrl && audioEngine.getAudioElement().src !== resolvedUrl) {
-            const curTime = audioEngine.getAudioElement().currentTime;
-            audioEngine.setSrc(resolvedUrl);
-            audioEngine.seek(curTime);
-            audioEngine.play().catch(() => {});
-          }
-        })
-        .catch(() => {});
+    if (isExplicitYt) {
+      setIsYouTubeMode(true);
+      audioEngine.pause();
+    } else if (!isYouTubeMode || track.isLocal) {
+      // Play full audio stream on Web Audio engine
+      if (track.audioUrl && (track.audioUrl.startsWith('blob:') || track.audioUrl.startsWith('data:') || track.audioUrl.includes('.mp3') || track.audioUrl.includes('audius.co'))) {
+        audioEngine.setSrc(track.audioUrl);
+        audioEngine.play().catch(() => {});
+      } else {
+        // Resolve full track stream seamlessly
+        AudioStreamService.resolveFullAudioUrl(track.title, track.artist, track.audioUrl)
+          .then(resolvedUrl => {
+            if (resolvedUrl) {
+              audioEngine.setSrc(resolvedUrl);
+              audioEngine.play().catch(() => {});
+            }
+          })
+          .catch(() => {});
+      }
     }
 
     setHistory(prev => {
@@ -353,8 +360,8 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     };
 
     const onLoadedMetadata = () => {
-      if (!isYouTubeMode) {
-        setDuration(audio.duration || currentTrack?.duration || 0);
+      if (!isYouTubeMode && audio.duration) {
+        setDuration(audio.duration);
       }
     };
 
@@ -362,8 +369,11 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       handleTrackEnd();
     };
 
-    const onError = (e: any) => {
-      console.warn('Audio error:', e);
+    const onError = () => {
+      // If HTML5 audio stream fails, auto-fallback to YouTube audio bridge so music never cuts
+      if (currentTrack && !isYouTubeMode && !currentTrack.isLocal) {
+        setIsYouTubeMode(true);
+      }
     };
 
     audio.addEventListener('timeupdate', onTimeUpdate);
@@ -388,17 +398,35 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     if (isPlaying) {
       audioEngine.pause();
       setIsPlaying(false);
+      try {
+        if (window.__johnmusic_yt_player?.pauseVideo) {
+          window.__johnmusic_yt_player.pauseVideo();
+        }
+      } catch {}
     } else {
       setIsPlaying(true);
-      audioEngine.play().catch(err => {
-        console.warn('Playback resume error:', err);
-      });
+      if (isYouTubeMode) {
+        try {
+          if (window.__johnmusic_yt_player?.playVideo) {
+            window.__johnmusic_yt_player.playVideo();
+          }
+        } catch {}
+      } else {
+        audioEngine.play().catch(err => {
+          console.warn('Playback resume error:', err);
+        });
+      }
     }
-  }, [isPlaying, currentTrack, queue, playTrack]);
+  }, [isPlaying, currentTrack, queue, playTrack, isYouTubeMode]);
 
   const seek = useCallback((seconds: number) => {
     audioEngine.seek(seconds);
     setCurrentTime(seconds);
+    try {
+      if (window.__johnmusic_yt_player?.seekTo) {
+        window.__johnmusic_yt_player.seekTo(seconds, true);
+      }
+    } catch {}
   }, []);
 
   const prevTrack = useCallback(() => {
@@ -419,6 +447,11 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const clamped = Math.max(0, Math.min(1, vol));
     setVolumeState(clamped);
     audioEngine.setVolume(clamped);
+    try {
+      if (window.__johnmusic_yt_player?.setVolume) {
+        window.__johnmusic_yt_player.setVolume(clamped * 100);
+      }
+    } catch {}
     if (clamped > 0 && isMuted) {
       setIsMuted(false);
       audioEngine.setMuted(false);
@@ -429,6 +462,13 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     setIsMuted(prev => {
       const next = !prev;
       audioEngine.setMuted(next);
+      try {
+        if (next) {
+          window.__johnmusic_yt_player?.mute();
+        } else {
+          window.__johnmusic_yt_player?.unMute();
+        }
+      } catch {}
       return next;
     });
   }, []);
@@ -645,6 +685,8 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         nextTrack,
         prevTrack,
         seek,
+        setCurrentTime,
+        setDuration,
         setVolume,
         toggleMute,
         toggleShuffle,

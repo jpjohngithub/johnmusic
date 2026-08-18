@@ -6,6 +6,7 @@ declare global {
   interface Window {
     YT: any;
     onYouTubeIframeAPIReady: () => void;
+    __johnmusic_yt_player: any;
   }
 }
 
@@ -16,7 +17,9 @@ export const YouTubeAudioPlayer: React.FC = () => {
     volume, 
     isMuted, 
     nextTrack,
-    isYouTubeMode
+    isYouTubeMode,
+    setCurrentTime,
+    setDuration
   } = usePlayer();
 
   const [player, setPlayer] = useState<any>(null);
@@ -59,6 +62,7 @@ export const YouTubeAudioPlayer: React.FC = () => {
         },
         events: {
           onReady: (e: any) => {
+            window.__johnmusic_yt_player = e.target;
             e.target.setVolume(volume * 100);
             if (isMuted) e.target.mute();
           },
@@ -72,34 +76,62 @@ export const YouTubeAudioPlayer: React.FC = () => {
       });
 
       setPlayer(newPlayer);
+      window.__johnmusic_yt_player = newPlayer;
     } catch (err) {
       console.debug('YouTube Player init:', err);
     }
   }, [isApiReady]);
 
-  // Sync track when currentTrack changes and isYouTubeMode is enabled
+  // Sync timeline progress bar during playback
+  useEffect(() => {
+    if (!player || !isYouTubeMode) return;
+
+    const interval = setInterval(() => {
+      try {
+        if (player.getCurrentTime && player.getDuration) {
+          const cur = player.getCurrentTime();
+          const dur = player.getDuration();
+          if (cur !== undefined && !isNaN(cur)) setCurrentTime(cur);
+          if (dur !== undefined && !isNaN(dur) && dur > 0) setDuration(dur);
+        }
+      } catch {}
+    }, 500);
+
+    return () => clearInterval(interval);
+  }, [player, isYouTubeMode, setCurrentTime, setDuration]);
+
+  // Sync track when currentTrack changes
   useEffect(() => {
     if (!player || !player.loadPlaylist || !currentTrack) return;
     if (currentTrack.isLocal) return;
 
-    if (isYouTubeMode) {
-      const searchQuery = `${currentTrack.artist} ${currentTrack.title} official audio`;
+    const isExplicitYt = currentTrack.genre === 'YouTube' || currentTrack.genre === 'TikTok Viral';
+    if (isYouTubeMode || isExplicitYt) {
+      const searchQuery = currentTrack.genre === 'YouTube' && currentTrack.audioUrl.includes('watch?v=')
+        ? currentTrack.audioUrl.split('watch?v=')[1]?.substring(0, 11)
+        : `${currentTrack.artist} ${currentTrack.title} official audio`;
+
       try {
-        player.loadPlaylist({
-          listType: 'search',
-          list: searchQuery,
-          index: 0,
-          suggestedQuality: 'hd720',
-        });
+        if (currentTrack.genre === 'YouTube' && currentTrack.audioUrl.includes('watch?v=')) {
+          const vidId = currentTrack.audioUrl.split('watch?v=')[1]?.substring(0, 11);
+          player.loadVideoById(vidId);
+        } else {
+          player.loadPlaylist({
+            listType: 'search',
+            list: searchQuery,
+            index: 0,
+            suggestedQuality: 'hd720',
+          });
+        }
       } catch (err) {
-        console.debug('Failed to load search query on YT:', err);
+        console.debug('Failed to load track on YT player:', err);
       }
     }
   }, [currentTrack, isYouTubeMode, player]);
 
   // Sync play / pause
   useEffect(() => {
-    if (!player || !isYouTubeMode) return;
+    if (!player) return;
     try {
       if (isPlaying) {
         player.playVideo();
@@ -107,11 +139,11 @@ export const YouTubeAudioPlayer: React.FC = () => {
         player.pauseVideo();
       }
     } catch {}
-  }, [isPlaying, isYouTubeMode, player]);
+  }, [isPlaying, player]);
 
   // Sync volume & mute
   useEffect(() => {
-    if (!player || !isYouTubeMode) return;
+    if (!player) return;
     try {
       if (isMuted) {
         player.mute();
@@ -120,7 +152,7 @@ export const YouTubeAudioPlayer: React.FC = () => {
         player.setVolume(volume * 100);
       }
     } catch {}
-  }, [volume, isMuted, isYouTubeMode, player]);
+  }, [volume, isMuted, player]);
 
   return (
     <div className={`fixed z-30 transition-all duration-300 ${
