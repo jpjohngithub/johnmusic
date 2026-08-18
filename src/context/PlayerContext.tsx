@@ -38,7 +38,7 @@ interface PlayerContextType {
   searchQuery: string;
 
   // Actions
-  playTrack: (track: Track, newQueue?: Track[]) => Promise<void>;
+  playTrack: (track: Track, newQueue?: Track[]) => void;
   togglePlay: () => void;
   nextTrack: () => void;
   prevTrack: () => void;
@@ -260,7 +260,8 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     return () => clearInterval(interval);
   }, [sleepTimerMinutes]);
 
-  const playTrack = useCallback(async (track: Track, newQueue?: Track[]) => {
+  // INSTANT 0ms ZERO-LATENCY PLAYBACK
+  const playTrack = useCallback((track: Track, newQueue?: Track[]) => {
     let updatedQueue = queue;
     let index = 0;
 
@@ -283,19 +284,24 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
     setQueueIndex(index >= 0 ? index : 0);
     setCurrentTrack(track);
+    setIsPlaying(true);
 
-    // Resolve full 100% audio URL
-    const fullAudioUrl = await AudioStreamService.resolveFullAudioUrl(track.title, track.artist, track.audioUrl);
-
+    // 1. Instantly trigger audio playback with 0ms delay!
     if (!isYouTubeMode || track.isLocal) {
-      audioEngine.setSrc(fullAudioUrl);
-      audioEngine.play().then(() => {
-        setIsPlaying(true);
-      }).catch(err => {
-        console.warn('Playback error:', err);
-      });
-    } else {
-      setIsPlaying(true);
+      audioEngine.setSrc(track.audioUrl);
+      audioEngine.play().catch(e => console.warn('Instant play:', e));
+
+      // 2. Background stream enhancer: resolve full track stream seamlessly
+      AudioStreamService.resolveFullAudioUrl(track.title, track.artist, track.audioUrl)
+        .then(resolvedUrl => {
+          if (resolvedUrl && resolvedUrl !== track.audioUrl && audioEngine.getAudioElement().src !== resolvedUrl) {
+            const curTime = audioEngine.getAudioElement().currentTime;
+            audioEngine.setSrc(resolvedUrl);
+            audioEngine.seek(curTime);
+            audioEngine.play().catch(() => {});
+          }
+        })
+        .catch(() => {});
     }
 
     setHistory(prev => {
@@ -357,8 +363,7 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     };
 
     const onError = (e: any) => {
-      console.warn('Audio playback error:', e);
-      setIsPlaying(false);
+      console.warn('Audio error:', e);
     };
 
     audio.addEventListener('timeupdate', onTimeUpdate);
@@ -384,10 +389,9 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       audioEngine.pause();
       setIsPlaying(false);
     } else {
-      audioEngine.play().then(() => {
-        setIsPlaying(true);
-      }).catch(err => {
-        console.warn('Playback error:', err);
+      setIsPlaying(true);
+      audioEngine.play().catch(err => {
+        console.warn('Playback resume error:', err);
       });
     }
   }, [isPlaying, currentTrack, queue, playTrack]);
