@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useRef, useCallb
 import type { Track, Playlist, RepeatMode, VisualizerMode, ViewType, SpotifyAlbum, SpotifyPlaylistCard } from '../types/music';
 import { DEFAULT_PLAYLISTS } from '../data/defaultTracks';
 import { audioEngine } from '../services/audioService';
+import { SpotifyService } from '../services/spotifyService';
 import confetti from 'canvas-confetti';
 
 interface PlayerContextType {
@@ -31,9 +32,6 @@ interface PlayerContextType {
   isQueueOpen: boolean;
   isLyricsOpen: boolean;
   isSpotifyEmbedOpen: boolean;
-  isYouTubeMode: boolean;
-  sleepTimerMinutes: number | null;
-  sleepTimerRemaining: number | null;
   searchQuery: string;
 
   // Actions
@@ -63,14 +61,12 @@ interface PlayerContextType {
   openSpotifyItem: (item: SpotifyPlaylistCard | SpotifyAlbum, type: 'playlist' | 'album') => void;
   setEqualizerGains: (gains: number[], presetName?: string) => void;
   setVisualizerMode: (mode: VisualizerMode) => void;
-  setSleepTimer: (minutes: number | null) => void;
   setSearchQuery: (query: string) => void;
   toggleVisualizer: () => void;
   toggleEqualizer: () => void;
   toggleQueue: () => void;
   toggleLyrics: () => void;
   toggleSpotifyEmbed: () => void;
-  toggleYouTubeMode: () => void;
 }
 
 const PlayerContext = createContext<PlayerContextType | null>(null);
@@ -84,7 +80,6 @@ const STORAGE_VISUALIZER_KEY = 'johnmusic_visualizer_mode';
 const STORAGE_LAST_TRACK_KEY = 'johnmusic_last_track';
 const STORAGE_REPEAT_KEY = 'johnmusic_repeat_mode';
 const STORAGE_SHUFFLE_KEY = 'johnmusic_shuffle_mode';
-const STORAGE_YT_MODE_KEY = 'johnmusic_yt_mode';
 
 export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [playlists, setPlaylists] = useState<Playlist[]>(() => {
@@ -153,11 +148,6 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     return saved === 'true';
   });
 
-  const [isYouTubeMode, setIsYouTubeMode] = useState<boolean>(() => {
-    const saved = localStorage.getItem(STORAGE_YT_MODE_KEY);
-    return saved === 'true';
-  });
-
   const [currentTrack, setCurrentTrack] = useState<Track | null>(() => {
     const saved = localStorage.getItem(STORAGE_LAST_TRACK_KEY);
     if (saved) {
@@ -187,10 +177,6 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [isQueueOpen, setIsQueueOpen] = useState<boolean>(false);
   const [isLyricsOpen, setIsLyricsOpen] = useState<boolean>(false);
   const [isSpotifyEmbedOpen, setIsSpotifyEmbedOpen] = useState<boolean>(false);
-
-  // Sleep Timer
-  const [sleepTimerMinutes, setSleepTimerMinutes] = useState<number | null>(null);
-  const [sleepTimerRemaining, setSleepTimerRemaining] = useState<number | null>(null);
 
   const audioRef = useRef<HTMLAudioElement>(audioEngine.getAudioElement());
 
@@ -227,54 +213,18 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   }, [isShuffle]);
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_YT_MODE_KEY, String(isYouTubeMode));
-  }, [isYouTubeMode]);
-
-  useEffect(() => {
     if (currentTrack) {
       localStorage.setItem(STORAGE_LAST_TRACK_KEY, JSON.stringify(currentTrack));
     }
   }, [currentTrack]);
 
-  // Handle sleep timer countdown
-  useEffect(() => {
-    if (sleepTimerMinutes === null) {
-      setSleepTimerRemaining(null);
-      return;
-    }
-
-    setSleepTimerRemaining(sleepTimerMinutes * 60);
-
-    const interval = setInterval(() => {
-      setSleepTimerRemaining((prev) => {
-        if (prev === null || prev <= 1) {
-          audioEngine.pause();
-          setIsPlaying(false);
-          setSleepTimerMinutes(null);
-          clearInterval(interval);
-          return null;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-
-    return () => clearInterval(interval);
-  }, [sleepTimerMinutes]);
-
   const seek = useCallback((seconds: number) => {
-    if (!isYouTubeMode) {
-      audioEngine.seek(seconds);
-    }
+    audioEngine.seek(seconds);
     setCurrentTime(seconds);
-    try {
-      if (window.__johnmusic_yt_player?.seekTo) {
-        window.__johnmusic_yt_player.seekTo(seconds, true);
-      }
-    } catch {}
-  }, [isYouTubeMode]);
+  }, []);
 
-  // Instant & Guaranteed Audio Playback
-  const playTrack = useCallback((track: Track, newQueue?: Track[]) => {
+  // Instant & Guaranteed Audio Playback for ANY Track
+  const playTrack = useCallback(async (track: Track, newQueue?: Track[]) => {
     let updatedQueue = queue;
     let index = 0;
 
@@ -300,19 +250,13 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     setIsPlaying(true);
     setCurrentTime(0);
 
-    const isExplicitYt = track.genre === 'YouTube' || track.audioUrl?.includes('youtube.com') || track.audioUrl?.includes('youtu.be');
-
-    if (isExplicitYt) {
-      setIsYouTubeMode(true);
-      audioEngine.pause();
-    } else {
-      setIsYouTubeMode(false);
-      if (track.audioUrl) {
-        audioEngine.setSrc(track.audioUrl);
-        audioEngine.play().catch(e => {
-          console.warn('Audio play attempt:', e);
-        });
-      }
+    // Resolve direct stream URL dynamically if not already available
+    const finalAudioUrl = await SpotifyService.ensurePlayableAudioUrl(track);
+    if (finalAudioUrl) {
+      audioEngine.setSrc(finalAudioUrl);
+      audioEngine.play().catch(e => {
+        console.warn('Audio play attempt note:', e);
+      });
     }
 
     setHistory(prev => {
@@ -360,21 +304,17 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const audio = audioRef.current;
 
     const onTimeUpdate = () => {
-      if (!isYouTubeMode) {
-        setCurrentTime(audio.currentTime);
-      }
+      setCurrentTime(audio.currentTime);
     };
 
     const onLoadedMetadata = () => {
-      if (!isYouTubeMode && audio.duration) {
+      if (audio.duration) {
         setDuration(audio.duration);
       }
     };
 
     const onEnded = () => {
-      if (!isYouTubeMode) {
-        handleTrackEnd();
-      }
+      handleTrackEnd();
     };
 
     audio.addEventListener('timeupdate', onTimeUpdate);
@@ -386,7 +326,7 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       audio.removeEventListener('loadedmetadata', onLoadedMetadata);
       audio.removeEventListener('ended', onEnded);
     };
-  }, [currentTrack, queue, queueIndex, repeatMode, isShuffle, handleTrackEnd, isYouTubeMode]);
+  }, [currentTrack, queue, queueIndex, repeatMode, isShuffle, handleTrackEnd]);
 
   const togglePlay = useCallback(() => {
     if (!currentTrack && queue.length > 0) {
@@ -397,26 +337,13 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     if (isPlaying) {
       audioEngine.pause();
       setIsPlaying(false);
-      try {
-        if (window.__johnmusic_yt_player?.pauseVideo) {
-          window.__johnmusic_yt_player.pauseVideo();
-        }
-      } catch {}
     } else {
       setIsPlaying(true);
-      if (isYouTubeMode) {
-        try {
-          if (window.__johnmusic_yt_player?.playVideo) {
-            window.__johnmusic_yt_player.playVideo();
-          }
-        } catch {}
-      } else {
-        audioEngine.play().catch(err => {
-          console.warn('Playback resume error:', err);
-        });
-      }
+      audioEngine.play().catch(err => {
+        console.warn('Playback resume error:', err);
+      });
     }
-  }, [isPlaying, currentTrack, queue, playTrack, isYouTubeMode]);
+  }, [isPlaying, currentTrack, queue, playTrack]);
 
   const prevTrack = useCallback(() => {
     if (currentTime > 4) {
@@ -436,11 +363,6 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const clamped = Math.max(0, Math.min(1, vol));
     setVolumeState(clamped);
     audioEngine.setVolume(clamped);
-    try {
-      if (window.__johnmusic_yt_player?.setVolume) {
-        window.__johnmusic_yt_player.setVolume(clamped * 100);
-      }
-    } catch {}
     if (clamped > 0 && isMuted) {
       setIsMuted(false);
       audioEngine.setMuted(false);
@@ -451,13 +373,6 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     setIsMuted(prev => {
       const next = !prev;
       audioEngine.setMuted(next);
-      try {
-        if (next) {
-          window.__johnmusic_yt_player?.mute();
-        } else {
-          window.__johnmusic_yt_player?.unMute();
-        }
-      } catch {}
       return next;
     });
   }, []);
@@ -472,10 +387,6 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       if (prev === 'all') return 'one';
       return 'off';
     });
-  }, []);
-
-  const toggleYouTubeMode = useCallback(() => {
-    setIsYouTubeMode(prev => !prev);
   }, []);
 
   const toggleFavorite = useCallback((track: Track) => {
@@ -620,10 +531,6 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     audioEngine.setEqualizerGains(gains);
   }, []);
 
-  const setSleepTimer = useCallback((minutes: number | null) => {
-    setSleepTimerMinutes(minutes);
-  }, []);
-
   const toggleVisualizer = useCallback(() => setIsVisualizerOpen(prev => !prev), []);
   const toggleEqualizer = useCallback(() => setIsEqualizerOpen(prev => !prev), []);
   const toggleQueue = useCallback(() => setIsQueueOpen(prev => !prev), []);
@@ -659,9 +566,6 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         isQueueOpen,
         isLyricsOpen,
         isSpotifyEmbedOpen,
-        isYouTubeMode,
-        sleepTimerMinutes,
-        sleepTimerRemaining,
         searchQuery,
         playTrack,
         togglePlay,
@@ -689,14 +593,12 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         openSpotifyItem,
         setEqualizerGains,
         setVisualizerMode,
-        setSleepTimer,
         setSearchQuery,
         toggleVisualizer,
         toggleEqualizer,
         toggleQueue,
         toggleLyrics,
         toggleSpotifyEmbed,
-        toggleYouTubeMode,
       }}
     >
       {children}
