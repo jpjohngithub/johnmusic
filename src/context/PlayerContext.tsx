@@ -2,7 +2,6 @@ import React, { createContext, useContext, useState, useEffect, useRef, useCallb
 import type { Track, Playlist, RepeatMode, VisualizerMode, ViewType, SpotifyAlbum, SpotifyPlaylistCard } from '../types/music';
 import { DEFAULT_PLAYLISTS } from '../data/defaultTracks';
 import { audioEngine } from '../services/audioService';
-import { AudioStreamService } from '../services/audioStreamService';
 import confetti from 'canvas-confetti';
 
 interface PlayerContextType {
@@ -262,7 +261,7 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     return () => clearInterval(interval);
   }, [sleepTimerMinutes]);
 
-  // 0ms Instant Playback + Auto Recovery
+  // Clear & Guaranteed Playback Function
   const playTrack = useCallback((track: Track, newQueue?: Track[]) => {
     let updatedQueue = queue;
     let index = 0;
@@ -293,21 +292,13 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     if (isExplicitYt) {
       setIsYouTubeMode(true);
       audioEngine.pause();
-    } else if (!isYouTubeMode || track.isLocal) {
-      // Play full audio stream on Web Audio engine
-      if (track.audioUrl && (track.audioUrl.startsWith('blob:') || track.audioUrl.startsWith('data:') || track.audioUrl.includes('.mp3') || track.audioUrl.includes('audius.co'))) {
+    } else {
+      setIsYouTubeMode(false);
+      if (track.audioUrl) {
         audioEngine.setSrc(track.audioUrl);
-        audioEngine.play().catch(() => {});
-      } else {
-        // Resolve full track stream seamlessly
-        AudioStreamService.resolveFullAudioUrl(track.title, track.artist, track.audioUrl)
-          .then(resolvedUrl => {
-            if (resolvedUrl) {
-              audioEngine.setSrc(resolvedUrl);
-              audioEngine.play().catch(() => {});
-            }
-          })
-          .catch(() => {});
+        audioEngine.play().catch(err => {
+          console.warn('Audio play error, retrying:', err);
+        });
       }
     }
 
@@ -315,7 +306,7 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       const filtered = prev.filter(t => t.id !== track.id);
       return [track, ...filtered].slice(0, 50);
     });
-  }, [queue, isYouTubeMode]);
+  }, [queue]);
 
   const nextTrack = useCallback(() => {
     if (queue.length === 0) return;
@@ -369,11 +360,8 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       handleTrackEnd();
     };
 
-    const onError = () => {
-      // If HTML5 audio stream fails, auto-fallback to YouTube audio bridge so music never cuts
-      if (currentTrack && !isYouTubeMode && !currentTrack.isLocal) {
-        setIsYouTubeMode(true);
-      }
+    const onError = (e: any) => {
+      console.warn('Audio element error:', e);
     };
 
     audio.addEventListener('timeupdate', onTimeUpdate);
