@@ -7,7 +7,6 @@ import { PlayerBar } from './components/player/PlayerBar';
 import { QueueDrawer } from './components/player/QueueDrawer';
 import { LyricsView } from './components/player/LyricsView';
 import { SpotifyEmbedModal } from './components/player/SpotifyEmbedModal';
-import { YouTubeAudioPlayer } from './components/player/YouTubeAudioPlayer';
 
 const KeyboardController: React.FC = () => {
   const {
@@ -109,7 +108,6 @@ export const AppContent: React.FC = () => {
         spotifyUriOrUrl={currentTrack?.spotifyUri} 
         title={currentTrack ? `${currentTrack.title} — ${currentTrack.artist}` : 'Spotify Web Player'} 
       />
-      <YouTubeAudioPlayer />
     </div>
   );
 };
