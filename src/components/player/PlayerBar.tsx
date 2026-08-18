@@ -14,8 +14,6 @@ import {
   Heart, 
   ListMusic, 
   Mic2, 
-  Clock, 
-  Moon,
   Radio
 } from 'lucide-react';
 
@@ -30,8 +28,6 @@ export const PlayerBar: React.FC = () => {
     repeatMode,
     isShuffle,
     favorites,
-    sleepTimerRemaining,
-    sleepTimerMinutes,
     togglePlay,
     nextTrack,
     prevTrack,
@@ -44,12 +40,10 @@ export const PlayerBar: React.FC = () => {
     toggleQueue,
     toggleLyrics,
     toggleSpotifyEmbed,
-    setSleepTimer,
   } = usePlayer();
 
   const [isScrubbing, setIsScrubbing] = useState(false);
   const [scrubValue, setScrubValue] = useState(0);
-  const [showSleepMenu, setShowSleepMenu] = useState(false);
 
   const displayDuration = (currentTrack?.duration && currentTrack.duration > 30) ? currentTrack.duration : (duration || 180);
 
@@ -240,60 +234,6 @@ export const PlayerBar: React.FC = () => {
         >
           <Radio className="w-4 h-4 text-green-400" />
         </button>
-
-        {/* Sleep Timer */}
-        <div className="relative">
-          <button
-            onClick={() => setShowSleepMenu(!showSleepMenu)}
-            className={`p-2 rounded-xl transition-colors relative ${
-              sleepTimerMinutes !== null 
-                ? 'text-amber-400 bg-amber-400/10' 
-                : 'text-slate-400 hover:text-white hover:bg-slate-800'
-            }`}
-            title="Temporizador de Sono (Sleep Timer)"
-          >
-            <Moon className="w-4 h-4" />
-            {sleepTimerRemaining !== null && (
-              <span className="absolute -top-1 -right-1 px-1 bg-amber-500 text-[9px] text-slate-950 font-bold rounded-full">
-                {Math.ceil(sleepTimerRemaining / 60)}m
-              </span>
-            )}
-          </button>
-
-          {showSleepMenu && (
-            <>
-              <div className="fixed inset-0 z-30" onClick={() => setShowSleepMenu(false)} />
-              <div className="absolute right-0 bottom-12 z-40 w-44 bg-slate-900 border border-slate-700/80 rounded-2xl shadow-2xl p-2 text-xs text-slate-200 animate-slide-up">
-                <div className="px-2 py-1 text-[11px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5 mb-1">
-                  <Clock className="w-3.5 h-3.5 text-amber-400" />
-                  Sleep Timer
-                </div>
-                {[
-                  { label: 'Desativar', min: null },
-                  { label: 'Em 15 minutos', min: 15 },
-                  { label: 'Em 30 minutos', min: 30 },
-                  { label: 'Em 45 minutos', min: 45 },
-                  { label: 'Em 60 minutos', min: 60 },
-                ].map((opt) => (
-                  <button
-                    key={opt.label}
-                    onClick={() => {
-                      setSleepTimer(opt.min);
-                      setShowSleepMenu(false);
-                    }}
-                    className={`w-full px-2.5 py-1.5 text-left rounded-lg transition-colors ${
-                      sleepTimerMinutes === opt.min
-                        ? 'bg-amber-500/20 text-amber-300 font-semibold'
-                        : 'hover:bg-slate-800 text-slate-300'
-                    }`}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
-              </div>
-            </>
-          )}
-        </div>
 
         {/* Queue Toggle */}
         <button
