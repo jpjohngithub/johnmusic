@@ -12,9 +12,12 @@ import {
   Edit3, 
   Search, 
   Download, 
-  X 
+  X,
+  Link as LinkIcon,
+  Plus
 } from 'lucide-react';
 import { EditPlaylistModal } from '../common/EditPlaylistModal';
+import { AddByUrlModal } from '../common/AddByUrlModal';
 
 export const PlaylistView: React.FC = () => {
   const { 
@@ -30,6 +33,7 @@ export const PlaylistView: React.FC = () => {
   } = usePlayer();
 
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isAddByUrlOpen, setIsAddByUrlOpen] = useState(false);
   const [filterQuery, setFilterQuery] = useState('');
 
   const playlist = playlists.find(p => p.id === selectedPlaylistId) || playlists[0];
@@ -154,7 +158,7 @@ export const PlaylistView: React.FC = () => {
 
       {/* Action Toolbar & Search inside Playlist */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <button
             disabled={playlistTracks.length === 0}
             onClick={handlePlayAll}
@@ -162,6 +166,15 @@ export const PlaylistView: React.FC = () => {
           >
             <Play className="w-5 h-5 fill-slate-950" />
             Tocar Playlist
+          </button>
+
+          <button
+            onClick={() => setIsAddByUrlOpen(true)}
+            className="px-4 py-3 rounded-2xl bg-slate-800 hover:bg-slate-700 text-emerald-300 font-semibold text-xs border border-slate-700 flex items-center gap-2 transition-all shadow-md"
+            title="Adicionar por Link do YouTube, TikTok ou Spotify"
+          >
+            <LinkIcon className="w-4 h-4 text-red-400" />
+            <span>Colar Link (YouTube / TikTok)</span>
           </button>
 
           <button
@@ -228,9 +241,16 @@ export const PlaylistView: React.FC = () => {
           <div className="text-center py-12 text-slate-500">
             <Music className="w-12 h-12 mx-auto mb-3 opacity-40" />
             <p className="text-sm font-semibold text-slate-300">Esta playlist está vazia.</p>
-            <p className="text-xs text-slate-500 mt-1">
-              Pesquise qualquer música ou toque uma faixa online e adicione-a aqui pelos 3 pontinhos!
+            <p className="text-xs text-slate-500 mt-1 mb-4">
+              Cole qualquer link do YouTube ou TikTok acima para adicionar instantaneamente!
             </p>
+            <button
+              onClick={() => setIsAddByUrlOpen(true)}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 rounded-xl text-xs font-semibold transition-all"
+            >
+              <Plus className="w-4 h-4" />
+              Adicionar Música por Link
+            </button>
           </div>
         ) : filteredTracks.length === 0 ? (
           <div className="text-center py-8 text-slate-500 text-xs">
@@ -255,6 +275,12 @@ export const PlaylistView: React.FC = () => {
         playlist={playlist}
         onClose={() => setIsEditModalOpen(false)}
         onSave={updatePlaylist}
+      />
+
+      <AddByUrlModal
+        isOpen={isAddByUrlOpen}
+        onClose={() => setIsAddByUrlOpen(false)}
+        targetPlaylistId={playlist.id}
       />
     </div>
   );
