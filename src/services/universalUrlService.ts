@@ -31,7 +31,72 @@ export class UniversalUrlService {
     const cleanUrl = url.trim();
     if (!cleanUrl) return null;
 
-    // 1. YOUTUBE (Videos / Shorts / Music)
+    // 1. TIKTOK (Videos / Sounds) - Extract Real Direct MP3 Stream
+    if (this.isTikTokUrl(cleanUrl)) {
+      try {
+        const tikwmRes = await fetch(`https://www.tikwm.com/api/?url=${encodeURIComponent(cleanUrl)}`);
+        if (tikwmRes.ok) {
+          const tikData = await tikwmRes.json();
+          if (tikData.code === 0 && tikData.data) {
+            const data = tikData.data;
+            const audioStreamUrl = data.music || data.play || cleanUrl;
+            const title = (data.title || 'Som Viral do TikTok').substring(0, 80);
+            const artist = data.author?.nickname || data.music_info?.author || 'Criador do TikTok';
+            const cover = data.cover || data.music_info?.cover || 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=600&q=80';
+            const duration = data.duration || 60;
+
+            const track: Track = {
+              id: `tiktok-${data.id || Date.now()}`,
+              title,
+              artist,
+              album: data.music_info?.title || 'TikTok Audio',
+              duration,
+              audioUrl: audioStreamUrl,
+              coverUrl: cover,
+              genre: 'TikTok Direct Audio',
+              source: 'online',
+              externalUrl: cleanUrl,
+            };
+
+            return { track, platform: 'tiktok' };
+          }
+        }
+      } catch (err) {
+        console.debug('TikWM resolver error:', err);
+      }
+
+      // Fallback via oEmbed
+      let title = 'Som do TikTok';
+      let artist = 'Criador do TikTok';
+      let thumb = 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=600&q=80';
+
+      try {
+        const oembedRes = await fetch(`https://www.tiktok.com/oembed?url=${encodeURIComponent(cleanUrl)}`);
+        if (oembedRes.ok) {
+          const data = await oembedRes.json();
+          if (data.title) title = data.title.substring(0, 70);
+          if (data.author_name) artist = `@${data.author_name}`;
+          if (data.thumbnail_url) thumb = data.thumbnail_url;
+        }
+      } catch {}
+
+      const track: Track = {
+        id: `tiktok-${Date.now()}`,
+        title,
+        artist,
+        album: 'TikTok Audio',
+        duration: 60,
+        audioUrl: cleanUrl,
+        coverUrl: thumb,
+        genre: 'TikTok Viral',
+        source: 'online',
+        externalUrl: cleanUrl,
+      };
+
+      return { track, platform: 'tiktok' };
+    }
+
+    // 2. YOUTUBE (Videos / Shorts / Music)
     if (this.isYouTubeUrl(cleanUrl)) {
       const videoId = this.extractYouTubeVideoId(cleanUrl) || 'dQw4w9WgXcQ';
       let title = 'Vídeo do YouTube';
@@ -64,50 +129,6 @@ export class UniversalUrlService {
       };
 
       return { track, platform: 'youtube' };
-    }
-
-    // 2. TIKTOK (Videos / Sounds)
-    if (this.isTikTokUrl(cleanUrl)) {
-      let title = 'Som do TikTok';
-      let artist = 'Criador do TikTok';
-      let thumb = 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=600&q=80';
-
-      try {
-        const oembedRes = await fetch(`https://www.tiktok.com/oembed?url=${encodeURIComponent(cleanUrl)}`);
-        if (oembedRes.ok) {
-          const data = await oembedRes.json();
-          if (data.title) title = data.title.substring(0, 70);
-          if (data.author_name) artist = `@${data.author_name}`;
-          if (data.thumbnail_url) thumb = data.thumbnail_url;
-        }
-      } catch {
-        try {
-          const fallbackRes = await fetch(`https://noembed.com/embed?url=${encodeURIComponent(cleanUrl)}`);
-          if (fallbackRes.ok) {
-            const data = await fallbackRes.json();
-            if (data.title) title = data.title;
-            if (data.author_name) artist = data.author_name;
-            if (data.thumbnail_url) thumb = data.thumbnail_url;
-          }
-        } catch (e) {
-          console.debug('TikTok oEmbed fallback error:', e);
-        }
-      }
-
-      const track: Track = {
-        id: `tiktok-${Date.now()}`,
-        title: title || 'Som Viral do TikTok',
-        artist: artist || 'TikTok Audio',
-        album: 'TikTok Virals',
-        duration: 60,
-        audioUrl: cleanUrl,
-        coverUrl: thumb,
-        genre: 'TikTok Viral',
-        source: 'online',
-        externalUrl: cleanUrl,
-      };
-
-      return { track, platform: 'tiktok' };
     }
 
     // 3. DIRECT AUDIO URL

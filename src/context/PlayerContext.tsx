@@ -261,7 +261,7 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     return () => clearInterval(interval);
   }, [sleepTimerMinutes]);
 
-  // 100% Full Length Playback Function for all tracks
+  // 100% Full Length Playback Function (Direct MP3 for TikTok & Local, YouTube Bridge for Global catalog)
   const playTrack = useCallback((track: Track, newQueue?: Track[]) => {
     let updatedQueue = queue;
     let index = 0;
@@ -287,16 +287,24 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     setCurrentTrack(track);
     setIsPlaying(true);
     setCurrentTime(0);
-    setDuration(track.duration || 210);
+    setDuration(track.duration || 180);
 
-    const isLocalAudio = track.isLocal || (track.audioUrl && (track.audioUrl.startsWith('blob:') || track.audioUrl.startsWith('data:')));
+    const isDirectAudio = 
+      track.isLocal || 
+      track.genre === 'TikTok Direct Audio' ||
+      (track.audioUrl && (
+        track.audioUrl.startsWith('blob:') || 
+        track.audioUrl.startsWith('data:') ||
+        track.audioUrl.includes('tiktokcdn') ||
+        track.audioUrl.includes('.mp3')
+      ) && !track.audioUrl.includes('youtube.com') && !track.audioUrl.includes('youtu.be'));
 
-    if (isLocalAudio) {
+    if (isDirectAudio) {
       setIsYouTubeMode(false);
       audioEngine.setSrc(track.audioUrl);
-      audioEngine.play().catch(e => console.warn(e));
+      audioEngine.play().catch(e => console.warn('Direct audio play error:', e));
     } else {
-      // 100% Full Audio streaming for all global songs
+      // 100% Full Audio streaming for all global songs and YouTube links
       setIsYouTubeMode(true);
       audioEngine.pause();
     }
