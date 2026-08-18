@@ -5,11 +5,12 @@ import { ExploreView } from '../views/ExploreView';
 import { LocalFilesView } from '../views/LocalFilesView';
 import { SpotifyView } from '../views/SpotifyView';
 import { PlaylistView } from '../views/PlaylistView';
+import { SpotifyPlaylistView } from '../views/SpotifyPlaylistView';
 import { FavoritesView } from '../views/FavoritesView';
 import { HistoryView } from '../views/HistoryView';
 
 export const MainContent: React.FC = () => {
-  const { currentView } = usePlayer();
+  const { currentView, selectedSpotifyItem, selectedSpotifyType } = usePlayer();
 
   const renderView = () => {
     switch (currentView) {
@@ -23,6 +24,8 @@ export const MainContent: React.FC = () => {
         return <SpotifyView />;
       case 'playlist':
         return <PlaylistView />;
+      case 'spotify-playlist':
+        return <SpotifyPlaylistView item={selectedSpotifyItem} type={selectedSpotifyType} />;
       case 'favorites':
         return <FavoritesView />;
       case 'history':

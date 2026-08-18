@@ -17,7 +17,8 @@ import {
   ListMusic, 
   Mic2, 
   Clock, 
-  Moon
+  Moon,
+  Radio
 } from 'lucide-react';
 
 export const PlayerBar: React.FC = () => {
@@ -46,6 +47,7 @@ export const PlayerBar: React.FC = () => {
     toggleVisualizer,
     toggleQueue,
     toggleLyrics,
+    toggleSpotifyEmbed,
     setSleepTimer,
   } = usePlayer();
 
@@ -222,7 +224,16 @@ export const PlayerBar: React.FC = () => {
       </div>
 
       {/* Right: Tools & Volume */}
-      <div className="flex items-center justify-end gap-2.5 sm:gap-3.5 w-1/4 min-w-[200px]">
+      <div className="flex items-center justify-end gap-2 sm:gap-3 w-1/4 min-w-[200px]">
+        {/* Spotify Web Player Embed Button */}
+        <button
+          onClick={toggleSpotifyEmbed}
+          className="p-2 rounded-xl text-slate-400 hover:text-green-400 hover:bg-green-500/10 transition-colors"
+          title="Abrir Player Oficial do Spotify"
+        >
+          <Radio className="w-4 h-4 text-green-400" />
+        </button>
+
         {/* Sleep Timer */}
         <div className="relative">
           <button
@@ -329,7 +340,7 @@ export const PlayerBar: React.FC = () => {
             )}
           </button>
 
-          <div className="relative w-20 sm:w-24 h-4 flex items-center">
+          <div className="relative w-16 sm:w-20 h-4 flex items-center">
             <div className="absolute left-0 right-0 h-1 rounded-full bg-slate-800 overflow-hidden">
               <div 
                 className="h-full bg-slate-300 group-hover:bg-emerald-400 transition-colors"

@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
-import type { Track, Playlist, RepeatMode, VisualizerMode, ViewType } from '../types/music';
+import type { Track, Playlist, RepeatMode, VisualizerMode, ViewType, SpotifyAlbum, SpotifyPlaylistCard } from '../types/music';
 import { DEFAULT_TRACKS, DEFAULT_PLAYLISTS } from '../data/defaultTracks';
 import { audioEngine } from '../services/audioService';
 import confetti from 'canvas-confetti';
@@ -21,6 +21,8 @@ interface PlayerContextType {
   localTracks: Track[];
   currentView: ViewType;
   selectedPlaylistId: string | null;
+  selectedSpotifyItem: SpotifyPlaylistCard | SpotifyAlbum | null;
+  selectedSpotifyType: 'playlist' | 'album';
   equalizerGains: number[];
   activePreset: string;
   visualizerMode: VisualizerMode;
@@ -28,6 +30,7 @@ interface PlayerContextType {
   isEqualizerOpen: boolean;
   isQueueOpen: boolean;
   isLyricsOpen: boolean;
+  isSpotifyEmbedOpen: boolean;
   sleepTimerMinutes: number | null;
   sleepTimerRemaining: number | null;
   searchQuery: string;
@@ -52,6 +55,7 @@ interface PlayerContextType {
   removeTrackFromPlaylist: (playlistId: string, trackId: string) => void;
   addLocalTracks: (tracks: Track[]) => void;
   setCurrentView: (view: ViewType, playlistId?: string | null) => void;
+  openSpotifyItem: (item: SpotifyPlaylistCard | SpotifyAlbum, type: 'playlist' | 'album') => void;
   setEqualizerGains: (gains: number[], presetName?: string) => void;
   setVisualizerMode: (mode: VisualizerMode) => void;
   setSleepTimer: (minutes: number | null) => void;
@@ -60,6 +64,7 @@ interface PlayerContextType {
   toggleEqualizer: () => void;
   toggleQueue: () => void;
   toggleLyrics: () => void;
+  toggleSpotifyEmbed: () => void;
 }
 
 const PlayerContext = createContext<PlayerContextType | null>(null);
@@ -69,7 +74,6 @@ const STORAGE_FAVORITES_KEY = 'johnmusic_favorites';
 const STORAGE_VOL_KEY = 'johnmusic_volume';
 
 export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  // Load saved playlists or defaults
   const [playlists, setPlaylists] = useState<Playlist[]>(() => {
     const saved = localStorage.getItem(STORAGE_PLAYLISTS_KEY);
     if (saved) {
@@ -82,7 +86,6 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     return DEFAULT_PLAYLISTS;
   });
 
-  // Load favorites
   const [favorites, setFavorites] = useState<Track[]>(() => {
     const saved = localStorage.getItem(STORAGE_FAVORITES_KEY);
     if (saved) {
@@ -116,6 +119,8 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   const [currentView, setCurrentViewState] = useState<ViewType>('home');
   const [selectedPlaylistId, setSelectedPlaylistId] = useState<string | null>(null);
+  const [selectedSpotifyItem, setSelectedSpotifyItem] = useState<SpotifyPlaylistCard | SpotifyAlbum | null>(null);
+  const [selectedSpotifyType, setSelectedSpotifyType] = useState<'playlist' | 'album'>('playlist');
   const [searchQuery, setSearchQuery] = useState<string>('');
 
   // Modals & Panels
@@ -123,6 +128,7 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [isEqualizerOpen, setIsEqualizerOpen] = useState<boolean>(false);
   const [isQueueOpen, setIsQueueOpen] = useState<boolean>(false);
   const [isLyricsOpen, setIsLyricsOpen] = useState<boolean>(false);
+  const [isSpotifyEmbedOpen, setIsSpotifyEmbedOpen] = useState<boolean>(false);
   const [visualizerMode, setVisualizerMode] = useState<VisualizerMode>('neon-pulse');
 
   // Equalizer
@@ -135,7 +141,6 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   const audioRef = useRef<HTMLAudioElement>(audioEngine.getAudioElement());
 
-  // Save changes to localStorage
   useEffect(() => {
     localStorage.setItem(STORAGE_PLAYLISTS_KEY, JSON.stringify(playlists));
   }, [playlists]);
@@ -148,7 +153,6 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     localStorage.setItem(STORAGE_VOL_KEY, String(volume));
   }, [volume]);
 
-  // Handle sleep timer countdown
   useEffect(() => {
     if (sleepTimerMinutes === null) {
       setSleepTimerRemaining(null);
@@ -213,7 +217,6 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }
   }, [repeatMode, nextTrack]);
 
-  // Bind HTML Audio Element events
   useEffect(() => {
     const audio = audioRef.current;
 
@@ -278,7 +281,6 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       console.warn('Playback prevented or failed:', err);
     });
 
-    // Add to listening history
     setHistory(prev => {
       const filtered = prev.filter(t => t.id !== track.id);
       return [track, ...filtered].slice(0, 50);
@@ -365,7 +367,6 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       if (exists) {
         return prev.filter(t => t.id !== track.id);
       } else {
-        // Trigger small celebration confetti
         confetti({
           particleCount: 35,
           spread: 60,
@@ -376,7 +377,6 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       }
     });
 
-    // Also sync in default playlist favorites
     setPlaylists(prev => prev.map(pl => {
       if (pl.id === 'playlist-favorites') {
         const has = pl.trackIds.includes(track.id);
@@ -468,6 +468,12 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }
   }, []);
 
+  const openSpotifyItem = useCallback((item: SpotifyPlaylistCard | SpotifyAlbum, type: 'playlist' | 'album') => {
+    setSelectedSpotifyItem(item);
+    setSelectedSpotifyType(type);
+    setCurrentViewState('spotify-playlist');
+  }, []);
+
   const setEqualizerGains = useCallback((gains: number[], presetName?: string) => {
     setEqualizerGainsState(gains);
     if (presetName) {
@@ -484,6 +490,7 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const toggleEqualizer = useCallback(() => setIsEqualizerOpen(prev => !prev), []);
   const toggleQueue = useCallback(() => setIsQueueOpen(prev => !prev), []);
   const toggleLyrics = useCallback(() => setIsLyricsOpen(prev => !prev), []);
+  const toggleSpotifyEmbed = useCallback(() => setIsSpotifyEmbedOpen(prev => !prev), []);
 
   return (
     <PlayerContext.Provider
@@ -504,6 +511,8 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         localTracks,
         currentView,
         selectedPlaylistId,
+        selectedSpotifyItem,
+        selectedSpotifyType,
         equalizerGains,
         activePreset,
         visualizerMode,
@@ -511,6 +520,7 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         isEqualizerOpen,
         isQueueOpen,
         isLyricsOpen,
+        isSpotifyEmbedOpen,
         sleepTimerMinutes,
         sleepTimerRemaining,
         searchQuery,
@@ -533,6 +543,7 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         removeTrackFromPlaylist,
         addLocalTracks,
         setCurrentView,
+        openSpotifyItem,
         setEqualizerGains,
         setVisualizerMode,
         setSleepTimer,
@@ -541,6 +552,7 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         toggleEqualizer,
         toggleQueue,
         toggleLyrics,
+        toggleSpotifyEmbed,
       }}
     >
       {children}

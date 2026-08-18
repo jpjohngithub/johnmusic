@@ -8,6 +8,7 @@ import { EqualizerModal } from './components/player/EqualizerModal';
 import { AudioVisualizer } from './components/player/AudioVisualizer';
 import { QueueDrawer } from './components/player/QueueDrawer';
 import { LyricsView } from './components/player/LyricsView';
+import { SpotifyEmbedModal } from './components/player/SpotifyEmbedModal';
 
 const KeyboardController: React.FC = () => {
   const {
@@ -82,6 +83,8 @@ const KeyboardController: React.FC = () => {
 };
 
 export const AppContent: React.FC = () => {
+  const { isSpotifyEmbedOpen, toggleSpotifyEmbed, currentTrack } = usePlayer();
+
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-john-dark text-slate-100 font-sans">
       <KeyboardController />
@@ -103,6 +106,12 @@ export const AppContent: React.FC = () => {
       <AudioVisualizer />
       <QueueDrawer />
       <LyricsView />
+      <SpotifyEmbedModal 
+        isOpen={isSpotifyEmbedOpen} 
+        onClose={toggleSpotifyEmbed} 
+        spotifyUriOrUrl={currentTrack?.spotifyUri} 
+        title={currentTrack ? `${currentTrack.title} — ${currentTrack.artist}` : 'Spotify Web Player'} 
+      />
     </div>
   );
 };

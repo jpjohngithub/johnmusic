@@ -1,5 +1,5 @@
 export interface LyricLine {
-  time: number; // in seconds (for synced lyrics)
+  time: number; // in seconds
   text: string;
 }
 
@@ -19,6 +19,8 @@ export interface Track {
   file?: File;
   addedAt?: number;
   spotifyUri?: string;
+  spotifyId?: string;
+  externalUrl?: string;
 }
 
 export interface Playlist {
@@ -29,6 +31,28 @@ export interface Playlist {
   trackIds: string[];
   createdAt: number;
   isSystem?: boolean;
+  spotifyId?: string;
+  tracks?: Track[];
+}
+
+export interface SpotifyAlbum {
+  id: string;
+  name: string;
+  artist: string;
+  coverUrl: string;
+  releaseDate?: string;
+  totalTracks: number;
+  spotifyUri: string;
+}
+
+export interface SpotifyPlaylistCard {
+  id: string;
+  name: string;
+  description: string;
+  coverUrl: string;
+  totalTracks: number;
+  spotifyUri: string;
+  owner?: string;
 }
 
 export type RepeatMode = 'off' | 'all' | 'one';
@@ -39,6 +63,7 @@ export type ViewType =
   | 'home'
   | 'explore'
   | 'playlist'
+  | 'spotify-playlist'
   | 'local-files'
   | 'spotify'
   | 'favorites'
