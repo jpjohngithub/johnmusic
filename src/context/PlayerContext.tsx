@@ -32,6 +32,7 @@ interface PlayerContextType {
   isQueueOpen: boolean;
   isLyricsOpen: boolean;
   isSpotifyEmbedOpen: boolean;
+  isYouTubeMode: boolean;
   sleepTimerMinutes: number | null;
   sleepTimerRemaining: number | null;
   searchQuery: string;
@@ -68,11 +69,11 @@ interface PlayerContextType {
   toggleQueue: () => void;
   toggleLyrics: () => void;
   toggleSpotifyEmbed: () => void;
+  toggleYouTubeMode: () => void;
 }
 
 const PlayerContext = createContext<PlayerContextType | null>(null);
 
-// LocalStorage Keys for complete offline / reload state persistence
 const STORAGE_PLAYLISTS_KEY = 'johnmusic_playlists';
 const STORAGE_FAVORITES_KEY = 'johnmusic_favorites';
 const STORAGE_VOL_KEY = 'johnmusic_volume';
@@ -82,6 +83,7 @@ const STORAGE_VISUALIZER_KEY = 'johnmusic_visualizer_mode';
 const STORAGE_LAST_TRACK_KEY = 'johnmusic_last_track';
 const STORAGE_REPEAT_KEY = 'johnmusic_repeat_mode';
 const STORAGE_SHUFFLE_KEY = 'johnmusic_shuffle_mode';
+const STORAGE_YT_MODE_KEY = 'johnmusic_yt_mode';
 
 export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [playlists, setPlaylists] = useState<Playlist[]>(() => {
@@ -147,6 +149,11 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   const [isShuffle, setIsShuffle] = useState<boolean>(() => {
     const saved = localStorage.getItem(STORAGE_SHUFFLE_KEY);
+    return saved === 'true';
+  });
+
+  const [isYouTubeMode, setIsYouTubeMode] = useState<boolean>(() => {
+    const saved = localStorage.getItem(STORAGE_YT_MODE_KEY);
     return saved === 'true';
   });
 
@@ -219,6 +226,10 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   }, [isShuffle]);
 
   useEffect(() => {
+    localStorage.setItem(STORAGE_YT_MODE_KEY, String(isYouTubeMode));
+  }, [isYouTubeMode]);
+
+  useEffect(() => {
     if (currentTrack) {
       localStorage.setItem(STORAGE_LAST_TRACK_KEY, JSON.stringify(currentTrack));
     }
@@ -276,18 +287,22 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     // Resolve full 100% audio URL
     const fullAudioUrl = await AudioStreamService.resolveFullAudioUrl(track.title, track.artist, track.audioUrl);
 
-    audioEngine.setSrc(fullAudioUrl);
-    audioEngine.play().then(() => {
+    if (!isYouTubeMode || track.isLocal) {
+      audioEngine.setSrc(fullAudioUrl);
+      audioEngine.play().then(() => {
+        setIsPlaying(true);
+      }).catch(err => {
+        console.warn('Playback error:', err);
+      });
+    } else {
       setIsPlaying(true);
-    }).catch(err => {
-      console.warn('Playback prevented or failed:', err);
-    });
+    }
 
     setHistory(prev => {
       const filtered = prev.filter(t => t.id !== track.id);
       return [track, ...filtered].slice(0, 50);
     });
-  }, [queue]);
+  }, [queue, isYouTubeMode]);
 
   const nextTrack = useCallback(() => {
     if (queue.length === 0) return;
@@ -326,11 +341,15 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const audio = audioRef.current;
 
     const onTimeUpdate = () => {
-      setCurrentTime(audio.currentTime);
+      if (!isYouTubeMode) {
+        setCurrentTime(audio.currentTime);
+      }
     };
 
     const onLoadedMetadata = () => {
-      setDuration(audio.duration || currentTrack?.duration || 0);
+      if (!isYouTubeMode) {
+        setDuration(audio.duration || currentTrack?.duration || 0);
+      }
     };
 
     const onEnded = () => {
@@ -353,7 +372,7 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       audio.removeEventListener('ended', onEnded);
       audio.removeEventListener('error', onError);
     };
-  }, [currentTrack, queue, queueIndex, repeatMode, isShuffle, handleTrackEnd]);
+  }, [currentTrack, queue, queueIndex, repeatMode, isShuffle, handleTrackEnd, isYouTubeMode]);
 
   const togglePlay = useCallback(() => {
     if (!currentTrack && queue.length > 0) {
@@ -419,6 +438,16 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       if (prev === 'off') return 'all';
       if (prev === 'all') return 'one';
       return 'off';
+    });
+  }, []);
+
+  const toggleYouTubeMode = useCallback(() => {
+    setIsYouTubeMode(prev => {
+      const next = !prev;
+      if (next) {
+        audioEngine.pause();
+      }
+      return next;
     });
   }, []);
 
@@ -603,6 +632,7 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         isQueueOpen,
         isLyricsOpen,
         isSpotifyEmbedOpen,
+        isYouTubeMode,
         sleepTimerMinutes,
         sleepTimerRemaining,
         searchQuery,
@@ -637,6 +667,7 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         toggleQueue,
         toggleLyrics,
         toggleSpotifyEmbed,
+        toggleYouTubeMode,
       }}
     >
       {children}

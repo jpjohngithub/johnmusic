@@ -18,7 +18,8 @@ import {
   Mic2, 
   Clock, 
   Moon,
-  Radio
+  Radio,
+  Tv
 } from 'lucide-react';
 
 export const PlayerBar: React.FC = () => {
@@ -34,6 +35,7 @@ export const PlayerBar: React.FC = () => {
     favorites,
     sleepTimerRemaining,
     sleepTimerMinutes,
+    isYouTubeMode,
     togglePlay,
     nextTrack,
     prevTrack,
@@ -48,6 +50,7 @@ export const PlayerBar: React.FC = () => {
     toggleQueue,
     toggleLyrics,
     toggleSpotifyEmbed,
+    toggleYouTubeMode,
     setSleepTimer,
   } = usePlayer();
 
@@ -103,12 +106,19 @@ export const PlayerBar: React.FC = () => {
             </div>
 
             <div className="min-w-0 flex-1">
-              <h4 
-                onClick={toggleLyrics}
-                className="text-sm font-bold text-slate-100 hover:text-emerald-400 cursor-pointer truncate transition-colors"
-              >
-                {currentTrack.title}
-              </h4>
+              <div className="flex items-center gap-1.5">
+                <h4 
+                  onClick={toggleLyrics}
+                  className="text-sm font-bold text-slate-100 hover:text-emerald-400 cursor-pointer truncate transition-colors"
+                >
+                  {currentTrack.title}
+                </h4>
+                {isYouTubeMode && (
+                  <span className="px-1.5 py-0.2 rounded bg-red-500/20 text-red-400 text-[9px] font-bold">
+                    100%
+                  </span>
+                )}
+              </div>
               <p className="text-xs text-slate-400 hover:underline cursor-pointer truncate">
                 {currentTrack.artist}
               </p>
@@ -225,6 +235,19 @@ export const PlayerBar: React.FC = () => {
 
       {/* Right: Tools & Volume */}
       <div className="flex items-center justify-end gap-2 sm:gap-3 w-1/4 min-w-[200px]">
+        {/* Full 100% Music Mode Toggle */}
+        <button
+          onClick={toggleYouTubeMode}
+          className={`p-2 rounded-xl transition-all ${
+            isYouTubeMode 
+              ? 'bg-red-500/20 text-red-400 ring-1 ring-red-500/40 shadow-lg shadow-red-500/20' 
+              : 'text-slate-400 hover:text-red-400 hover:bg-slate-800'
+          }`}
+          title={isYouTubeMode ? 'Modo 100% Completo Ativado' : 'Ativar Modo 100% Música Completa (Sem cortes)'}
+        >
+          <Tv className="w-4 h-4" />
+        </button>
+
         {/* Spotify Web Player Embed Button */}
         <button
           onClick={toggleSpotifyEmbed}

@@ -4,62 +4,45 @@
 const CACHED_STREAMS = new Map<string, string>();
 
 export class AudioStreamService {
-  // Reliable full-length audio mirrors and stream resolvers
   public static async resolveFullAudioUrl(title: string, artist: string, fallbackUrl?: string): Promise<string> {
     const query = `${artist} - ${title}`.trim();
     if (CACHED_STREAMS.has(query)) {
       return CACHED_STREAMS.get(query)!;
     }
 
-    // If already a valid full blob or direct audio url
-    if (fallbackUrl && (fallbackUrl.startsWith('blob:') || fallbackUrl.includes('.mp3') || fallbackUrl.includes('.m4a') || fallbackUrl.includes('.wav'))) {
-      // Check if it's already an active CDN stream
-      if (!fallbackUrl.includes('preview') || fallbackUrl.length > 50) {
-        return fallbackUrl;
-      }
+    // 1. If it's already a local blob or direct complete local audio file
+    if (fallbackUrl && (fallbackUrl.startsWith('blob:') || fallbackUrl.startsWith('data:'))) {
+      return fallbackUrl;
     }
 
-    // Try finding full audio stream from free public streaming endpoints
+    // 2. If it's already an Audius full stream
+    if (fallbackUrl && fallbackUrl.includes('audius.co')) {
+      return fallbackUrl;
+    }
+
+    // 3. Search Audius for 100% full length stream
     try {
-      const searchTerms = encodeURIComponent(`${artist} ${title} audio`);
-      const endpoints = [
-        `https://pipedapi.kavin.rocks/search?q=${searchTerms}&filter=music_songs`,
-        `https://api.piped.privacy.com.de/search?q=${searchTerms}&filter=music_songs`,
-      ];
-
-      for (const endpoint of endpoints) {
-        try {
-          const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 2500);
-          const res = await fetch(endpoint, { signal: controller.signal });
-          clearTimeout(timeoutId);
-
-          if (res.ok) {
-            const data = await res.json();
-            const firstItem = data.items?.find((it: any) => it.type === 'stream' || it.url);
-            if (firstItem?.url) {
-              const videoId = firstItem.url.replace('/watch?v=', '');
-              // Fetch audio stream URL
-              const streamRes = await fetch(`https://pipedapi.kavin.rocks/streams/${videoId}`);
-              if (streamRes.ok) {
-                const streamData = await streamRes.json();
-                const audioStream = streamData.audioStreams?.find((s: any) => s.mimeType?.includes('audio/mp4') || s.mimeType?.includes('audio/webm'));
-                if (audioStream?.url) {
-                  CACHED_STREAMS.set(query, audioStream.url);
-                  return audioStream.url;
-                }
-              }
-            }
-          }
-        } catch {
-          // Continue to next fallback
+      const cleanTitle = title.replace(/\(.*?\)|\[.*?\]/g, '').trim();
+      const searchQuery = encodeURIComponent(`${artist} ${cleanTitle}`);
+      const res = await fetch(`https://discoveryprovider.audius.co/v1/tracks/search?query=${searchQuery}&app_name=johnmusic`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.data && data.data.length > 0) {
+          const topTrack = data.data[0];
+          const streamUrl = `https://discoveryprovider.audius.co/v1/tracks/${topTrack.id}/stream?app_name=johnmusic`;
+          CACHED_STREAMS.set(query, streamUrl);
+          return streamUrl;
         }
       }
-    } catch {
-      // Ignore network errors
+    } catch (e) {
+      console.debug('Audius full stream resolver error:', e);
     }
 
-    // Fallback to provided URL or standard stream
-    return fallbackUrl || 'https://cdn.pixabay.com/download/audio/2022/05/27/audio_1808fbf07a.mp3?filename=synthwave-80s-110045.mp3';
+    // 4. Return provided URL
+    if (fallbackUrl) {
+      return fallbackUrl;
+    }
+
+    return 'https://cdn.pixabay.com/download/audio/2022/05/27/audio_1808fbf07a.mp3?filename=synthwave-80s-110045.mp3';
   }
 }

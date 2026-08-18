@@ -5,7 +5,6 @@ const SPOTIFY_TOKEN_KEY = 'johnmusic_spotify_token';
 const SPOTIFY_REFRESH_KEY = 'johnmusic_spotify_refresh';
 const SPOTIFY_EXP_KEY = 'johnmusic_spotify_exp';
 
-// Curated live mock / cached Spotify feeds as instant zero-latency fallbacks
 const FALLBACK_SPOTIFY_NEW_RELEASES: SpotifyAlbum[] = [
   {
     id: 'alb-1',
@@ -151,17 +150,14 @@ export class SpotifyService {
     localStorage.removeItem(SPOTIFY_EXP_KEY);
   }
 
-  // Parse Spotify URL / URI (e.g. open.spotify.com/playlist/xyz or spotify:playlist:xyz)
   public static parseSpotifyUrl(input: string): { type: 'track' | 'playlist' | 'album' | 'artist'; id: string } | null {
     const clean = input.trim();
     
-    // URI format: spotify:track:id
     const uriMatch = clean.match(/^spotify:(track|playlist|album|artist):([a-zA-Z0-9]+)$/);
     if (uriMatch) {
       return { type: uriMatch[1] as any, id: uriMatch[2] };
     }
 
-    // URL format: https://open.spotify.com/playlist/id?si=...
     const urlMatch = clean.match(/open\.spotify\.com\/(track|playlist|album|artist)\/([a-zA-Z0-9]+)/);
     if (urlMatch) {
       return { type: urlMatch[1] as any, id: urlMatch[2] };
@@ -170,7 +166,6 @@ export class SpotifyService {
     return null;
   }
 
-  // Get Live New Releases
   public static async getNewReleases(): Promise<SpotifyAlbum[]> {
     const token = this.getStoredToken();
     if (token) {
@@ -195,7 +190,6 @@ export class SpotifyService {
       }
     }
 
-    // Dynamic Live Fallback using iTunes / Cloud Latest Pop Hits feed
     try {
       const res = await fetch('https://itunes.apple.com/search?term=2024+hits&media=music&entity=album&limit=8');
       if (res.ok) {
@@ -219,7 +213,6 @@ export class SpotifyService {
     return FALLBACK_SPOTIFY_NEW_RELEASES;
   }
 
-  // Get Featured / Top Playlists
   public static async getFeaturedPlaylists(): Promise<SpotifyPlaylistCard[]> {
     const token = this.getStoredToken();
     if (token) {
@@ -247,7 +240,6 @@ export class SpotifyService {
     return FALLBACK_SPOTIFY_FEATURED_PLAYLISTS;
   }
 
-  // Fetch playlist tracks from Spotify or cloud
   public static async getPlaylistTracks(playlistId: string, playlistTitle: string = 'Spotify Playlist'): Promise<Track[]> {
     const token = this.getStoredToken();
     if (token) {
@@ -281,9 +273,8 @@ export class SpotifyService {
       }
     }
 
-    // Dynamic Live search for this playlist theme via Cloud API
     try {
-      const query = playlistTitle.replace(/[^a-zA-Z0-9\s]/g, '').trim() || 'Top Hits 2024';
+      const query = playlistTitle.replace(/[^a-zA-Z0-9\s]/g, '').trim() || 'Top Hits';
       const tracks = await this.searchOnlineTracks(query);
       if (tracks.length > 0) return tracks;
     } catch (e) {
@@ -293,7 +284,6 @@ export class SpotifyService {
     return [];
   }
 
-  // Fetch album tracks from Spotify or cloud
   public static async getAlbumTracks(albumId: string, albumTitle: string = 'Spotify Album', artistName: string = ''): Promise<Track[]> {
     const token = this.getStoredToken();
     if (token) {
@@ -323,68 +313,73 @@ export class SpotifyService {
       }
     }
 
-    // Dynamic Live search for this album
     return this.searchOnlineTracks(`${artistName} ${albumTitle}`);
   }
 
-  // Universal online track search
+  // Search online tracks with 100% Full Audio streaming integration
   public static async searchOnlineTracks(query: string): Promise<Track[]> {
     if (!query.trim()) return [];
 
-    const token = this.getStoredToken();
-    if (token) {
-      try {
-        const res = await fetch(`https://api.spotify.com/v1/search?q=${encodeURIComponent(query)}&type=track&limit=25`, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        if (res.ok) {
-          const data = await res.json();
-          return data.tracks.items.map((item: any) => ({
-            id: `spotify-${item.id}`,
-            title: item.name,
-            artist: item.artists.map((a: any) => a.name).join(', '),
-            album: item.album?.name,
-            duration: Math.round(item.duration_ms / 1000) || 180,
-            audioUrl: item.preview_url || `https://open.spotify.com/track/${item.id}`,
-            coverUrl: item.album?.images?.[0]?.url || 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=600&q=80',
-            genre: 'Spotify Global',
-            source: 'spotify' as const,
-            spotifyUri: item.uri,
-            spotifyId: item.id,
-            externalUrl: item.external_urls?.spotify
-          }));
-        }
-      } catch (e) {
-        console.warn('Spotify search failed, falling back to instant preview search:', e);
-      }
-    }
+    const tracksList: Track[] = [];
 
-    // High quality instant music search via iTunes / Cloud API
+    // 1. Search Audius for 100% full length streaming tracks
     try {
-      const res = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(query)}&media=music&entity=song&limit=30`);
-      if (res.ok) {
-        const data = await res.json();
-        return data.results.map((item: any) => ({
-          id: `preview-${item.trackId}`,
-          title: item.trackName,
-          artist: item.artistName,
-          album: item.collectionName,
-          duration: Math.round(item.trackTimeMillis / 1000) || 30,
-          audioUrl: item.previewUrl,
-          coverUrl: (item.artworkUrl100 || '').replace('100x100bb', '600x600bb'),
-          genre: item.primaryGenreName || 'Pop / Rock',
-          source: 'online' as const,
-          externalUrl: item.trackViewUrl
-        }));
+      const audiusRes = await fetch(`https://discoveryprovider.audius.co/v1/tracks/search?query=${encodeURIComponent(query)}&app_name=johnmusic`);
+      if (audiusRes.ok) {
+        const audiusData = await audiusRes.json();
+        if (audiusData.data && Array.isArray(audiusData.data)) {
+          audiusData.data.slice(0, 15).forEach((t: any) => {
+            const cover = t.artwork?.['480x480'] || t.artwork?.['150x150'] || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?auto=format&fit=crop&w=600&q=80';
+            tracksList.push({
+              id: `audius-${t.id}`,
+              title: t.title,
+              artist: t.user?.name || 'Artista',
+              album: t.genre || 'Full Track (100%)',
+              duration: t.duration || 180,
+              audioUrl: `https://discoveryprovider.audius.co/v1/tracks/${t.id}/stream?app_name=johnmusic`,
+              coverUrl: cover,
+              genre: t.genre || 'Música Completa',
+              source: 'online',
+            });
+          });
+        }
       }
     } catch (e) {
-      console.error('Online preview search error:', e);
+      console.debug('Audius search error:', e);
     }
 
-    return [];
+    // 2. Also search iTunes / Spotify for rich global catalog
+    try {
+      const res = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(query)}&media=music&entity=song&limit=15`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.results) {
+          data.results.forEach((item: any) => {
+            // Only add if not already in list
+            if (!tracksList.some(t => t.title.toLowerCase() === item.trackName.toLowerCase())) {
+              tracksList.push({
+                id: `itunes-${item.trackId}`,
+                title: item.trackName,
+                artist: item.artistName,
+                album: item.collectionName,
+                duration: Math.round(item.trackTimeMillis / 1000) || 210,
+                audioUrl: item.previewUrl,
+                coverUrl: (item.artworkUrl100 || '').replace('100x100bb', '600x600bb'),
+                genre: item.primaryGenreName || 'Pop / Rock',
+                source: 'online' as const,
+                externalUrl: item.trackViewUrl
+              });
+            }
+          });
+        }
+      }
+    } catch (e) {
+      console.debug('Catalog search error:', e);
+    }
+
+    return tracksList;
   }
 
-  // Generate Spotify OAuth Authorization URL with PKCE
   public static async getAuthUrl(clientId: string, redirectUri: string): Promise<string> {
     const codeVerifier = this.generateRandomString(64);
     sessionStorage.setItem('spotify_code_verifier', codeVerifier);
