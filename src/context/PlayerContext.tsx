@@ -1,7 +1,8 @@
 import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
 import type { Track, Playlist, RepeatMode, VisualizerMode, ViewType, SpotifyAlbum, SpotifyPlaylistCard } from '../types/music';
-import { DEFAULT_TRACKS, DEFAULT_PLAYLISTS } from '../data/defaultTracks';
+import { DEFAULT_PLAYLISTS } from '../data/defaultTracks';
 import { audioEngine } from '../services/audioService';
+import { AudioStreamService } from '../services/audioStreamService';
 import confetti from 'canvas-confetti';
 
 interface PlayerContextType {
@@ -36,7 +37,7 @@ interface PlayerContextType {
   searchQuery: string;
 
   // Actions
-  playTrack: (track: Track, newQueue?: Track[]) => void;
+  playTrack: (track: Track, newQueue?: Track[]) => Promise<void>;
   togglePlay: () => void;
   nextTrack: () => void;
   prevTrack: () => void;
@@ -49,10 +50,12 @@ interface PlayerContextType {
   addToQueue: (track: Track) => void;
   removeFromQueue: (index: number) => void;
   clearQueue: () => void;
-  createPlaylist: (title: string, description: string) => Playlist;
+  createPlaylist: (title: string, description: string, coverUrl?: string) => Playlist;
+  updatePlaylist: (playlistId: string, updated: { title: string; description: string; coverUrl?: string }) => void;
   deletePlaylist: (playlistId: string) => void;
   addTrackToPlaylist: (playlistId: string, track: Track) => void;
   removeTrackFromPlaylist: (playlistId: string, trackId: string) => void;
+  reorderPlaylistTracks: (playlistId: string, fromIndex: number, toIndex: number) => void;
   addLocalTracks: (tracks: Track[]) => void;
   setCurrentView: (view: ViewType, playlistId?: string | null) => void;
   openSpotifyItem: (item: SpotifyPlaylistCard | SpotifyAlbum, type: 'playlist' | 'album') => void;
@@ -81,7 +84,6 @@ const STORAGE_REPEAT_KEY = 'johnmusic_repeat_mode';
 const STORAGE_SHUFFLE_KEY = 'johnmusic_shuffle_mode';
 
 export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  // 1. Playlists Persistence
   const [playlists, setPlaylists] = useState<Playlist[]>(() => {
     const saved = localStorage.getItem(STORAGE_PLAYLISTS_KEY);
     if (saved) {
@@ -90,16 +92,14 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     return DEFAULT_PLAYLISTS;
   });
 
-  // 2. Favorites Persistence
   const [favorites, setFavorites] = useState<Track[]>(() => {
     const saved = localStorage.getItem(STORAGE_FAVORITES_KEY);
     if (saved) {
       try { return JSON.parse(saved); } catch (e) { console.error(e); }
     }
-    return DEFAULT_TRACKS.filter(t => t.isLiked);
+    return [];
   });
 
-  // 3. Playback History Persistence
   const [history, setHistory] = useState<Track[]>(() => {
     const saved = localStorage.getItem(STORAGE_HISTORY_KEY);
     if (saved) {
@@ -108,7 +108,6 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     return [];
   });
 
-  // 4. Equalizer Persistence
   const [equalizerGains, setEqualizerGainsState] = useState<number[]>(() => {
     const saved = localStorage.getItem(STORAGE_EQ_KEY);
     if (saved) {
@@ -131,19 +130,16 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     return 'Padrão (Flat)';
   });
 
-  // 5. Visualizer Mode Persistence
   const [visualizerMode, setVisualizerMode] = useState<VisualizerMode>(() => {
     const saved = localStorage.getItem(STORAGE_VISUALIZER_KEY) as VisualizerMode;
     return saved || 'neon-pulse';
   });
 
-  // 6. Volume Persistence
   const [volume, setVolumeState] = useState<number>(() => {
     const saved = localStorage.getItem(STORAGE_VOL_KEY);
     return saved ? Number(saved) : 0.8;
   });
 
-  // 7. Repeat & Shuffle Persistence
   const [repeatMode, setRepeatMode] = useState<RepeatMode>(() => {
     const saved = localStorage.getItem(STORAGE_REPEAT_KEY) as RepeatMode;
     return saved || 'off';
@@ -154,22 +150,21 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     return saved === 'true';
   });
 
-  // 8. Last Track Persistence
   const [currentTrack, setCurrentTrack] = useState<Track | null>(() => {
     const saved = localStorage.getItem(STORAGE_LAST_TRACK_KEY);
     if (saved) {
       try { return JSON.parse(saved); } catch (e) { console.error(e); }
     }
-    return DEFAULT_TRACKS[0] || null;
+    return null;
   });
 
   const [localTracks, setLocalTracks] = useState<Track[]>([]);
-  const [queue, setQueue] = useState<Track[]>(DEFAULT_TRACKS);
+  const [queue, setQueue] = useState<Track[]>([]);
   const [queueIndex, setQueueIndex] = useState<number>(0);
 
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [currentTime, setCurrentTime] = useState<number>(0);
-  const [duration, setDuration] = useState<number>(184);
+  const [duration, setDuration] = useState<number>(0);
   const [isMuted, setIsMuted] = useState<boolean>(false);
 
   const [currentView, setCurrentViewState] = useState<ViewType>('home');
@@ -191,7 +186,6 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   const audioRef = useRef<HTMLAudioElement>(audioEngine.getAudioElement());
 
-  // Save all states to localStorage automatically
   useEffect(() => {
     localStorage.setItem(STORAGE_PLAYLISTS_KEY, JSON.stringify(playlists));
   }, [playlists]);
@@ -255,6 +249,46 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     return () => clearInterval(interval);
   }, [sleepTimerMinutes]);
 
+  const playTrack = useCallback(async (track: Track, newQueue?: Track[]) => {
+    let updatedQueue = queue;
+    let index = 0;
+
+    if (newQueue && newQueue.length > 0) {
+      updatedQueue = newQueue;
+      index = newQueue.findIndex(t => t.id === track.id);
+      if (index === -1) {
+        updatedQueue = [track, ...newQueue];
+        index = 0;
+      }
+      setQueue(updatedQueue);
+    } else {
+      index = updatedQueue.findIndex(t => t.id === track.id);
+      if (index === -1) {
+        updatedQueue = [...queue, track];
+        index = updatedQueue.length - 1;
+        setQueue(updatedQueue);
+      }
+    }
+
+    setQueueIndex(index >= 0 ? index : 0);
+    setCurrentTrack(track);
+
+    // Resolve full 100% audio URL
+    const fullAudioUrl = await AudioStreamService.resolveFullAudioUrl(track.title, track.artist, track.audioUrl);
+
+    audioEngine.setSrc(fullAudioUrl);
+    audioEngine.play().then(() => {
+      setIsPlaying(true);
+    }).catch(err => {
+      console.warn('Playback prevented or failed:', err);
+    });
+
+    setHistory(prev => {
+      const filtered = prev.filter(t => t.id !== track.id);
+      return [track, ...filtered].slice(0, 50);
+    });
+  }, [queue]);
+
   const nextTrack = useCallback(() => {
     if (queue.length === 0) return;
 
@@ -275,16 +309,9 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
     const nextTrk = queue[nextIdx];
     if (nextTrk) {
-      setQueueIndex(nextIdx);
-      setCurrentTrack(nextTrk);
-      audioEngine.setSrc(nextTrk.audioUrl);
-      audioEngine.play().then(() => {
-        setIsPlaying(true);
-      }).catch(e => console.warn(e));
-
-      setHistory(prev => [nextTrk, ...prev.filter(t => t.id !== nextTrk.id)].slice(0, 50));
+      playTrack(nextTrk, queue);
     }
-  }, [queue, queueIndex, isShuffle, repeatMode]);
+  }, [queue, queueIndex, isShuffle, repeatMode, playTrack]);
 
   const handleTrackEnd = useCallback(() => {
     if (repeatMode === 'one') {
@@ -328,43 +355,6 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     };
   }, [currentTrack, queue, queueIndex, repeatMode, isShuffle, handleTrackEnd]);
 
-  const playTrack = useCallback((track: Track, newQueue?: Track[]) => {
-    let updatedQueue = queue;
-    let index = 0;
-
-    if (newQueue && newQueue.length > 0) {
-      updatedQueue = newQueue;
-      index = newQueue.findIndex(t => t.id === track.id);
-      if (index === -1) {
-        updatedQueue = [track, ...newQueue];
-        index = 0;
-      }
-      setQueue(updatedQueue);
-    } else {
-      index = updatedQueue.findIndex(t => t.id === track.id);
-      if (index === -1) {
-        updatedQueue = [...queue, track];
-        index = updatedQueue.length - 1;
-        setQueue(updatedQueue);
-      }
-    }
-
-    setQueueIndex(index >= 0 ? index : 0);
-    setCurrentTrack(track);
-
-    audioEngine.setSrc(track.audioUrl);
-    audioEngine.play().then(() => {
-      setIsPlaying(true);
-    }).catch(err => {
-      console.warn('Playback prevented or failed:', err);
-    });
-
-    setHistory(prev => {
-      const filtered = prev.filter(t => t.id !== track.id);
-      return [track, ...filtered].slice(0, 50);
-    });
-  }, [queue]);
-
   const togglePlay = useCallback(() => {
     if (!currentTrack && queue.length > 0) {
       playTrack(queue[0]);
@@ -398,16 +388,9 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const prevIdx = queueIndex - 1 < 0 ? queue.length - 1 : queueIndex - 1;
     const prevTrk = queue[prevIdx];
     if (prevTrk) {
-      setQueueIndex(prevIdx);
-      setCurrentTrack(prevTrk);
-      audioEngine.setSrc(prevTrk.audioUrl);
-      audioEngine.play().then(() => {
-        setIsPlaying(true);
-      }).catch(e => console.warn(e));
-
-      setHistory(prev => [prevTrk, ...prev.filter(t => t.id !== prevTrk.id)].slice(0, 50));
+      playTrack(prevTrk, queue);
     }
-  }, [queue, queueIndex, currentTime, seek]);
+  }, [queue, queueIndex, currentTime, seek, playTrack]);
 
   const setVolume = useCallback((vol: number) => {
     const clamped = Math.max(0, Math.min(1, vol));
@@ -488,12 +471,12 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }
   }, [currentTrack]);
 
-  const createPlaylist = useCallback((title: string, description: string): Playlist => {
+  const createPlaylist = useCallback((title: string, description: string, coverUrl?: string): Playlist => {
     const newPlaylist: Playlist = {
       id: `playlist-${Date.now()}`,
       title: title || 'Minha Playlist',
       description: description || 'Playlist criada no johnmusic.',
-      coverUrl: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?auto=format&fit=crop&w=600&q=80',
+      coverUrl: coverUrl || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?auto=format&fit=crop&w=600&q=80',
       trackIds: [],
       createdAt: Date.now()
     };
@@ -506,6 +489,15 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     });
 
     return newPlaylist;
+  }, []);
+
+  const updatePlaylist = useCallback((playlistId: string, updated: { title: string; description: string; coverUrl?: string }) => {
+    setPlaylists(prev => prev.map(p => {
+      if (p.id === playlistId) {
+        return { ...p, ...updated };
+      }
+      return p;
+    }));
   }, []);
 
   const deletePlaylist = useCallback((playlistId: string) => {
@@ -529,6 +521,18 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     setPlaylists(prev => prev.map(p => {
       if (p.id === playlistId) {
         return { ...p, trackIds: p.trackIds.filter(id => id !== trackId) };
+      }
+      return p;
+    }));
+  }, []);
+
+  const reorderPlaylistTracks = useCallback((playlistId: string, fromIndex: number, toIndex: number) => {
+    setPlaylists(prev => prev.map(p => {
+      if (p.id === playlistId) {
+        const nextIds = [...p.trackIds];
+        const [moved] = nextIds.splice(fromIndex, 1);
+        nextIds.splice(toIndex, 0, moved);
+        return { ...p, trackIds: nextIds };
       }
       return p;
     }));
@@ -616,9 +620,11 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         removeFromQueue,
         clearQueue,
         createPlaylist,
+        updatePlaylist,
         deletePlaylist,
         addTrackToPlaylist,
         removeTrackFromPlaylist,
+        reorderPlaylistTracks,
         addLocalTracks,
         setCurrentView,
         openSpotifyItem,

@@ -1,22 +1,23 @@
 import React, { useState, useEffect } from 'react';
 import { usePlayer } from '../../context/PlayerContext';
-import { DEFAULT_TRACKS } from '../../data/defaultTracks';
 import { SpotifyService } from '../../services/spotifyService';
 import type { SpotifyAlbum, SpotifyPlaylistCard } from '../../types/music';
-import { TrackCard } from '../common/TrackCard';
+import { TrackRow } from '../common/TrackRow';
 import { 
   Play, 
   Sparkles, 
   FileAudio, 
   Flame, 
   Radio, 
-  ArrowRight,
-  Zap,
-  Globe
+  ArrowRight, 
+  Zap, 
+  Globe, 
+  Compass, 
+  History 
 } from 'lucide-react';
 
 export const HomeView: React.FC = () => {
-  const { playTrack, setCurrentView, playlists, localTracks, openSpotifyItem } = usePlayer();
+  const { playTrack, setCurrentView, playlists, localTracks, favorites, history, openSpotifyItem } = usePlayer();
   const [spotifyNewReleases, setSpotifyNewReleases] = useState<SpotifyAlbum[]>([]);
   const [spotifyFeatured, setSpotifyFeatured] = useState<SpotifyPlaylistCard[]>([]);
   const [spotifyUrlInput, setSpotifyUrlInput] = useState<string>('');
@@ -50,7 +51,7 @@ export const HomeView: React.FC = () => {
 
     const parsed = SpotifyService.parseSpotifyUrl(spotifyUrlInput);
     if (!parsed) {
-      setUrlMessage('Link inválido. Cole um link válido do Spotify (música, playlist ou álbum).');
+      setUrlMessage('Link inválido. Cole uma URL válida do Spotify (música, playlist ou álbum).');
       return;
     }
 
@@ -82,8 +83,6 @@ export const HomeView: React.FC = () => {
     }
   };
 
-  const featuredTrack = DEFAULT_TRACKS[0];
-
   return (
     <div className="space-y-10 animate-fade-in">
       {/* Hero Banner */}
@@ -92,10 +91,10 @@ export const HomeView: React.FC = () => {
         <div className="absolute -right-10 -bottom-10 w-64 h-64 bg-emerald-500/15 rounded-full blur-3xl pointer-events-none" />
 
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
-          <div className="space-y-3 max-w-xl">
+          <div className="space-y-3 max-w-2xl">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 text-xs font-semibold border border-emerald-500/30">
               <Sparkles className="w-3.5 h-3.5" />
-              <span>Conectado ao Catálogo Spotify & Web Audio Live</span>
+              <span>johnmusic Pro — Tocador de Alta Fidelidade</span>
             </div>
 
             <h1 className="text-3xl sm:text-4xl font-black text-white tracking-tight">
@@ -103,16 +102,16 @@ export const HomeView: React.FC = () => {
             </h1>
 
             <p className="text-sm text-slate-300 leading-relaxed">
-              O que você quer ouvir agora? Navegue por qualquer lançamento do Spotify, importe suas músicas locais do computador ou explore o catálogo mundial.
+              Pesquise qualquer música do mundo, ouça lançamentos ao vivo do Spotify, crie playlists personalizadas ou toque seus arquivos de áudio do PC com áudio 100% completo e equalizador.
             </p>
 
             <div className="flex flex-wrap items-center gap-3 pt-2">
               <button
-                onClick={() => playTrack(featuredTrack, DEFAULT_TRACKS)}
+                onClick={() => setCurrentView('explore')}
                 className="px-6 py-3 rounded-2xl bg-emerald-400 hover:bg-emerald-300 text-slate-950 font-bold text-sm shadow-xl shadow-emerald-500/30 flex items-center gap-2.5 transition-all hover:scale-105 active:scale-95"
               >
-                <Play className="w-4 h-4 fill-slate-950" />
-                Tocar Mix em Destaque
+                <Compass className="w-4 h-4" />
+                Explorar & Buscar Músicas
               </button>
 
               <button
@@ -125,24 +124,19 @@ export const HomeView: React.FC = () => {
             </div>
           </div>
 
-          {/* Featured Artwork */}
-          <div 
-            onClick={() => playTrack(featuredTrack, DEFAULT_TRACKS)}
-            className="group relative w-44 h-44 sm:w-52 sm:h-52 rounded-2xl overflow-hidden shadow-2xl border border-slate-700/60 cursor-pointer flex-shrink-0 self-center md:self-auto"
-          >
-            <img 
-              src={featuredTrack.coverUrl} 
-              alt={featuredTrack.title} 
-              className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
-            />
-            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-              <div className="w-12 h-12 rounded-full bg-emerald-500 text-slate-950 flex items-center justify-center shadow-lg">
-                <Play className="w-6 h-6 fill-slate-950 ml-0.5" />
-              </div>
+          <div className="hidden lg:flex flex-col gap-2 p-4 rounded-2xl bg-slate-950/60 border border-slate-800 backdrop-blur-md min-w-[220px]">
+            <div className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
+              <Globe className="w-4 h-4 text-emerald-400" />
+              Resumo da Biblioteca
             </div>
-            <div className="absolute bottom-2 left-2 right-2 p-2 rounded-xl bg-slate-950/80 backdrop-blur-md">
-              <div className="text-xs font-bold text-white truncate">{featuredTrack.title}</div>
-              <div className="text-[10px] text-emerald-400 truncate">{featuredTrack.artist}</div>
+            <div className="text-[11px] text-slate-400">
+              ❤️ Favoritos: <span className="text-white font-bold">{favorites.length}</span>
+            </div>
+            <div className="text-[11px] text-slate-400">
+              📁 Playlists: <span className="text-white font-bold">{playlists.length}</span>
+            </div>
+            <div className="text-[11px] text-slate-400">
+              🕒 Histórico: <span className="text-white font-bold">{history.length} faixas</span>
             </div>
           </div>
         </div>
@@ -156,12 +150,12 @@ export const HomeView: React.FC = () => {
           </div>
           <div>
             <h3 className="text-sm font-bold text-white flex items-center gap-2">
-              Importador Universal do Spotify
+              Importador Instantâneo do Spotify
               <span className="px-2 py-0.5 rounded-full bg-green-500/20 text-green-300 text-[10px] font-mono">
                 Qualquer Link
               </span>
             </h3>
-            <p className="text-xs text-slate-400">Cole qualquer URL de música, playlist ou álbum do Spotify para abrir instantaneamente</p>
+            <p className="text-xs text-slate-400">Cole qualquer link de música, playlist ou álbum do Spotify para abrir aqui</p>
           </div>
         </div>
 
@@ -187,6 +181,67 @@ export const HomeView: React.FC = () => {
         <div className="text-xs text-green-400 font-medium px-2">{urlMessage}</div>
       )}
 
+      {/* User's Recent History (if any) */}
+      {history.length > 0 && (
+        <div className="bg-slate-900/60 border border-slate-800/80 rounded-3xl p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-bold text-white flex items-center gap-2">
+              <History className="w-5 h-5 text-cyan-400" />
+              Tocadas Recentemente
+            </h2>
+            <button
+              onClick={() => setCurrentView('history')}
+              className="text-xs font-bold text-cyan-400 hover:underline"
+            >
+              Ver Todas ({history.length})
+            </button>
+          </div>
+          <div className="space-y-1">
+            {history.slice(0, 5).map((track, idx) => (
+              <TrackRow 
+                key={`home-hist-${track.id}-${idx}`} 
+                track={track} 
+                index={idx} 
+                allTracks={history} 
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* User Playlists */}
+      {playlists.length > 0 && (
+        <div>
+          <h2 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+            <Flame className="w-5 h-5 text-amber-400" />
+            Suas Playlists no johnmusic
+          </h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {playlists.map((pl) => (
+              <div
+                key={pl.id}
+                onClick={() => setCurrentView('playlist', pl.id)}
+                className="group flex items-center gap-4 p-3 rounded-2xl bg-slate-900/60 hover:bg-slate-800/80 border border-slate-800/80 hover:border-emerald-500/30 cursor-pointer transition-all"
+              >
+                <img 
+                  src={pl.coverUrl} 
+                  alt={pl.title} 
+                  className="w-14 h-14 rounded-xl object-cover shadow flex-shrink-0 group-hover:scale-105 transition-transform"
+                />
+                <div className="min-w-0 flex-1">
+                  <h3 className="text-sm font-bold text-slate-200 group-hover:text-emerald-400 truncate transition-colors">
+                    {pl.title}
+                  </h3>
+                  <p className="text-xs text-slate-400 truncate mt-0.5">
+                    {pl.trackIds.length} músicas
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Spotify Live New Releases */}
       <div>
         <div className="flex items-center justify-between mb-4">
@@ -195,7 +250,7 @@ export const HomeView: React.FC = () => {
               <Radio className="w-5 h-5 text-green-400" />
               🔥 Novos Lançamentos no Spotify (Live)
             </h2>
-            <p className="text-xs text-slate-400">Álbuns e singles recém-lançados no catálogo mundial</p>
+            <p className="text-xs text-slate-400">Álbuns e músicas recém-lançados no catálogo mundial</p>
           </div>
           <button
             onClick={() => setCurrentView('explore')}
@@ -224,7 +279,7 @@ export const HomeView: React.FC = () => {
                   </div>
                 </div>
                 <span className="absolute top-2 left-2 px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-950/80 backdrop-blur-md text-green-400 border border-green-500/30">
-                  Spotify Álbum
+                  Spotify
                 </span>
               </div>
               <h3 className="font-semibold text-sm text-slate-100 group-hover:text-green-400 truncate">
@@ -276,59 +331,6 @@ export const HomeView: React.FC = () => {
                 {pl.description}
               </p>
             </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Quick Launch Cards */}
-      <div>
-        <h2 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
-          <Flame className="w-5 h-5 text-amber-400" />
-          Suas Playlists do johnmusic
-        </h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          {playlists.slice(0, 3).map((pl) => (
-            <div
-              key={pl.id}
-              onClick={() => setCurrentView('playlist', pl.id)}
-              className="group flex items-center gap-4 p-3 rounded-2xl bg-slate-900/60 hover:bg-slate-800/80 border border-slate-800/80 hover:border-emerald-500/30 cursor-pointer transition-all"
-            >
-              <img 
-                src={pl.coverUrl} 
-                alt={pl.title} 
-                className="w-14 h-14 rounded-xl object-cover shadow flex-shrink-0 group-hover:scale-105 transition-transform"
-              />
-              <div className="min-w-0 flex-1">
-                <h3 className="text-sm font-bold text-slate-200 group-hover:text-emerald-400 truncate transition-colors">
-                  {pl.title}
-                </h3>
-                <p className="text-xs text-slate-400 truncate mt-0.5">
-                  {pl.trackIds.length} músicas
-                </p>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Curated Built-in Tracks Grid */}
-      <div>
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h2 className="text-xl font-bold text-white">Recomendados em Alta Qualidade</h2>
-            <p className="text-xs text-slate-400">Coleção curada pronta para tocar com visualizador</p>
-          </div>
-          <button
-            onClick={() => setCurrentView('explore')}
-            className="text-xs font-bold text-emerald-400 hover:underline"
-          >
-            Ver Tudo
-          </button>
-        </div>
-
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
-          {DEFAULT_TRACKS.map((track) => (
-            <TrackCard key={track.id} track={track} allTracks={DEFAULT_TRACKS} />
           ))}
         </div>
       </div>
