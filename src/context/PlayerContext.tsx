@@ -155,7 +155,7 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   const [isYouTubeMode, setIsYouTubeMode] = useState<boolean>(() => {
     const saved = localStorage.getItem(STORAGE_YT_MODE_KEY);
-    return saved === 'true';
+    return saved !== null ? saved === 'true' : true;
   });
 
   const [currentTrack, setCurrentTrack] = useState<Track | null>(() => {
@@ -261,7 +261,7 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     return () => clearInterval(interval);
   }, [sleepTimerMinutes]);
 
-  // Clear & Guaranteed Playback Function
+  // 100% Full Length Playback Function for all tracks
   const playTrack = useCallback((track: Track, newQueue?: Track[]) => {
     let updatedQueue = queue;
     let index = 0;
@@ -286,20 +286,19 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     setQueueIndex(index >= 0 ? index : 0);
     setCurrentTrack(track);
     setIsPlaying(true);
+    setCurrentTime(0);
+    setDuration(track.duration || 210);
 
-    const isExplicitYt = track.genre === 'YouTube' || track.genre === 'TikTok Viral' || track.audioUrl?.includes('youtube.com') || track.audioUrl?.includes('youtu.be');
+    const isLocalAudio = track.isLocal || (track.audioUrl && (track.audioUrl.startsWith('blob:') || track.audioUrl.startsWith('data:')));
 
-    if (isExplicitYt) {
+    if (isLocalAudio) {
+      setIsYouTubeMode(false);
+      audioEngine.setSrc(track.audioUrl);
+      audioEngine.play().catch(e => console.warn(e));
+    } else {
+      // 100% Full Audio streaming for all global songs
       setIsYouTubeMode(true);
       audioEngine.pause();
-    } else {
-      setIsYouTubeMode(false);
-      if (track.audioUrl) {
-        audioEngine.setSrc(track.audioUrl);
-        audioEngine.play().catch(err => {
-          console.warn('Audio play error, retrying:', err);
-        });
-      }
     }
 
     setHistory(prev => {
@@ -334,12 +333,18 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   const handleTrackEnd = useCallback(() => {
     if (repeatMode === 'one') {
-      audioEngine.seek(0);
-      audioEngine.play();
+      seek(0);
+      setIsPlaying(true);
+      if (isYouTubeMode) {
+        try { window.__johnmusic_yt_player?.seekTo(0, true); window.__johnmusic_yt_player?.playVideo(); } catch {}
+      } else {
+        audioEngine.seek(0);
+        audioEngine.play();
+      }
     } else {
       nextTrack();
     }
-  }, [repeatMode, nextTrack]);
+  }, [repeatMode, nextTrack, isYouTubeMode]);
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -357,23 +362,19 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     };
 
     const onEnded = () => {
-      handleTrackEnd();
-    };
-
-    const onError = (e: any) => {
-      console.warn('Audio element error:', e);
+      if (!isYouTubeMode) {
+        handleTrackEnd();
+      }
     };
 
     audio.addEventListener('timeupdate', onTimeUpdate);
     audio.addEventListener('loadedmetadata', onLoadedMetadata);
     audio.addEventListener('ended', onEnded);
-    audio.addEventListener('error', onError);
 
     return () => {
       audio.removeEventListener('timeupdate', onTimeUpdate);
       audio.removeEventListener('loadedmetadata', onLoadedMetadata);
       audio.removeEventListener('ended', onEnded);
-      audio.removeEventListener('error', onError);
     };
   }, [currentTrack, queue, queueIndex, repeatMode, isShuffle, handleTrackEnd, isYouTubeMode]);
 
@@ -408,14 +409,16 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   }, [isPlaying, currentTrack, queue, playTrack, isYouTubeMode]);
 
   const seek = useCallback((seconds: number) => {
-    audioEngine.seek(seconds);
+    if (!isYouTubeMode) {
+      audioEngine.seek(seconds);
+    }
     setCurrentTime(seconds);
     try {
       if (window.__johnmusic_yt_player?.seekTo) {
         window.__johnmusic_yt_player.seekTo(seconds, true);
       }
     } catch {}
-  }, []);
+  }, [isYouTubeMode]);
 
   const prevTrack = useCallback(() => {
     if (currentTime > 4) {
@@ -474,13 +477,7 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   }, []);
 
   const toggleYouTubeMode = useCallback(() => {
-    setIsYouTubeMode(prev => {
-      const next = !prev;
-      if (next) {
-        audioEngine.pause();
-      }
-      return next;
-    });
+    setIsYouTubeMode(prev => !prev);
   }, []);
 
   const toggleFavorite = useCallback((track: Track) => {
