@@ -155,7 +155,7 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   const [isYouTubeMode, setIsYouTubeMode] = useState<boolean>(() => {
     const saved = localStorage.getItem(STORAGE_YT_MODE_KEY);
-    return saved !== null ? saved === 'true' : true;
+    return saved === 'true';
   });
 
   const [currentTrack, setCurrentTrack] = useState<Track | null>(() => {
@@ -261,7 +261,19 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     return () => clearInterval(interval);
   }, [sleepTimerMinutes]);
 
-  // 100% Full Length Playback Function (Direct MP3 for TikTok & Local, YouTube Bridge for Global catalog)
+  const seek = useCallback((seconds: number) => {
+    if (!isYouTubeMode) {
+      audioEngine.seek(seconds);
+    }
+    setCurrentTime(seconds);
+    try {
+      if (window.__johnmusic_yt_player?.seekTo) {
+        window.__johnmusic_yt_player.seekTo(seconds, true);
+      }
+    } catch {}
+  }, [isYouTubeMode]);
+
+  // Instant & Guaranteed Audio Playback
   const playTrack = useCallback((track: Track, newQueue?: Track[]) => {
     let updatedQueue = queue;
     let index = 0;
@@ -287,26 +299,20 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     setCurrentTrack(track);
     setIsPlaying(true);
     setCurrentTime(0);
-    setDuration(track.duration || 180);
 
-    const isDirectAudio = 
-      track.isLocal || 
-      track.genre === 'TikTok Direct Audio' ||
-      (track.audioUrl && (
-        track.audioUrl.startsWith('blob:') || 
-        track.audioUrl.startsWith('data:') ||
-        track.audioUrl.includes('tiktokcdn') ||
-        track.audioUrl.includes('.mp3')
-      ) && !track.audioUrl.includes('youtube.com') && !track.audioUrl.includes('youtu.be'));
+    const isExplicitYt = track.genre === 'YouTube' || track.audioUrl?.includes('youtube.com') || track.audioUrl?.includes('youtu.be');
 
-    if (isDirectAudio) {
-      setIsYouTubeMode(false);
-      audioEngine.setSrc(track.audioUrl);
-      audioEngine.play().catch(e => console.warn('Direct audio play error:', e));
-    } else {
-      // 100% Full Audio streaming for all global songs and YouTube links
+    if (isExplicitYt) {
       setIsYouTubeMode(true);
       audioEngine.pause();
+    } else {
+      setIsYouTubeMode(false);
+      if (track.audioUrl) {
+        audioEngine.setSrc(track.audioUrl);
+        audioEngine.play().catch(e => {
+          console.warn('Audio play attempt:', e);
+        });
+      }
     }
 
     setHistory(prev => {
@@ -343,16 +349,12 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     if (repeatMode === 'one') {
       seek(0);
       setIsPlaying(true);
-      if (isYouTubeMode) {
-        try { window.__johnmusic_yt_player?.seekTo(0, true); window.__johnmusic_yt_player?.playVideo(); } catch {}
-      } else {
-        audioEngine.seek(0);
-        audioEngine.play();
-      }
+      audioEngine.seek(0);
+      audioEngine.play().catch(() => {});
     } else {
       nextTrack();
     }
-  }, [repeatMode, nextTrack, isYouTubeMode]);
+  }, [repeatMode, nextTrack, seek]);
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -415,18 +417,6 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       }
     }
   }, [isPlaying, currentTrack, queue, playTrack, isYouTubeMode]);
-
-  const seek = useCallback((seconds: number) => {
-    if (!isYouTubeMode) {
-      audioEngine.seek(seconds);
-    }
-    setCurrentTime(seconds);
-    try {
-      if (window.__johnmusic_yt_player?.seekTo) {
-        window.__johnmusic_yt_player.seekTo(seconds, true);
-      }
-    } catch {}
-  }, [isYouTubeMode]);
 
   const prevTrack = useCallback(() => {
     if (currentTime > 4) {
