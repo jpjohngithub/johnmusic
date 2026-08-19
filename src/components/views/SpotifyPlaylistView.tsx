@@ -3,7 +3,7 @@ import { usePlayer } from '../../context/PlayerContext';
 import { SpotifyService } from '../../services/spotifyService';
 import type { Track, SpotifyPlaylistCard, SpotifyAlbum } from '../../types/music';
 import { TrackRow } from '../common/TrackRow';
-import { Play, Shuffle, Radio, Loader2, Sparkles, ExternalLink } from 'lucide-react';
+import { Play, Shuffle, Radio, Loader2, Sparkles, ExternalLink, Music2 } from 'lucide-react';
 import { SpotifyEmbedModal } from '../player/SpotifyEmbedModal';
 
 interface SpotifyPlaylistViewProps {
@@ -16,6 +16,7 @@ export const SpotifyPlaylistView: React.FC<SpotifyPlaylistViewProps> = ({ item, 
   const [tracks, setTracks] = useState<Track[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isEmbedOpen, setIsEmbedOpen] = useState<boolean>(false);
+  const [embedMode, setEmbedMode] = useState<boolean>(false);
 
   useEffect(() => {
     if (!item) return;
@@ -66,8 +67,10 @@ export const SpotifyPlaylistView: React.FC<SpotifyPlaylistViewProps> = ({ item, 
     }
   };
 
+  const embedUrl = `https://open.spotify.com/embed/${type}/${item.id}?utm_source=generator&theme=0`;
+
   return (
-    <div className="space-y-8 animate-fade-in">
+    <div className="space-y-8 animate-fade-in pb-12">
       {/* Hero Banner */}
       <div className="flex flex-col md:flex-row items-center md:items-end gap-6 p-6 sm:p-8 rounded-3xl bg-gradient-to-b from-green-950/70 via-slate-900 to-slate-950 border border-green-500/30 shadow-2xl">
         <img 
@@ -93,7 +96,7 @@ export const SpotifyPlaylistView: React.FC<SpotifyPlaylistViewProps> = ({ item, 
           <div className="flex flex-wrap items-center justify-center md:justify-start gap-4 text-xs text-slate-400 font-medium pt-1">
             <span className="text-white font-bold">{artistOrOwner}</span>
             <span>•</span>
-            <span className="text-green-400 font-semibold">{tracks.length > 0 ? `${tracks.length} músicas carregadas` : 'Carregando faixas...'}</span>
+            <span className="text-green-400 font-semibold">{tracks.length > 0 ? `${tracks.length} músicas completas` : 'Carregando faixas...'}</span>
           </div>
         </div>
       </div>
@@ -120,56 +123,84 @@ export const SpotifyPlaylistView: React.FC<SpotifyPlaylistViewProps> = ({ item, 
           </button>
 
           <button
-            onClick={() => setIsEmbedOpen(true)}
-            className="px-4 py-3 rounded-2xl bg-slate-800/80 hover:bg-slate-700 text-slate-200 font-semibold text-xs border border-slate-700 flex items-center gap-2 transition-all"
+            onClick={() => setEmbedMode(!embedMode)}
+            className={`px-4 py-3 rounded-2xl font-semibold text-xs border transition-all flex items-center gap-2 ${
+              embedMode 
+                ? 'bg-green-500/20 text-green-300 border-green-500/40' 
+                : 'bg-slate-800/80 hover:bg-slate-700 text-slate-200 border-slate-700'
+            }`}
           >
             <Radio className="w-4 h-4 text-green-400" />
-            Abrir no Player Spotify
+            {embedMode ? 'Ver Lista de Faixas' : 'Player Oficial Spotify Integrado'}
           </button>
         </div>
 
-        <a
-          href={`https://open.spotify.com/${type}/${item.id}`}
-          target="_blank"
-          rel="noreferrer"
-          className="px-4 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-xs font-semibold text-slate-400 hover:text-white flex items-center gap-1.5 transition-colors"
-        >
-          <ExternalLink className="w-4 h-4" />
-          Ver no app Spotify
-        </a>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setIsEmbedOpen(true)}
+            className="px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-xs font-semibold text-slate-400 hover:text-white flex items-center gap-1.5 transition-colors"
+          >
+            <Music2 className="w-4 h-4 text-green-400" />
+            Janela Spotify
+          </button>
+
+          <a
+            href={`https://open.spotify.com/${type}/${item.id}`}
+            target="_blank"
+            rel="noreferrer"
+            className="px-4 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-xs font-semibold text-slate-400 hover:text-white flex items-center gap-1.5 transition-colors"
+          >
+            <ExternalLink className="w-4 h-4" />
+            Abrir no Spotify
+          </a>
+        </div>
       </div>
 
-      {/* Track List */}
-      <div className="bg-slate-900/60 border border-slate-800/80 rounded-3xl p-6">
-        {isLoading ? (
-          <div className="flex flex-col items-center justify-center py-16 space-y-3">
-            <Loader2 className="w-8 h-8 text-green-400 animate-spin" />
-            <p className="text-xs text-slate-400">Conectando e sincronizando faixas do Spotify...</p>
-          </div>
-        ) : tracks.length === 0 ? (
-          <div className="text-center py-12 text-slate-500">
-            <Sparkles className="w-10 h-10 mx-auto mb-2 text-slate-600" />
-            <p className="text-sm font-semibold text-slate-300">Nenhuma faixa encontrada.</p>
-            <button
-              onClick={() => setIsEmbedOpen(true)}
-              className="mt-3 px-4 py-2 bg-green-500 text-slate-950 font-bold rounded-xl text-xs"
-            >
-              Ouvir no Spotify Embed
-            </button>
-          </div>
-        ) : (
-          <div className="space-y-1">
-            {tracks.map((track, idx) => (
-              <TrackRow 
-                key={`${track.id}-${idx}`} 
-                track={track} 
-                index={idx} 
-                allTracks={tracks} 
-              />
-            ))}
-          </div>
-        )}
-      </div>
+      {/* Interactive Content */}
+      {embedMode ? (
+        <div className="bg-slate-900/80 border border-slate-800 rounded-3xl p-4 shadow-2xl overflow-hidden animate-slide-up">
+          <iframe
+            src={embedUrl}
+            width="100%"
+            height="480"
+            frameBorder="0"
+            allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
+            loading="lazy"
+            className="rounded-2xl"
+          />
+        </div>
+      ) : (
+        <div className="bg-slate-900/60 border border-slate-800/80 rounded-3xl p-6">
+          {isLoading ? (
+            <div className="flex flex-col items-center justify-center py-16 space-y-3">
+              <Loader2 className="w-8 h-8 text-green-400 animate-spin" />
+              <p className="text-xs text-slate-400">Conectando e sincronizando todas as faixas do Spotify...</p>
+            </div>
+          ) : tracks.length === 0 ? (
+            <div className="text-center py-12 text-slate-500">
+              <Sparkles className="w-10 h-10 mx-auto mb-2 text-slate-600" />
+              <p className="text-sm font-semibold text-slate-300">Nenhuma faixa encontrada.</p>
+              <button
+                onClick={() => setEmbedMode(true)}
+                className="mt-3 px-4 py-2 bg-green-500 text-slate-950 font-bold rounded-xl text-xs"
+              >
+                Abrir Player Spotify Integrado
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-1">
+              {tracks.map((track, idx) => (
+                <TrackRow 
+                  key={`${track.id}-${idx}`} 
+                  track={track} 
+                  index={idx} 
+                  allTracks={tracks} 
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       <SpotifyEmbedModal
         isOpen={isEmbedOpen}

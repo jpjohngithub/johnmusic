@@ -1,4 +1,5 @@
 import type { Track } from '../types/music';
+import { SpotifyService } from './spotifyService';
 
 export interface ResolvedUrlTrack {
   track: Track;
@@ -31,7 +32,41 @@ export class UniversalUrlService {
     const cleanUrl = url.trim();
     if (!cleanUrl) return null;
 
-    // 1. TIKTOK (Videos / Sounds) - Extract Real Direct MP3 Stream
+    // 1. SPOTIFY URL (Tracks, Playlists, Albums)
+    if (this.isSpotifyUrl(cleanUrl)) {
+      try {
+        const oembedRes = await fetch(`https://open.spotify.com/oembed?url=${encodeURIComponent(cleanUrl)}`);
+        if (oembedRes.ok) {
+          const data = await oembedRes.json();
+          const title = data.title || 'Música do Spotify';
+          const cover = data.thumbnail_url || 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=600&q=80';
+
+          const track: Track = {
+            id: `spotify-${Date.now()}`,
+            title,
+            artist: 'Spotify',
+            album: 'Spotify Playlist & Tracks',
+            duration: 210,
+            audioUrl: '',
+            coverUrl: cover,
+            genre: 'Spotify',
+            source: 'spotify',
+            externalUrl: cleanUrl,
+            spotifyUri: cleanUrl,
+          };
+
+          // Try to resolve playable stream
+          const resolvedAudioUrl = await SpotifyService.ensurePlayableAudioUrl(track);
+          track.audioUrl = resolvedAudioUrl;
+
+          return { track, platform: 'spotify' };
+        }
+      } catch (err) {
+        console.debug('Spotify oEmbed resolution error:', err);
+      }
+    }
+
+    // 2. TIKTOK (Videos / Sounds) - Extract Real Direct MP3 Stream
     if (this.isTikTokUrl(cleanUrl)) {
       try {
         const tikwmRes = await fetch(`https://www.tikwm.com/api/?url=${encodeURIComponent(cleanUrl)}`);
@@ -96,7 +131,7 @@ export class UniversalUrlService {
       return { track, platform: 'tiktok' };
     }
 
-    // 2. YOUTUBE (Videos / Shorts / Music)
+    // 3. YOUTUBE (Videos / Shorts / Music)
     if (this.isYouTubeUrl(cleanUrl)) {
       const videoId = this.extractYouTubeVideoId(cleanUrl) || 'dQw4w9WgXcQ';
       let title = 'Vídeo do YouTube';
@@ -131,7 +166,7 @@ export class UniversalUrlService {
       return { track, platform: 'youtube' };
     }
 
-    // 3. DIRECT AUDIO URL
+    // 4. DIRECT AUDIO URL
     if (this.isDirectAudioUrl(cleanUrl)) {
       const fileName = cleanUrl.split('/').pop()?.split('?')[0] || 'Áudio da Web';
       const cleanTitle = decodeURIComponent(fileName).replace(/\.[^/.]+$/, '');
