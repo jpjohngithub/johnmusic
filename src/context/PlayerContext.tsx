@@ -3,6 +3,8 @@ import type { Track, Playlist, RepeatMode, VisualizerMode, ViewType, SpotifyAlbu
 import { DEFAULT_PLAYLISTS } from '../data/defaultTracks';
 import { audioEngine } from '../services/audioService';
 import { SpotifyService } from '../services/spotifyService';
+import { SpotifyWebPlaybackService } from '../services/SpotifyWebPlaybackService';
+import type { SpotifySDKState } from '../services/SpotifyWebPlaybackService';
 import confetti from 'canvas-confetti';
 
 interface PlayerContextType {
@@ -33,6 +35,11 @@ interface PlayerContextType {
   isLyricsOpen: boolean;
   isSpotifyEmbedOpen: boolean;
   searchQuery: string;
+
+  // Spotify SDK state
+  spotifySDKState: SpotifySDKState;
+  userSpotifyPlaylists: SpotifyPlaylistCard[];
+  isSpotifySDKReady: boolean;
 
   // Actions
   playTrack: (track: Track, newQueue?: Track[]) => void;
@@ -67,6 +74,8 @@ interface PlayerContextType {
   toggleQueue: () => void;
   toggleLyrics: () => void;
   toggleSpotifyEmbed: () => void;
+  initSpotifySDK: () => Promise<boolean>;
+  loadUserSpotifyPlaylists: () => Promise<void>;
 }
 
 const PlayerContext = createContext<PlayerContextType | null>(null);
@@ -84,53 +93,36 @@ const STORAGE_SHUFFLE_KEY = 'johnmusic_shuffle_mode';
 export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [playlists, setPlaylists] = useState<Playlist[]>(() => {
     const saved = localStorage.getItem(STORAGE_PLAYLISTS_KEY);
-    if (saved) {
-      try { return JSON.parse(saved); } catch (e) { console.error(e); }
-    }
+    if (saved) { try { return JSON.parse(saved); } catch (e) { console.error(e); } }
     return DEFAULT_PLAYLISTS;
   });
 
   const [favorites, setFavorites] = useState<Track[]>(() => {
     const saved = localStorage.getItem(STORAGE_FAVORITES_KEY);
-    if (saved) {
-      try { return JSON.parse(saved); } catch (e) { console.error(e); }
-    }
+    if (saved) { try { return JSON.parse(saved); } catch (e) { console.error(e); } }
     return [];
   });
 
   const [history, setHistory] = useState<Track[]>(() => {
     const saved = localStorage.getItem(STORAGE_HISTORY_KEY);
-    if (saved) {
-      try { return JSON.parse(saved); } catch (e) { console.error(e); }
-    }
+    if (saved) { try { return JSON.parse(saved); } catch (e) { console.error(e); } }
     return [];
   });
 
   const [equalizerGains, setEqualizerGainsState] = useState<number[]>(() => {
     const saved = localStorage.getItem(STORAGE_EQ_KEY);
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed.gains)) return parsed.gains;
-      } catch (e) { console.error(e); }
-    }
+    if (saved) { try { const p = JSON.parse(saved); if (Array.isArray(p.gains)) return p.gains; } catch (e) { console.error(e); } }
     return [0, 0, 0, 0, 0];
   });
 
   const [activePreset, setActivePreset] = useState<string>(() => {
     const saved = localStorage.getItem(STORAGE_EQ_KEY);
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (parsed.preset) return parsed.preset;
-      } catch (e) { console.error(e); }
-    }
+    if (saved) { try { const p = JSON.parse(saved); if (p.preset) return p.preset; } catch (e) { console.error(e); } }
     return 'Padrão (Flat)';
   });
 
   const [visualizerMode, setVisualizerMode] = useState<VisualizerMode>(() => {
-    const saved = localStorage.getItem(STORAGE_VISUALIZER_KEY) as VisualizerMode;
-    return saved || 'neon-pulse';
+    return (localStorage.getItem(STORAGE_VISUALIZER_KEY) as VisualizerMode) || 'neon-pulse';
   });
 
   const [volume, setVolumeState] = useState<number>(() => {
@@ -139,20 +131,16 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   });
 
   const [repeatMode, setRepeatMode] = useState<RepeatMode>(() => {
-    const saved = localStorage.getItem(STORAGE_REPEAT_KEY) as RepeatMode;
-    return saved || 'off';
+    return (localStorage.getItem(STORAGE_REPEAT_KEY) as RepeatMode) || 'off';
   });
 
   const [isShuffle, setIsShuffle] = useState<boolean>(() => {
-    const saved = localStorage.getItem(STORAGE_SHUFFLE_KEY);
-    return saved === 'true';
+    return localStorage.getItem(STORAGE_SHUFFLE_KEY) === 'true';
   });
 
   const [currentTrack, setCurrentTrack] = useState<Track | null>(() => {
     const saved = localStorage.getItem(STORAGE_LAST_TRACK_KEY);
-    if (saved) {
-      try { return JSON.parse(saved); } catch (e) { console.error(e); }
-    }
+    if (saved) { try { return JSON.parse(saved); } catch (e) { console.error(e); } }
     return null;
   });
 
@@ -178,52 +166,90 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [isLyricsOpen, setIsLyricsOpen] = useState<boolean>(false);
   const [isSpotifyEmbedOpen, setIsSpotifyEmbedOpen] = useState<boolean>(false);
 
+  // Spotify SDK
+  const [spotifySDKState, setSpotifySDKState] = useState<SpotifySDKState>(SpotifyWebPlaybackService.getState());
+  const [userSpotifyPlaylists, setUserSpotifyPlaylists] = useState<SpotifyPlaylistCard[]>([]);
+  const isSpotifySDKReady = spotifySDKState.isReady;
+
   const audioRef = useRef<HTMLAudioElement>(audioEngine.getAudioElement());
 
-  useEffect(() => {
-    localStorage.setItem(STORAGE_PLAYLISTS_KEY, JSON.stringify(playlists));
-  }, [playlists]);
+  // ─── Persist to localStorage ──────────────────────────────────────────────
+
+  useEffect(() => { localStorage.setItem(STORAGE_PLAYLISTS_KEY, JSON.stringify(playlists)); }, [playlists]);
+  useEffect(() => { localStorage.setItem(STORAGE_FAVORITES_KEY, JSON.stringify(favorites)); }, [favorites]);
+  useEffect(() => { localStorage.setItem(STORAGE_HISTORY_KEY, JSON.stringify(history)); }, [history]);
+  useEffect(() => { localStorage.setItem(STORAGE_VOL_KEY, String(volume)); }, [volume]);
+  useEffect(() => { localStorage.setItem(STORAGE_EQ_KEY, JSON.stringify({ gains: equalizerGains, preset: activePreset })); }, [equalizerGains, activePreset]);
+  useEffect(() => { localStorage.setItem(STORAGE_VISUALIZER_KEY, visualizerMode); }, [visualizerMode]);
+  useEffect(() => { localStorage.setItem(STORAGE_REPEAT_KEY, repeatMode); }, [repeatMode]);
+  useEffect(() => { localStorage.setItem(STORAGE_SHUFFLE_KEY, String(isShuffle)); }, [isShuffle]);
+  useEffect(() => { if (currentTrack) localStorage.setItem(STORAGE_LAST_TRACK_KEY, JSON.stringify(currentTrack)); }, [currentTrack]);
+
+  // ─── Subscribe to Spotify SDK state ───────────────────────────────────────
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_FAVORITES_KEY, JSON.stringify(favorites));
-  }, [favorites]);
-
-  useEffect(() => {
-    localStorage.setItem(STORAGE_HISTORY_KEY, JSON.stringify(history));
-  }, [history]);
-
-  useEffect(() => {
-    localStorage.setItem(STORAGE_VOL_KEY, String(volume));
-  }, [volume]);
-
-  useEffect(() => {
-    localStorage.setItem(STORAGE_EQ_KEY, JSON.stringify({ gains: equalizerGains, preset: activePreset }));
-  }, [equalizerGains, activePreset]);
-
-  useEffect(() => {
-    localStorage.setItem(STORAGE_VISUALIZER_KEY, visualizerMode);
-  }, [visualizerMode]);
-
-  useEffect(() => {
-    localStorage.setItem(STORAGE_REPEAT_KEY, repeatMode);
-  }, [repeatMode]);
-
-  useEffect(() => {
-    localStorage.setItem(STORAGE_SHUFFLE_KEY, String(isShuffle));
-  }, [isShuffle]);
-
-  useEffect(() => {
-    if (currentTrack) {
-      localStorage.setItem(STORAGE_LAST_TRACK_KEY, JSON.stringify(currentTrack));
-    }
-  }, [currentTrack]);
-
-  const seek = useCallback((seconds: number) => {
-    audioEngine.seek(seconds);
-    setCurrentTime(seconds);
+    const unsub = SpotifyWebPlaybackService.onStateChange((sdkState) => {
+      setSpotifySDKState(sdkState);
+      // Sync playback state from SDK
+      if (sdkState.isReady) {
+        setIsPlaying(sdkState.isPlaying);
+        setCurrentTime(sdkState.positionMs / 1000);
+        if (sdkState.durationMs > 0) setDuration(sdkState.durationMs / 1000);
+      }
+    });
+    return unsub;
   }, []);
 
-  // Instant & Guaranteed Audio Playback for ANY Track
+  // ─── Auto-init SDK when Spotify token is available ────────────────────────
+
+  useEffect(() => {
+    const token = SpotifyService.getStoredToken();
+    if (token && !SpotifyWebPlaybackService.isActive()) {
+      SpotifyWebPlaybackService.initialize(token)
+        .then((ok) => {
+          if (ok) {
+            console.info('[johnmusic] Spotify Web Playback SDK initialized');
+            loadUserSpotifyPlaylists();
+          }
+        })
+        .catch((err) => console.warn('[johnmusic] SDK init failed:', err));
+    } else if (token) {
+      // Token exists but SDK already active — still load playlists
+      loadUserSpotifyPlaylists();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ─── Load user Spotify playlists ──────────────────────────────────────────
+
+  const loadUserSpotifyPlaylists = useCallback(async () => {
+    const token = SpotifyService.getStoredToken();
+    if (!token) return;
+    const pls = await SpotifyService.getUserPlaylists();
+    setUserSpotifyPlaylists(pls);
+  }, []);
+
+  const initSpotifySDK = useCallback(async (): Promise<boolean> => {
+    const token = SpotifyService.getStoredToken();
+    if (!token) return false;
+    const ok = await SpotifyWebPlaybackService.initialize(token);
+    if (ok) loadUserSpotifyPlaylists();
+    return ok;
+  }, [loadUserSpotifyPlaylists]);
+
+  // ─── Seek ─────────────────────────────────────────────────────────────────
+
+  const seek = useCallback((seconds: number) => {
+    if (spotifySDKState.isReady && currentTrack?.source === 'spotify') {
+      SpotifyWebPlaybackService.seek(Math.round(seconds * 1000));
+    } else {
+      audioEngine.seek(seconds);
+    }
+    setCurrentTime(seconds);
+  }, [spotifySDKState.isReady, currentTrack?.source]);
+
+  // ─── Play Track ───────────────────────────────────────────────────────────
+
   const playTrack = useCallback(async (track: Track, newQueue?: Track[]) => {
     let updatedQueue = queue;
     let index = 0;
@@ -231,18 +257,11 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     if (newQueue && newQueue.length > 0) {
       updatedQueue = newQueue;
       index = newQueue.findIndex(t => t.id === track.id);
-      if (index === -1) {
-        updatedQueue = [track, ...newQueue];
-        index = 0;
-      }
+      if (index === -1) { updatedQueue = [track, ...newQueue]; index = 0; }
       setQueue(updatedQueue);
     } else {
       index = updatedQueue.findIndex(t => t.id === track.id);
-      if (index === -1) {
-        updatedQueue = [...queue, track];
-        index = updatedQueue.length - 1;
-        setQueue(updatedQueue);
-      }
+      if (index === -1) { updatedQueue = [...queue, track]; index = updatedQueue.length - 1; setQueue(updatedQueue); }
     }
 
     setQueueIndex(index >= 0 ? index : 0);
@@ -250,23 +269,51 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     setIsPlaying(true);
     setCurrentTime(0);
 
-    // Resolve direct stream URL dynamically if not already available
-    const finalAudioUrl = await SpotifyService.ensurePlayableAudioUrl(track);
-    if (finalAudioUrl) {
-      audioEngine.setSrc(finalAudioUrl);
-      audioEngine.play().catch(e => {
-        console.warn('Audio play attempt note:', e);
-      });
-    }
-
     setHistory(prev => {
       const filtered = prev.filter(t => t.id !== track.id);
       return [track, ...filtered].slice(0, 50);
     });
-  }, [queue]);
+
+    // ── Decide playback engine ─────────────────────────────────────────────
+    const useSpotifySDK = spotifySDKState.isReady && track.source === 'spotify' && !!track.spotifyUri;
+
+    if (useSpotifySDK) {
+      // Find the context URI (playlist/album) from the queue if available
+      const contextItem = selectedSpotifyItem;
+      if (contextItem && track.spotifyUri) {
+        try {
+          await SpotifyWebPlaybackService.playTrackInContext(contextItem.spotifyUri, track.spotifyUri);
+        } catch {
+          // Fallback: play track directly
+          if (track.spotifyUri) await SpotifyWebPlaybackService.play(track.spotifyUri);
+        }
+      } else if (track.spotifyUri) {
+        await SpotifyWebPlaybackService.play(track.spotifyUri);
+      }
+      // Volume sync
+      SpotifyWebPlaybackService.setVolume(isMuted ? 0 : volume);
+      return;
+    }
+
+    // ── Standard HTML Audio engine ─────────────────────────────────────────
+    const finalAudioUrl = await SpotifyService.ensurePlayableAudioUrl(track);
+    if (finalAudioUrl) {
+      audioEngine.setSrc(finalAudioUrl);
+      audioEngine.play().catch(e => console.warn('Audio play error:', e));
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [queue, spotifySDKState.isReady, selectedSpotifyItem, isMuted, volume]);
+
+  // ─── Next / Previous ──────────────────────────────────────────────────────
 
   const nextTrack = useCallback(() => {
     if (queue.length === 0) return;
+
+    // If SDK is controlling playback, delegate to SDK
+    if (spotifySDKState.isReady && currentTrack?.source === 'spotify') {
+      SpotifyWebPlaybackService.nextTrack();
+      return;
+    }
 
     let nextIdx = 0;
     if (isShuffle) {
@@ -274,20 +321,13 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     } else {
       nextIdx = queueIndex + 1;
       if (nextIdx >= queue.length) {
-        if (repeatMode === 'all') {
-          nextIdx = 0;
-        } else {
-          setIsPlaying(false);
-          return;
-        }
+        if (repeatMode === 'all') nextIdx = 0;
+        else { setIsPlaying(false); return; }
       }
     }
-
     const nextTrk = queue[nextIdx];
-    if (nextTrk) {
-      playTrack(nextTrk, queue);
-    }
-  }, [queue, queueIndex, isShuffle, repeatMode, playTrack]);
+    if (nextTrk) playTrack(nextTrk, queue);
+  }, [queue, queueIndex, isShuffle, repeatMode, playTrack, spotifySDKState.isReady, currentTrack?.source]);
 
   const handleTrackEnd = useCallback(() => {
     if (repeatMode === 'one') {
@@ -300,22 +340,23 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }
   }, [repeatMode, nextTrack, seek]);
 
+  // ─── Audio element event listeners ────────────────────────────────────────
+
   useEffect(() => {
     const audio = audioRef.current;
 
     const onTimeUpdate = () => {
-      setCurrentTime(audio.currentTime);
+      // Don't override SDK time
+      if (!spotifySDKState.isReady || currentTrack?.source !== 'spotify') {
+        setCurrentTime(audio.currentTime);
+      }
     };
-
     const onLoadedMetadata = () => {
-      if (audio.duration) {
+      if (audio.duration && (!spotifySDKState.isReady || currentTrack?.source !== 'spotify')) {
         setDuration(audio.duration);
       }
     };
-
-    const onEnded = () => {
-      handleTrackEnd();
-    };
+    const onEnded = () => { handleTrackEnd(); };
 
     audio.addEventListener('timeupdate', onTimeUpdate);
     audio.addEventListener('loadedmetadata', onLoadedMetadata);
@@ -326,60 +367,68 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       audio.removeEventListener('loadedmetadata', onLoadedMetadata);
       audio.removeEventListener('ended', onEnded);
     };
-  }, [currentTrack, queue, queueIndex, repeatMode, isShuffle, handleTrackEnd]);
+  }, [currentTrack, queue, queueIndex, repeatMode, isShuffle, handleTrackEnd, spotifySDKState.isReady]);
+
+  // ─── Toggle Play ──────────────────────────────────────────────────────────
 
   const togglePlay = useCallback(() => {
-    if (!currentTrack && queue.length > 0) {
-      playTrack(queue[0]);
+    if (!currentTrack && queue.length > 0) { playTrack(queue[0]); return; }
+
+    // SDK playback
+    if (spotifySDKState.isReady && currentTrack?.source === 'spotify') {
+      if (isPlaying) {
+        SpotifyWebPlaybackService.pause();
+      } else {
+        SpotifyWebPlaybackService.resume();
+      }
+      setIsPlaying(prev => !prev);
       return;
     }
 
+    // HTML Audio
     if (isPlaying) {
       audioEngine.pause();
       setIsPlaying(false);
     } else {
       setIsPlaying(true);
-      audioEngine.play().catch(err => {
-        console.warn('Playback resume error:', err);
-      });
+      audioEngine.play().catch(err => console.warn('Playback resume error:', err));
     }
-  }, [isPlaying, currentTrack, queue, playTrack]);
+  }, [isPlaying, currentTrack, queue, playTrack, spotifySDKState.isReady]);
 
   const prevTrack = useCallback(() => {
-    if (currentTime > 4) {
-      seek(0);
+    if (spotifySDKState.isReady && currentTrack?.source === 'spotify') {
+      SpotifyWebPlaybackService.prevTrack();
       return;
     }
-
+    if (currentTime > 4) { seek(0); return; }
     if (queue.length === 0) return;
     const prevIdx = queueIndex - 1 < 0 ? queue.length - 1 : queueIndex - 1;
     const prevTrk = queue[prevIdx];
-    if (prevTrk) {
-      playTrack(prevTrk, queue);
-    }
-  }, [queue, queueIndex, currentTime, seek, playTrack]);
+    if (prevTrk) playTrack(prevTrk, queue);
+  }, [queue, queueIndex, currentTime, seek, playTrack, spotifySDKState.isReady, currentTrack?.source]);
+
+  // ─── Volume ───────────────────────────────────────────────────────────────
 
   const setVolume = useCallback((vol: number) => {
     const clamped = Math.max(0, Math.min(1, vol));
     setVolumeState(clamped);
     audioEngine.setVolume(clamped);
-    if (clamped > 0 && isMuted) {
-      setIsMuted(false);
-      audioEngine.setMuted(false);
-    }
-  }, [isMuted]);
+    if (spotifySDKState.isReady) SpotifyWebPlaybackService.setVolume(clamped);
+    if (clamped > 0 && isMuted) { setIsMuted(false); audioEngine.setMuted(false); }
+  }, [isMuted, spotifySDKState.isReady]);
 
   const toggleMute = useCallback(() => {
     setIsMuted(prev => {
       const next = !prev;
       audioEngine.setMuted(next);
+      if (spotifySDKState.isReady) SpotifyWebPlaybackService.setVolume(next ? 0 : volume);
       return next;
     });
-  }, []);
+  }, [spotifySDKState.isReady, volume]);
 
-  const toggleShuffle = useCallback(() => {
-    setIsShuffle(prev => !prev);
-  }, []);
+  // ─── Misc controls ────────────────────────────────────────────────────────
+
+  const toggleShuffle = useCallback(() => setIsShuffle(prev => !prev), []);
 
   const toggleRepeat = useCallback(() => {
     setRepeatMode(prev => {
@@ -392,50 +441,28 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const toggleFavorite = useCallback((track: Track) => {
     setFavorites(prev => {
       const exists = prev.some(t => t.id === track.id);
-      if (exists) {
-        return prev.filter(t => t.id !== track.id);
-      } else {
-        confetti({
-          particleCount: 35,
-          spread: 60,
-          origin: { y: 0.85 },
-          colors: ['#10b981', '#06b6d4', '#ec4899', '#f59e0b']
-        });
-        return [...prev, { ...track, isLiked: true }];
-      }
+      if (exists) return prev.filter(t => t.id !== track.id);
+      confetti({ particleCount: 35, spread: 60, origin: { y: 0.85 }, colors: ['#10b981', '#06b6d4', '#ec4899', '#f59e0b'] });
+      return [...prev, { ...track, isLiked: true }];
     });
-
     setPlaylists(prev => prev.map(pl => {
       if (pl.id === 'playlist-favorites') {
         const has = pl.trackIds.includes(track.id);
-        return {
-          ...pl,
-          trackIds: has ? pl.trackIds.filter(id => id !== track.id) : [...pl.trackIds, track.id]
-        };
+        return { ...pl, trackIds: has ? pl.trackIds.filter(id => id !== track.id) : [...pl.trackIds, track.id] };
       }
       return pl;
     }));
   }, []);
 
-  const addToQueue = useCallback((track: Track) => {
-    setQueue(prev => [...prev, track]);
-  }, []);
-
+  const addToQueue = useCallback((track: Track) => setQueue(prev => [...prev, track]), []);
   const removeFromQueue = useCallback((index: number) => {
     setQueue(prev => prev.filter((_, i) => i !== index));
-    if (index < queueIndex) {
-      setQueueIndex(prev => prev - 1);
-    }
+    if (index < queueIndex) setQueueIndex(prev => prev - 1);
   }, [queueIndex]);
 
   const clearQueue = useCallback(() => {
-    if (currentTrack) {
-      setQueue([currentTrack]);
-      setQueueIndex(0);
-    } else {
-      setQueue([]);
-      setQueueIndex(0);
-    }
+    if (currentTrack) { setQueue([currentTrack]); setQueueIndex(0); }
+    else { setQueue([]); setQueueIndex(0); }
   }, [currentTrack]);
 
   const createPlaylist = useCallback((title: string, description: string, coverUrl?: string): Playlist => {
@@ -448,49 +475,28 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       createdAt: Date.now()
     };
     setPlaylists(prev => [newPlaylist, ...prev]);
-
-    confetti({
-      particleCount: 45,
-      spread: 70,
-      origin: { y: 0.6 }
-    });
-
+    confetti({ particleCount: 45, spread: 70, origin: { y: 0.6 } });
     return newPlaylist;
   }, []);
 
   const updatePlaylist = useCallback((playlistId: string, updated: { title: string; description: string; coverUrl?: string }) => {
-    setPlaylists(prev => prev.map(p => {
-      if (p.id === playlistId) {
-        return { ...p, ...updated };
-      }
-      return p;
-    }));
+    setPlaylists(prev => prev.map(p => p.id === playlistId ? { ...p, ...updated } : p));
   }, []);
 
   const deletePlaylist = useCallback((playlistId: string) => {
     setPlaylists(prev => prev.filter(p => p.id !== playlistId));
-    if (selectedPlaylistId === playlistId) {
-      setSelectedPlaylistId(null);
-      setCurrentViewState('home');
-    }
+    if (selectedPlaylistId === playlistId) { setSelectedPlaylistId(null); setCurrentViewState('home'); }
   }, [selectedPlaylistId]);
 
   const addTrackToPlaylist = useCallback((playlistId: string, track: Track) => {
     setPlaylists(prev => prev.map(p => {
-      if (p.id === playlistId && !p.trackIds.includes(track.id)) {
-        return { ...p, trackIds: [...p.trackIds, track.id] };
-      }
+      if (p.id === playlistId && !p.trackIds.includes(track.id)) return { ...p, trackIds: [...p.trackIds, track.id] };
       return p;
     }));
   }, []);
 
   const removeTrackFromPlaylist = useCallback((playlistId: string, trackId: string) => {
-    setPlaylists(prev => prev.map(p => {
-      if (p.id === playlistId) {
-        return { ...p, trackIds: p.trackIds.filter(id => id !== trackId) };
-      }
-      return p;
-    }));
+    setPlaylists(prev => prev.map(p => p.id === playlistId ? { ...p, trackIds: p.trackIds.filter(id => id !== trackId) } : p));
   }, []);
 
   const reorderPlaylistTracks = useCallback((playlistId: string, fromIndex: number, toIndex: number) => {
@@ -512,9 +518,7 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   const setCurrentView = useCallback((view: ViewType, playlistId?: string | null) => {
     setCurrentViewState(view);
-    if (playlistId !== undefined) {
-      setSelectedPlaylistId(playlistId);
-    }
+    if (playlistId !== undefined) setSelectedPlaylistId(playlistId);
   }, []);
 
   const openSpotifyItem = useCallback((item: SpotifyPlaylistCard | SpotifyAlbum, type: 'playlist' | 'album') => {
@@ -525,9 +529,7 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   const setEqualizerGains = useCallback((gains: number[], presetName?: string) => {
     setEqualizerGainsState(gains);
-    if (presetName) {
-      setActivePreset(presetName);
-    }
+    if (presetName) setActivePreset(presetName);
     audioEngine.setEqualizerGains(gains);
   }, []);
 
@@ -540,65 +542,24 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   return (
     <PlayerContext.Provider
       value={{
-        currentTrack,
-        isPlaying,
-        currentTime,
-        duration,
-        volume,
-        isMuted,
-        repeatMode,
-        isShuffle,
-        queue,
-        queueIndex,
-        history,
-        playlists,
-        favorites,
-        localTracks,
-        currentView,
-        selectedPlaylistId,
-        selectedSpotifyItem,
-        selectedSpotifyType,
-        equalizerGains,
-        activePreset,
-        visualizerMode,
-        isVisualizerOpen,
-        isEqualizerOpen,
-        isQueueOpen,
-        isLyricsOpen,
-        isSpotifyEmbedOpen,
+        currentTrack, isPlaying, currentTime, duration, volume, isMuted,
+        repeatMode, isShuffle, queue, queueIndex, history,
+        playlists, favorites, localTracks,
+        currentView, selectedPlaylistId, selectedSpotifyItem, selectedSpotifyType,
+        equalizerGains, activePreset, visualizerMode,
+        isVisualizerOpen, isEqualizerOpen, isQueueOpen, isLyricsOpen, isSpotifyEmbedOpen,
         searchQuery,
-        playTrack,
-        togglePlay,
-        nextTrack,
-        prevTrack,
-        seek,
-        setCurrentTime,
-        setDuration,
-        setVolume,
-        toggleMute,
-        toggleShuffle,
-        toggleRepeat,
-        toggleFavorite,
-        addToQueue,
-        removeFromQueue,
-        clearQueue,
-        createPlaylist,
-        updatePlaylist,
-        deletePlaylist,
-        addTrackToPlaylist,
-        removeTrackFromPlaylist,
-        reorderPlaylistTracks,
-        addLocalTracks,
-        setCurrentView,
-        openSpotifyItem,
-        setEqualizerGains,
-        setVisualizerMode,
-        setSearchQuery,
-        toggleVisualizer,
-        toggleEqualizer,
-        toggleQueue,
-        toggleLyrics,
-        toggleSpotifyEmbed,
+        spotifySDKState, userSpotifyPlaylists, isSpotifySDKReady,
+        playTrack, togglePlay, nextTrack, prevTrack, seek,
+        setCurrentTime, setDuration, setVolume, toggleMute,
+        toggleShuffle, toggleRepeat, toggleFavorite,
+        addToQueue, removeFromQueue, clearQueue,
+        createPlaylist, updatePlaylist, deletePlaylist,
+        addTrackToPlaylist, removeTrackFromPlaylist, reorderPlaylistTracks,
+        addLocalTracks, setCurrentView, openSpotifyItem,
+        setEqualizerGains, setVisualizerMode, setSearchQuery,
+        toggleVisualizer, toggleEqualizer, toggleQueue, toggleLyrics, toggleSpotifyEmbed,
+        initSpotifySDK, loadUserSpotifyPlaylists,
       }}
     >
       {children}
@@ -608,8 +569,6 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
 export const usePlayer = () => {
   const context = useContext(PlayerContext);
-  if (!context) {
-    throw new Error('usePlayer must be used within a PlayerProvider');
-  }
+  if (!context) throw new Error('usePlayer must be used within a PlayerProvider');
   return context;
 };

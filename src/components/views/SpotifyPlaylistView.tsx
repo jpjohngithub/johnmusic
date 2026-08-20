@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { usePlayer } from '../../context/PlayerContext';
 import { SpotifyService } from '../../services/spotifyService';
+import { SpotifyWebPlaybackService } from '../../services/SpotifyWebPlaybackService';
 import type { Track, SpotifyPlaylistCard, SpotifyAlbum } from '../../types/music';
 import { TrackRow } from '../common/TrackRow';
-import { Play, Shuffle, Radio, Loader2, Sparkles, ExternalLink, Music2 } from 'lucide-react';
+import { Play, Shuffle, Radio, Loader2, Sparkles, ExternalLink, Music2, Zap } from 'lucide-react';
 import { SpotifyEmbedModal } from '../player/SpotifyEmbedModal';
 
 interface SpotifyPlaylistViewProps {
@@ -12,7 +13,7 @@ interface SpotifyPlaylistViewProps {
 }
 
 export const SpotifyPlaylistView: React.FC<SpotifyPlaylistViewProps> = ({ item, type }) => {
-  const { playTrack } = usePlayer();
+  const { playTrack, isSpotifySDKReady } = usePlayer();
   const [tracks, setTracks] = useState<Track[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isEmbedOpen, setIsEmbedOpen] = useState<boolean>(false);
@@ -20,9 +21,9 @@ export const SpotifyPlaylistView: React.FC<SpotifyPlaylistViewProps> = ({ item, 
 
   useEffect(() => {
     if (!item) return;
-
     let isMounted = true;
     setIsLoading(true);
+    setTracks([]);
 
     const load = async () => {
       let fetched: Track[] = [];
@@ -33,7 +34,6 @@ export const SpotifyPlaylistView: React.FC<SpotifyPlaylistViewProps> = ({ item, 
         const alb = item as SpotifyAlbum;
         fetched = await SpotifyService.getAlbumTracks(alb.id, alb.name, alb.artist);
       }
-
       if (isMounted) {
         setTracks(fetched);
         setIsLoading(false);
@@ -41,10 +41,7 @@ export const SpotifyPlaylistView: React.FC<SpotifyPlaylistViewProps> = ({ item, 
     };
 
     load();
-
-    return () => {
-      isMounted = false;
-    };
+    return () => { isMounted = false; };
   }, [item, type]);
 
   if (!item) return null;
@@ -54,20 +51,46 @@ export const SpotifyPlaylistView: React.FC<SpotifyPlaylistViewProps> = ({ item, 
   const coverUrl = item.coverUrl;
   const uri = item.spotifyUri;
 
-  const handlePlayAll = () => {
-    if (tracks.length > 0) {
-      playTrack(tracks[0], tracks);
+  const handlePlayAll = async () => {
+    if (tracks.length === 0) return;
+
+    // If SDK is ready, play the full context (playlist/album) via Spotify
+    if (isSpotifySDKReady && tracks[0].spotifyUri) {
+      try {
+        await SpotifyWebPlaybackService.play(item.spotifyUri);
+        // Also set the queue locally for UI sync
+        playTrack(tracks[0], tracks);
+        return;
+      } catch (e) {
+        console.warn('SDK play failed, falling back to audio engine:', e);
+      }
     }
+
+    playTrack(tracks[0], tracks);
   };
 
-  const handleShuffleAll = () => {
-    if (tracks.length > 0) {
-      const rand = Math.floor(Math.random() * tracks.length);
-      playTrack(tracks[rand], tracks);
+  const handleShuffleAll = async () => {
+    if (tracks.length === 0) return;
+    const rand = Math.floor(Math.random() * tracks.length);
+
+    if (isSpotifySDKReady && tracks[rand].spotifyUri) {
+      try {
+        await SpotifyWebPlaybackService.playWithOffset(item.spotifyUri, rand);
+        playTrack(tracks[rand], tracks);
+        return;
+      } catch (e) {
+        console.warn('SDK shuffle failed:', e);
+      }
     }
+
+    playTrack(tracks[rand], tracks);
   };
 
   const embedUrl = `https://open.spotify.com/embed/${type}/${item.id}?utm_source=generator&theme=0`;
+
+  const totalDurationMin = tracks.length > 0 
+    ? Math.round(tracks.reduce((acc, t) => acc + t.duration, 0) / 60)
+    : 0;
 
   return (
     <div className="space-y-8 animate-fade-in pb-12">
@@ -96,8 +119,33 @@ export const SpotifyPlaylistView: React.FC<SpotifyPlaylistViewProps> = ({ item, 
           <div className="flex flex-wrap items-center justify-center md:justify-start gap-4 text-xs text-slate-400 font-medium pt-1">
             <span className="text-white font-bold">{artistOrOwner}</span>
             <span>•</span>
-            <span className="text-green-400 font-semibold">{tracks.length > 0 ? `${tracks.length} músicas completas` : 'Carregando faixas...'}</span>
+            {isLoading ? (
+              <span className="text-slate-500">Carregando faixas...</span>
+            ) : (
+              <>
+                <span className="text-green-400 font-semibold">{tracks.length} músicas</span>
+                {totalDurationMin > 0 && (
+                  <>
+                    <span>•</span>
+                    <span>{totalDurationMin} min</span>
+                  </>
+                )}
+              </>
+            )}
           </div>
+
+          {/* SDK status badge */}
+          {isSpotifySDKReady ? (
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-green-500/15 border border-green-500/30 text-green-300 text-[11px] font-semibold">
+              <Zap className="w-3 h-3" />
+              Músicas Completas Ativas (Premium)
+            </div>
+          ) : (
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-800 border border-slate-700 text-slate-400 text-[11px] font-semibold">
+              <Radio className="w-3 h-3" />
+              Prévias de 30s (conecte Premium para músicas completas)
+            </div>
+          )}
         </div>
       </div>
 
@@ -105,16 +153,16 @@ export const SpotifyPlaylistView: React.FC<SpotifyPlaylistViewProps> = ({ item, 
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           <button
-            disabled={tracks.length === 0}
+            disabled={tracks.length === 0 || isLoading}
             onClick={handlePlayAll}
             className="px-6 py-3 rounded-2xl bg-green-500 hover:bg-green-400 disabled:opacity-50 disabled:cursor-not-allowed text-slate-950 font-bold text-sm shadow-xl shadow-green-500/30 flex items-center gap-2.5 transition-all hover:scale-105"
           >
             <Play className="w-5 h-5 fill-slate-950" />
-            Tocar Tudo
+            {isSpotifySDKReady ? 'Tocar Tudo (Completo)' : 'Tocar Tudo'}
           </button>
 
           <button
-            disabled={tracks.length === 0}
+            disabled={tracks.length === 0 || isLoading}
             onClick={handleShuffleAll}
             className="p-3 rounded-2xl bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-slate-200 border border-slate-700 transition-colors"
             title="Ordem aleatória"
@@ -131,7 +179,7 @@ export const SpotifyPlaylistView: React.FC<SpotifyPlaylistViewProps> = ({ item, 
             }`}
           >
             <Radio className="w-4 h-4 text-green-400" />
-            {embedMode ? 'Ver Lista de Faixas' : 'Player Oficial Spotify Integrado'}
+            {embedMode ? 'Ver Lista de Faixas' : 'Player Oficial Spotify'}
           </button>
         </div>
 
@@ -174,7 +222,7 @@ export const SpotifyPlaylistView: React.FC<SpotifyPlaylistViewProps> = ({ item, 
           {isLoading ? (
             <div className="flex flex-col items-center justify-center py-16 space-y-3">
               <Loader2 className="w-8 h-8 text-green-400 animate-spin" />
-              <p className="text-xs text-slate-400">Conectando e sincronizando todas as faixas do Spotify...</p>
+              <p className="text-xs text-slate-400">Sincronizando todas as faixas do Spotify...</p>
             </div>
           ) : tracks.length === 0 ? (
             <div className="text-center py-12 text-slate-500">
