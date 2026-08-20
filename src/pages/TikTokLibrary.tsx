@@ -1,0 +1,166 @@
+import { useState } from 'react'
+import { Trash2, Play, Plus, Search, ExternalLink } from 'lucide-react'
+import { TikTokInput } from '@/components/tiktok/TikTokInput'
+import { TikTokEmbed } from '@/components/tiktok/TikTokEmbed'
+import { useLibraryStore } from '@/store/libraryStore'
+import { usePlayerStore } from '@/store/playerStore'
+
+const TikTokIcon = () => (
+  <svg viewBox="0 0 24 24" width="28" height="28" fill="currentColor">
+    <path d="M19.59 6.69a4.83 4.83 0 01-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 01-2.88 2.5 2.89 2.89 0 01-2.89-2.89 2.89 2.89 0 012.89-2.89c.28 0 .54.04.79.1V9.01a6.33 6.33 0 00-.79-.05 6.34 6.34 0 00-6.34 6.34 6.34 6.34 0 006.34 6.34 6.34 6.34 0 006.33-6.34V8.69a8.17 8.17 0 004.79 1.53V6.78a4.85 4.85 0 01-1.02-.09z" />
+  </svg>
+)
+
+export function TikTokLibrary() {
+  const [filter, setFilter] = useState('')
+  const { tiktokVideos, removeTikTokVideo } = useLibraryStore()
+  const { source, tiktokVideo, playTikTokVideo } = usePlayerStore()
+
+  const filteredVideos = tiktokVideos.filter((v) =>
+    v.title.toLowerCase().includes(filter.toLowerCase()) ||
+    v.authorName.toLowerCase().includes(filter.toLowerCase())
+  )
+
+  return (
+    <div className="space-y-8 max-w-7xl mx-auto select-none">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/5 pb-6">
+        <div>
+          <h1 className="text-3xl font-extrabold text-white tracking-tight flex items-center gap-3">
+            <span className="text-tiktok-pink"><TikTokIcon /></span>
+            <span>Biblioteca TikTok</span>
+          </h1>
+          <p className="text-white/40 text-sm mt-1">
+            {tiktokVideos.length} vídeo(s) e música(s) adicionados por link
+          </p>
+        </div>
+      </div>
+
+      {/* Input box */}
+      <div className="p-6 rounded-2xl bg-white/[0.03] border border-white/10 backdrop-blur-sm space-y-3">
+        <h2 className="text-white font-bold text-base flex items-center gap-2">
+          <Plus size={18} className="text-tiktok-pink" />
+          <span>Adicionar Novo Link do TikTok</span>
+        </h2>
+        <TikTokInput />
+      </div>
+
+      {/* Active TikTok Player */}
+      {source === 'tiktok' && tiktokVideo && (
+        <section className="p-6 rounded-3xl bg-black/80 border border-white/10 space-y-4 shadow-2xl">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 text-tiktok-pink font-bold text-sm">
+              <TikTokIcon />
+              <span>Tocando Agora: {tiktokVideo.title || 'TikTok'}</span>
+            </div>
+            <a
+              href={tiktokVideo.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-white/40 hover:text-white text-xs flex items-center gap-1 transition-colors"
+            >
+              <span>Abrir no TikTok</span>
+              <ExternalLink size={12} />
+            </a>
+          </div>
+          <TikTokEmbed video={tiktokVideo} />
+        </section>
+      )}
+
+      {/* Search and Filters */}
+      {tiktokVideos.length > 0 && (
+        <div className="flex items-center justify-between gap-4">
+          <div className="relative flex-1 max-w-xs">
+            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30" />
+            <input
+              type="text"
+              value={filter}
+              onChange={(e) => setFilter(e.target.value)}
+              placeholder="Filtrar TikToks..."
+              className="w-full bg-white/5 border border-white/10 rounded-lg pl-9 pr-3 py-2 text-white text-xs placeholder-white/30 focus:outline-none focus:border-tiktok-pink/50"
+            />
+          </div>
+          <span className="text-white/40 text-xs">{filteredVideos.length} resultados</span>
+        </div>
+      )}
+
+      {/* Video Grid */}
+      {filteredVideos.length > 0 ? (
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+          {filteredVideos.map((video) => {
+            const isCurrentPlaying = source === 'tiktok' && tiktokVideo?.id === video.id
+
+            return (
+              <div
+                key={video.id}
+                className={`group p-3 rounded-2xl bg-white/[0.03] hover:bg-white/[0.08] transition-all border flex flex-col justify-between ${
+                  isCurrentPlaying ? 'border-tiktok-pink/50 bg-tiktok-pink/5' : 'border-white/5'
+                }`}
+              >
+                {/* Vertical Thumbnail */}
+                <div
+                  onClick={() => playTikTokVideo(video)}
+                  className="relative aspect-[9/16] rounded-xl overflow-hidden bg-black/60 cursor-pointer shadow-md flex items-center justify-center"
+                >
+                  {video.thumbnailUrl ? (
+                    <img
+                      src={video.thumbnailUrl}
+                      alt={video.title}
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                    />
+                  ) : (
+                    <div className="text-tiktok-pink/40">
+                      <TikTokIcon />
+                    </div>
+                  )}
+
+                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                    <div className="w-10 h-10 rounded-full bg-tiktok-pink flex items-center justify-center shadow-xl transform group-hover:scale-110 active:scale-95 transition-transform">
+                      <Play size={18} className="text-white fill-white ml-0.5" />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Info */}
+                <div className="mt-3 space-y-0.5">
+                  <p
+                    onClick={() => playTikTokVideo(video)}
+                    className="text-white text-xs font-semibold truncate hover:underline cursor-pointer"
+                  >
+                    {video.title || 'TikTok'}
+                  </p>
+                  <p className="text-white/40 text-[10px] truncate">@{video.authorName}</p>
+                </div>
+
+                {/* Action buttons */}
+                <div className="flex items-center justify-between pt-2 border-t border-white/5 mt-2">
+                  <span className="text-[9px] text-white/30">
+                    {new Date(video.addedAt).toLocaleDateString()}
+                  </span>
+                  <button
+                    onClick={() => removeTikTokVideo(video.id)}
+                    className="p-1 rounded-lg text-white/30 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                    title="Remover"
+                  >
+                    <Trash2 size={12} />
+                  </button>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      ) : (
+        <div className="flex flex-col items-center justify-center py-20 text-center space-y-3">
+          <div className="w-16 h-16 rounded-2xl bg-tiktok-pink/10 text-tiktok-pink flex items-center justify-center">
+            <TikTokIcon />
+          </div>
+          <p className="text-white/60 text-sm font-medium">
+            {tiktokVideos.length === 0
+              ? 'Nenhum vídeo do TikTok adicionado. Cole um link acima!'
+              : 'Nenhum vídeo encontrado para este filtro.'}
+          </p>
+        </div>
+      )}
+    </div>
+  )
+}

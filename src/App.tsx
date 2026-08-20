@@ -1,121 +1,94 @@
-import React, { useEffect } from 'react';
-import { PlayerProvider, usePlayer } from './context/PlayerContext';
-import { Sidebar } from './components/layout/Sidebar';
-import { Header } from './components/layout/Header';
-import { MainContent } from './components/layout/MainContent';
-import { PlayerBar } from './components/player/PlayerBar';
-import { QueueDrawer } from './components/player/QueueDrawer';
-import { LyricsView } from './components/player/LyricsView';
-import { SpotifyEmbedModal } from './components/player/SpotifyEmbedModal';
+import { Routes, Route } from 'react-router-dom'
+import { Sidebar } from '@/components/layout/Sidebar'
+import { MainContent } from '@/components/layout/MainContent'
+import { PlayerBar } from '@/components/layout/PlayerBar'
+import { Home } from '@/pages/Home'
+import { SpotifyLibrary } from '@/pages/SpotifyLibrary'
+import { SpotifyPlaylistDetail } from '@/pages/SpotifyPlaylistDetail'
+import { SpotifyLiked } from '@/pages/SpotifyLiked'
+import { SpotifyAlbumDetail } from '@/pages/SpotifyAlbumDetail'
+import { CustomPlaylistDetail } from '@/pages/CustomPlaylistDetail'
+import { YouTubeLibrary } from '@/pages/YouTubeLibrary'
+import { TikTokLibrary } from '@/pages/TikTokLibrary'
+import { Search } from '@/pages/Search'
+import { usePlayerStore } from '@/store/playerStore'
+import type { SpotifyTrack } from '@/types'
 
-const KeyboardController: React.FC = () => {
-  const {
-    togglePlay,
-    nextTrack,
-    prevTrack,
-    seek,
-    currentTime,
-    volume,
-    setVolume,
-    toggleMute,
-    toggleFavorite,
-    currentTrack,
-  } = usePlayer();
+export function App() {
+  const { setSource, setSpotifyTrack, setIsPlaying } = usePlayerStore()
 
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      const activeTag = (document.activeElement?.tagName || '').toLowerCase();
-      if (activeTag === 'input' || activeTag === 'textarea') {
-        return;
-      }
-
-      switch (e.code) {
-        case 'Space':
-          e.preventDefault();
-          togglePlay();
-          break;
-        case 'ArrowLeft':
-          e.preventDefault();
-          seek(Math.max(0, currentTime - 5));
-          break;
-        case 'ArrowRight':
-          e.preventDefault();
-          seek(currentTime + 5);
-          break;
-        case 'ArrowUp':
-          e.preventDefault();
-          setVolume(Math.min(1, volume + 0.05));
-          break;
-        case 'ArrowDown':
-          e.preventDefault();
-          setVolume(Math.max(0, volume - 0.05));
-          break;
-        case 'KeyM':
-          e.preventDefault();
-          toggleMute();
-          break;
-        case 'KeyL':
-          if (currentTrack) {
-            e.preventDefault();
-            toggleFavorite(currentTrack);
-          }
-          break;
-        case 'KeyN':
-          e.preventDefault();
-          nextTrack();
-          break;
-        case 'KeyP':
-          e.preventDefault();
-          prevTrack();
-          break;
-        default:
-          break;
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [togglePlay, nextTrack, prevTrack, seek, currentTime, volume, setVolume, toggleMute, toggleFavorite, currentTrack]);
-
-  return null;
-};
-
-export const AppContent: React.FC = () => {
-  const { isSpotifyEmbedOpen, toggleSpotifyEmbed, currentTrack } = usePlayer();
+  const handlePlaySpotifyTrack = async (track: SpotifyTrack) => {
+    setSource('spotify')
+    setSpotifyTrack({
+      id: track.id,
+      uri: track.uri,
+      name: track.name,
+      duration_ms: track.duration_ms,
+      artists: track.artists,
+      album: {
+        name: track.album?.name || '',
+        uri: track.album?.uri || '',
+        images: track.album?.images || [],
+      },
+    })
+    setIsPlaying(true)
+  }
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-john-dark text-slate-100 font-sans">
-      <KeyboardController />
-
-      {/* Main Left Sidebar */}
+    <div className="flex h-screen w-screen overflow-hidden bg-black select-none">
+      {/* Left Sidebar */}
       <Sidebar />
 
-      {/* Main Content + Top Navigation */}
-      <div className="flex-1 flex flex-col h-full overflow-hidden relative">
-        <Header />
-        <MainContent />
-      </div>
+      {/* Main Content Area */}
+      <MainContent>
+        <Routes>
+          <Route path="/" element={<Home />} />
+          <Route path="/spotify" element={<SpotifyLibrary />} />
+          <Route
+            path="/spotify/playlist/:id"
+            element={
+              <SpotifyPlaylistDetail
+                isAuthenticated={false}
+                isPremium={false}
+                onPlayTrack={handlePlaySpotifyTrack}
+              />
+            }
+          />
+          <Route
+            path="/spotify/liked"
+            element={
+              <SpotifyLiked
+                isAuthenticated={false}
+                onPlayTrack={handlePlaySpotifyTrack}
+              />
+            }
+          />
+          <Route
+            path="/spotify/album/:id"
+            element={
+              <SpotifyAlbumDetail
+                isAuthenticated={false}
+                onPlayTrack={handlePlaySpotifyTrack}
+              />
+            }
+          />
+          <Route path="/playlist/:id" element={<CustomPlaylistDetail />} />
+          <Route path="/youtube" element={<YouTubeLibrary />} />
+          <Route path="/tiktok" element={<TikTokLibrary />} />
+          <Route
+            path="/search"
+            element={
+              <Search
+                isAuthenticated={false}
+                onPlayTrack={handlePlaySpotifyTrack}
+              />
+            }
+          />
+        </Routes>
+      </MainContent>
 
-      {/* Bottom Sticky Player Controls */}
-      <PlayerBar />
-
-      {/* Modals and Overlays */}
-      <QueueDrawer />
-      <LyricsView />
-      <SpotifyEmbedModal 
-        isOpen={isSpotifyEmbedOpen} 
-        onClose={toggleSpotifyEmbed} 
-        spotifyUriOrUrl={currentTrack?.spotifyUri} 
-        title={currentTrack ? `${currentTrack.title} — ${currentTrack.artist}` : 'Spotify Web Player'} 
-      />
+      {/* Bottom Player Bar */}
+      <PlayerBar spotifyPlayer={null} />
     </div>
-  );
-};
-
-export default function App() {
-  return (
-    <PlayerProvider>
-      <AppContent />
-    </PlayerProvider>
-  );
+  )
 }
