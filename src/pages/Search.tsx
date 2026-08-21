@@ -15,7 +15,7 @@ import {
 } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import { executeUniversalSearch, type UniversalTrackResult } from '@/api/universalSearchService'
-import { SpotifyEmbedPlayer } from '@/components/spotify/SpotifyEmbedPlayer'
+import { SpotifyIFramePlayer } from '@/components/spotify/SpotifyIFramePlayer'
 import { usePlayerStore } from '@/store/playerStore'
 import { useLibraryStore } from '@/store/libraryStore'
 import { formatMs, cn } from '@/lib/utils'
@@ -204,8 +204,9 @@ export function Search({ isAuthenticated, onPlayTrack }: SearchProps) {
               </div>
 
               <div className="max-w-3xl mx-auto">
-                <SpotifyEmbedPlayer
-                  uri={`spotify:${searchData.directSpotifyItem.type}:${searchData.directSpotifyItem.spotifyId}`}
+                <SpotifyIFramePlayer
+                  key={searchData.directSpotifyItem.spotifyId}
+                  spotifyUri={`spotify:${searchData.directSpotifyItem.type}:${searchData.directSpotifyItem.spotifyId}`}
                   height={searchData.directSpotifyItem.type === 'track' ? 152 : 352}
                 />
               </div>

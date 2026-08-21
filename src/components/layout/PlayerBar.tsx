@@ -22,7 +22,7 @@ import {
 import { usePlayerStore } from '@/store/playerStore'
 import { formatSeconds } from '@/lib/utils'
 import { cn } from '@/lib/utils'
-import { SpotifyEmbedPlayer } from '@/components/spotify/SpotifyEmbedPlayer'
+import { SpotifyIFramePlayer } from '@/components/spotify/SpotifyIFramePlayer'
 
 // TikTok mini icon
 const TikTokIcon = () => (
@@ -258,8 +258,9 @@ export function PlayerBar({ spotifyPlayer, onExpandPlayer }: PlayerBarProps) {
               <ChevronDown size={16} />
             </button>
           </div>
-          <SpotifyEmbedPlayer
-            uri={`spotify:${spotifySavedItem.type}:${spotifySavedItem.spotifyId}`}
+          <SpotifyIFramePlayer
+            key={spotifySavedItem.spotifyId}
+            spotifyUri={`spotify:${spotifySavedItem.type}:${spotifySavedItem.spotifyId}`}
             height={spotifySavedItem.type === 'track' ? 152 : 352}
           />
         </div>
