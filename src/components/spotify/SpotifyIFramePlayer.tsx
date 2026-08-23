@@ -170,26 +170,3 @@ export function SpotifyIFramePlayer({
     />
   )
 }
-
-// Hook para usar o controller externamente
-export function useSpotifyIFrameController() {
-  const controllerRef = useRef<EmbedController | null>(null)
-
-  const setController = useCallback((controller: EmbedController) => {
-    controllerRef.current = controller
-  }, [])
-
-  const togglePlay = useCallback(() => {
-    controllerRef.current?.togglePlay()
-  }, [])
-
-  const seek = useCallback((seconds: number) => {
-    controllerRef.current?.seek(seconds)
-  }, [])
-
-  const loadUri = useCallback((uri: string) => {
-    controllerRef.current?.loadUri(uri)
-  }, [])
-
-  return { setController, togglePlay, seek, loadUri, controllerRef }
-}

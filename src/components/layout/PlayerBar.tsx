@@ -23,6 +23,7 @@ import { usePlayerStore } from '@/store/playerStore'
 import { formatSeconds } from '@/lib/utils'
 import { cn } from '@/lib/utils'
 import { SpotifyIFramePlayer } from '@/components/spotify/SpotifyIFramePlayer'
+import { YouTubePlayer } from '@/components/youtube/YouTubePlayer'
 
 // TikTok mini icon
 const TikTokIcon = () => (
@@ -73,6 +74,13 @@ export function PlayerBar({ spotifyPlayer, onExpandPlayer }: PlayerBarProps) {
 
   const [showEmbedDrawer, setShowEmbedDrawer] = useState(false)
   const audioElementRef = useRef<HTMLAudioElement | null>(null)
+
+  // Drawer do TikTok abre automaticamente ao tocar
+  useEffect(() => {
+    if (source === 'tiktok') {
+      setShowEmbedDrawer(true)
+    }
+  }, [source, tiktokVideo?.id])
 
   // ─── HTML5 Audio Engine ───────────────────────────────────
 
@@ -173,6 +181,10 @@ export function PlayerBar({ spotifyPlayer, onExpandPlayer }: PlayerBarProps) {
         audioElementRef.current.currentTime = newTime
       } else if (source === 'spotify' && spotifyPlayer?.isReady) {
         await spotifyPlayer.seek(newTime * 1000)
+      } else if (source === 'youtube') {
+        window.dispatchEvent(
+          new CustomEvent('yt-player-seek', { detail: { seconds: newTime } })
+        )
       }
     },
     [source, spotifyPlayer, duration, setProgress, setCurrentTime]
@@ -239,7 +251,38 @@ export function PlayerBar({ spotifyPlayer, onExpandPlayer }: PlayerBarProps) {
         onEnded={handleAudioEnded}
       />
 
-      {/* Floating Spotify Embed Drawer (Sem Login) */}
+      {/* YouTube IFrame API Player (áudio-first) */}
+      {source === 'youtube' && <YouTubePlayer />}
+
+      {/* TikTok Embed Drawer (player oficial) */}
+      {source === 'tiktok' && tiktokVideo && (
+        <div
+          className={cn(
+            'fixed bottom-24 right-6 z-40 w-96 rounded-2xl bg-[#121212] border border-white/10 shadow-2xl p-3 transition-all duration-300 transform',
+            showEmbedDrawer ? 'translate-y-0 opacity-100' : 'translate-y-4 opacity-0 pointer-events-none'
+          )}
+        >
+          <div className="flex items-center justify-between pb-2 mb-2 border-b border-white/5">
+            <span className="text-xs font-bold text-tiktok-pink flex items-center gap-1.5">
+              <Music2 size={14} /> Player Oficial TikTok
+            </span>
+            <button
+              onClick={() => setShowEmbedDrawer(false)}
+              className="text-white/40 hover:text-white text-xs"
+            >
+              <ChevronDown size={16} />
+            </button>
+          </div>
+          <iframe
+            src={`https://www.tiktok.com/player/v1/${tiktokVideo.postId}?music_info=1&description=1&autoplay=1`}
+            title={tiktokVideo.title}
+            allow="encrypted-media; autoplay; picture-in-picture"
+            allowFullScreen
+            className="w-full rounded-xl border-0 bg-black"
+            style={{ height: '480px' }}
+          />
+        </div>
+      )}
       {source === 'spotify' && spotifySavedItem && (
         <div
           className={cn(

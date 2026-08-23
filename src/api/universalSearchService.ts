@@ -5,7 +5,7 @@
 import { searchSpotify } from './spotifyService'
 import { getValidAccessToken } from './spotifyAuth'
 import { parseSpotifyUrl, createSpotifyItemFromUrl, CURATED_PUBLIC_SPOTIFY } from './spotifyUrlService'
-import type { SpotifyTrack, SpotifySavedItem, SpotifySearchResult } from '@/types'
+import type { SpotifyTrack, SpotifySavedItem } from '@/types'
 
 export interface UniversalTrackResult {
   id: string

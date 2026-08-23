@@ -7,7 +7,6 @@ import {
   loginWithSpotify,
   exchangeCodeForToken,
   saveTokens,
-  getStoredTokens,
   clearTokens,
   getValidAccessToken,
 } from '@/api/spotifyAuth'
@@ -116,7 +115,7 @@ export function useSpotifyAuth(): SpotifyAuthState & SpotifyAuthActions {
 }
 
 // Singleton state para compartilhar entre componentes
-let _authState: ReturnType<typeof useSpotifyAuth> | null = null
+const _authState: ReturnType<typeof useSpotifyAuth> | null = null
 
 export function getSpotifyAuthState() {
   return _authState

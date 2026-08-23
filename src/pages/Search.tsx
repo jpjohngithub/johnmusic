@@ -15,11 +15,12 @@ import {
 } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import { executeUniversalSearch, type UniversalTrackResult } from '@/api/universalSearchService'
+import { searchYouTubeKeyless } from '@/api/youtubeSearchService'
 import { SpotifyIFramePlayer } from '@/components/spotify/SpotifyIFramePlayer'
 import { usePlayerStore } from '@/store/playerStore'
 import { useLibraryStore } from '@/store/libraryStore'
 import { formatMs, cn } from '@/lib/utils'
-import type { SpotifyTrack, AudioTrack } from '@/types'
+import type { SpotifyTrack, QueueItem } from '@/types'
 
 const TikTokIcon = () => (
   <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
@@ -42,15 +43,15 @@ export function Search({ isAuthenticated, onPlayTrack }: SearchProps) {
   const {
     audioTrack,
     spotifyTrack,
-    spotifySavedItem,
     isPlaying,
     playAudioTrack,
     playSpotifySavedItem,
     playYouTubeVideo,
     playTikTokVideo,
+    playUniversal,
   } = usePlayerStore()
 
-  const { spotifyItems, youtubeVideos, tiktokVideos, customPlaylists, addSpotifyItem } =
+  const { youtubeVideos, tiktokVideos, customPlaylists, addSpotifyItem } =
     useLibraryStore()
 
   // Debounce query
@@ -67,6 +68,13 @@ export function Search({ isAuthenticated, onPlayTrack }: SearchProps) {
   const { data: searchData, isLoading } = useQuery({
     queryKey: ['universal', 'search', debouncedQuery, isAuthenticated],
     queryFn: () => executeUniversalSearch(debouncedQuery, isAuthenticated),
+    enabled: debouncedQuery.length > 1,
+  })
+
+  // YouTube keyless search (Piped/Invidious)
+  const { data: ytResults, isLoading: ytLoading } = useQuery({
+    queryKey: ['youtube', 'search', debouncedQuery],
+    queryFn: () => searchYouTubeKeyless(debouncedQuery, 12),
     enabled: debouncedQuery.length > 1,
   })
 
@@ -97,35 +105,39 @@ export function Search({ isAuthenticated, onPlayTrack }: SearchProps) {
       )
     : []
 
-  // Handle Track Click -> Play direct audio stream!
-  const handleTrackClick = (track: UniversalTrackResult, index: number) => {
-    if (track.rawTrack && isAuthenticated) {
+  // Handle Track Click → conversão automática p/ YouTube (faixa completa)
+  const handleTrackClick = async (track: UniversalTrackResult, index: number) => {
+    if (track.rawTrack && isAuthenticated && onPlayTrack) {
       onPlayTrack(track.rawTrack, index)
-    } else if (track.previewUrl) {
-      const directAudio: AudioTrack = {
-        id: track.id,
-        title: track.name,
-        artist: track.artistName,
-        album: track.albumName,
-        artworkUrl: track.artworkUrl,
-        audioUrl: track.previewUrl,
-        durationMs: track.durationMs,
-        externalUrl: track.spotifyUrl,
+      return
+    }
+
+    const queueItem: QueueItem = {
+      id: track.id,
+      source: 'spotify',
+      title: track.name,
+      subtitle: track.artistName,
+      imageUrl: track.artworkUrl,
+      uri: track.spotifyUri,
+      durationMs: track.durationMs,
+    }
+
+    try {
+      await playUniversal([queueItem], 0)
+    } catch {
+      // Fallback: preview de 30s quando a conversão falha
+      if (track.previewUrl) {
+        playAudioTrack({
+          id: track.id,
+          title: track.name,
+          artist: track.artistName,
+          album: track.albumName,
+          artworkUrl: track.artworkUrl,
+          audioUrl: track.previewUrl,
+          durationMs: track.durationMs,
+          externalUrl: track.spotifyUrl,
+        })
       }
-      playAudioTrack(directAudio)
-    } else if (track.spotifyUri) {
-      const spotifyId = track.spotifyUri.split(':')?.[2] || track.id
-      playSpotifySavedItem({
-        id: track.id,
-        type: 'track',
-        spotifyId,
-        title: track.name,
-        subtitle: track.artistName,
-        thumbnailUrl: track.artworkUrl,
-        url: track.spotifyUrl || `https://open.spotify.com/track/${spotifyId}`,
-        embedUrl: `https://open.spotify.com/embed/track/${spotifyId}?utm_source=generator&theme=0`,
-        addedAt: new Date().toISOString(),
-      })
     }
   }
 
@@ -377,12 +389,13 @@ export function Search({ isAuthenticated, onPlayTrack }: SearchProps) {
             </section>
           )}
 
-          {/* YouTube Matches */}
-          {showYouTube && matchedYouTube.length > 0 && (
+          {/* YouTube Matches (biblioteca + busca global) */}
+          {showYouTube && (matchedYouTube.length > 0 || (ytResults && ytResults.length > 0)) && (
             <section className="space-y-4 p-6 rounded-3xl bg-white/[0.02] border border-white/5 shadow-xl">
               <h2 className="text-lg font-bold text-white tracking-tight flex items-center gap-2 text-youtube-red">
                 <Youtube size={18} />
-                <span>Vídeos do YouTube ({matchedYouTube.length})</span>
+                <span>YouTube ({(matchedYouTube.length || 0) + (ytResults?.length || 0)})</span>
+                {ytLoading && <Loader2 size={14} className="animate-spin text-white/40" />}
               </h2>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
@@ -400,6 +413,33 @@ export function Search({ isAuthenticated, onPlayTrack }: SearchProps) {
                     <div className="min-w-0">
                       <p className="text-white text-xs font-semibold truncate">{video.title}</p>
                       <p className="text-white/40 text-[10px] truncate">{video.channelTitle}</p>
+                    </div>
+                  </div>
+                ))}
+                {ytResults?.map((r) => (
+                  <div
+                    key={r.videoId}
+                    onClick={() =>
+                      playYouTubeVideo({
+                        id: `yt-${r.videoId}`,
+                        videoId: r.videoId,
+                        title: r.title,
+                        channelTitle: r.channelTitle,
+                        thumbnailUrl: r.thumbnailUrl,
+                        url: `https://www.youtube.com/watch?v=${r.videoId}`,
+                        addedAt: new Date().toISOString(),
+                      })
+                    }
+                    className="flex items-center gap-3 p-2.5 rounded-xl bg-white/5 hover:bg-white/10 cursor-pointer transition-all border border-white/5"
+                  >
+                    <img
+                      src={r.thumbnailUrl}
+                      alt={r.title}
+                      className="w-14 h-10 object-cover rounded-lg flex-shrink-0"
+                    />
+                    <div className="min-w-0">
+                      <p className="text-white text-xs font-semibold truncate">{r.title}</p>
+                      <p className="text-white/40 text-[10px] truncate">{r.channelTitle}</p>
                     </div>
                   </div>
                 ))}

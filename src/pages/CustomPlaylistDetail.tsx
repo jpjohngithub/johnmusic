@@ -9,16 +9,13 @@ import {
   Trash2,
   ArrowLeft,
   Youtube,
-  ExternalLink,
   Plus,
-  Clock,
   Sparkles,
-  Volume2,
   Radio,
 } from 'lucide-react'
 import { useLibraryStore } from '@/store/libraryStore'
 import { usePlayerStore } from '@/store/playerStore'
-import { formatMs, formatSeconds, cn } from '@/lib/utils'
+import { formatMs, cn } from '@/lib/utils'
 import type { PlaylistItem, SpotifySavedItem, YouTubeVideo, TikTokVideo, AudioTrack } from '@/types'
 
 const TikTokIcon = () => (
@@ -38,8 +35,6 @@ export function CustomPlaylistDetail() {
     youtubeVideo,
     tiktokVideo,
     isPlaying,
-    currentTime,
-    duration,
     togglePlay,
     playAudioTrack,
     playSpotifySavedItem,
@@ -138,13 +133,6 @@ export function CustomPlaylistDetail() {
         addedAt: item.addedAt,
       }
       playTikTokVideo(video)
-    }
-  }
-
-  // Play first track or toggle
-  const handlePlayAll = () => {
-    if (playlist.items.length > 0) {
-      handlePlayItem(playlist.items[0], 0)
     }
   }
 

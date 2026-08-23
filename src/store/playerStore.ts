@@ -63,6 +63,9 @@ interface PlayerActions {
   prevInQueue: () => QueueItem | null
   playQueueItem: (index: number) => void
 
+  // Universal playback (conversão cruzada p/ YouTube)
+  playUniversal: (items: QueueItem[], startIndex?: number) => Promise<void>
+
   // Reset
   reset: () => void
 }
@@ -217,8 +220,55 @@ export const usePlayerStore = create<PlayerState & PlayerActions>()(
         set({ queueIndex: index })
       },
 
+      // ─── Universal playback ─────────────────────────────────
+      // Resolve cada item para um vídeo do YouTube (conversão
+      // cruzada) e toca a partir do índice escolhido.
+      playUniversal: async (items, startIndex = 0) => {
+        const queue = [...items]
+        set({ queue, queueIndex: startIndex })
+
+        const current = queue[startIndex]
+        if (!current) return
+
+        if (current.source === 'youtube' && current.videoId) {
+          playYouTubeVideoFromQueue(current)
+          return
+        }
+
+        try {
+          const { resolvePlayable } = await import('@/api/crossPlatformService')
+          const resolved = await resolvePlayable(current)
+          if (!resolved) throw new Error('Não foi possível encontrar essa faixa no YouTube')
+
+          const updated = [...queue]
+          updated[startIndex] = {
+            ...current,
+            source: 'youtube',
+            videoId: resolved.videoId,
+          }
+          set({ queue: updated })
+          playYouTubeVideoFromQueue(updated[startIndex])
+        } catch (e) {
+          set({ isPlaying: false })
+          throw e
+        }
+      },
+
       reset: () => set(initialState),
     }),
     { name: 'PlayerStore' }
   )
 )
+
+// Converte um QueueItem resolvido em YouTubeVideo e dispara o player
+function playYouTubeVideoFromQueue(item: QueueItem) {
+  usePlayerStore.getState().playYouTubeVideo({
+    id: item.id,
+    videoId: item.videoId || '',
+    title: item.title,
+    channelTitle: item.subtitle,
+    thumbnailUrl: item.imageUrl,
+    url: `https://www.youtube.com/watch?v=${item.videoId || ''}`,
+    addedAt: new Date().toISOString(),
+  })
+}

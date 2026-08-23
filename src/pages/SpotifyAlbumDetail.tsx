@@ -1,6 +1,6 @@
 import { useParams, Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { Disc3, Play, ArrowLeft } from 'lucide-react'
+import { Disc3, ArrowLeft } from 'lucide-react'
 import { getAlbum } from '@/api/spotifyService'
 import { TrackList } from '@/components/spotify/TrackList'
 import { SpotifyEmbedPlayer } from '@/components/spotify/SpotifyEmbedPlayer'

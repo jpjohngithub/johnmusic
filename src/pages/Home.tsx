@@ -4,7 +4,6 @@ import { CURATED_PUBLIC_SPOTIFY } from '@/api/spotifyUrlService'
 import { SpotifyInput } from '@/components/spotify/SpotifyInput'
 import { YouTubeInput } from '@/components/youtube/YouTubeInput'
 import { TikTokInput } from '@/components/tiktok/TikTokInput'
-import { YouTubePlayer } from '@/components/youtube/YouTubePlayer'
 import { TikTokEmbed } from '@/components/tiktok/TikTokEmbed'
 import { SpotifyEmbedPlayer } from '@/components/spotify/SpotifyEmbedPlayer'
 import { usePlayerStore } from '@/store/playerStore'
@@ -157,7 +156,11 @@ export function Home() {
             <span className="text-white/40 text-xs font-mono">{youtubeVideo.channelTitle}</span>
           </div>
           <div className="max-w-4xl mx-auto">
-            <YouTubePlayer video={youtubeVideo} />
+            <img
+              src={youtubeVideo.thumbnailUrl}
+              alt={youtubeVideo.title}
+              className="w-full rounded-2xl shadow-xl"
+            />
           </div>
         </section>
       )}

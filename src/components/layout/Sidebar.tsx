@@ -16,18 +16,14 @@ import {
   Sparkles,
   Plus,
   ListMusic,
+  LogOut,
 } from 'lucide-react'
 import { CURATED_PUBLIC_SPOTIFY } from '@/api/spotifyUrlService'
 import { PlaylistModal } from '@/components/playlist/PlaylistModal'
 import { useLibraryStore } from '@/store/libraryStore'
 import { usePlayerStore } from '@/store/playerStore'
+import { useSpotifyAuth } from '@/hooks/useSpotifyAuth'
 import { cn } from '@/lib/utils'
-
-const TikTokIcon = () => (
-  <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
-    <path d="M19.59 6.69a4.83 4.83 0 01-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 01-2.88 2.5 2.89 2.89 0 01-2.89-2.89 2.89 2.89 0 012.89-2.89c.28 0 .54.04.79.1V9.01a6.33 6.33 0 00-.79-.05 6.34 6.34 0 00-6.34 6.34 6.34 6.34 0 006.33-6.34V8.69a8.17 8.17 0 004.79 1.53V6.78a4.85 4.85 0 01-1.02-.09z" />
-  </svg>
-)
 
 interface SidebarProps {
   collapsed?: boolean
@@ -47,6 +43,7 @@ export function Sidebar({ collapsed = false }: SidebarProps) {
   const [isPlaylistModalOpen, setIsPlaylistModalOpen] = useState(false)
   const { customPlaylists, spotifyItems, youtubeVideos, tiktokVideos } = useLibraryStore()
   const { playSpotifySavedItem } = usePlayerStore()
+  const { isAuthenticated, isLoading: authLoading, user, login, logout } = useSpotifyAuth()
 
   return (
     <>
@@ -125,6 +122,40 @@ export function Sidebar({ collapsed = false }: SidebarProps) {
               <Plus size={15} />
               <span>Criar / Importar Playlist</span>
             </button>
+          </div>
+        )}
+
+        {/* Spotify Login / User */}
+        {!collapsed && (
+          <div className="px-3 pb-3">
+            {isAuthenticated ? (
+              <button
+                onClick={logout}
+                className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 transition-all"
+                title="Sair do Spotify"
+              >
+                {user?.images?.[0]?.url ? (
+                  <img src={user.images[0].url} alt="" className="w-7 h-7 rounded-full object-cover" />
+                ) : (
+                  <div className="w-7 h-7 rounded-full bg-spotify-green flex items-center justify-center">
+                    <Music2 size={12} className="text-black" />
+                  </div>
+                )}
+                <span className="flex-1 text-left text-xs font-semibold text-white truncate">
+                  {user?.display_name || 'Spotify'}
+                </span>
+                <LogOut size={13} className="text-white/40" />
+              </button>
+            ) : (
+              <button
+                onClick={() => login()}
+                disabled={authLoading}
+                className="w-full flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl bg-spotify-green hover:bg-green-400 disabled:opacity-50 text-black font-bold text-xs transition-all active:scale-95 shadow-sm"
+              >
+                <Music2 size={15} />
+                <span>{authLoading ? 'Verificando...' : 'Entrar com Spotify'}</span>
+              </button>
+            )}
           </div>
         )}
 

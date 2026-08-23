@@ -4,7 +4,7 @@
 
 import { ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ChevronLeft, ChevronRight, Music2 } from 'lucide-react'
+import { ChevronLeft, ChevronRight } from 'lucide-react'
 
 interface MainContentProps {
   children: ReactNode

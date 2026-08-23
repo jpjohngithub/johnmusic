@@ -12,7 +12,6 @@ import {
   Play,
   Pause,
   SkipBack,
-  SkipForward,
   ExternalLink,
   Search,
   Loader2,
@@ -20,7 +19,8 @@ import {
 import { useQuery } from '@tanstack/react-query'
 import { CURATED_PUBLIC_SPOTIFY } from '@/api/spotifyUrlService'
 import { SpotifyInput } from '@/components/spotify/SpotifyInput'
-import { SpotifyIFramePlayer, useSpotifyIFrameController } from '@/components/spotify/SpotifyIFramePlayer'
+import { SpotifyIFramePlayer } from '@/components/spotify/SpotifyIFramePlayer'
+import { useSpotifyIFrameController } from '@/hooks/useSpotifyIFrameController'
 import { usePlayerStore } from '@/store/playerStore'
 import { useLibraryStore } from '@/store/libraryStore'
 import { getClientCredentialsToken } from '@/api/spotifyAuth'

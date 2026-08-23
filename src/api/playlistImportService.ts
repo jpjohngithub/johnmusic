@@ -5,7 +5,7 @@
 import { parseSpotifyUrl, fetchSpotifyOEmbed } from './spotifyUrlService'
 import { getPlaylist, getAllPlaylistTracks } from './spotifyService'
 import { getValidAccessToken } from './spotifyAuth'
-import type { CustomPlaylist, PlaylistItem, SpotifySavedItem } from '@/types'
+import type { CustomPlaylist, PlaylistItem } from '@/types'
 
 // ─── Import Spotify Playlist to Custom Local Playlist ─────────
 
