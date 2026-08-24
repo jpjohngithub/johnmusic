@@ -195,11 +195,13 @@ export const usePlayerStore = create<ExtendedPlayerState & PlayerActions>()(
         const queueItem: QueueItem = {
           id: video.id,
           source: 'tiktok',
-          title: video.title || 'TikTok Music',
-          subtitle: `@${video.authorName}`,
+          title: video.soundTitle || video.title || 'TikTok Music',
+          subtitle: video.soundAuthor || `@${video.authorName}`,
           imageUrl: video.thumbnailUrl,
+          audioUrl: video.audioUrl,
           tiktokPostId: video.postId,
           tiktokUrl: video.url,
+          durationMs: (video.durationSeconds || 30) * 1000,
         }
         get().playUniversal([queueItem], 0)
       },
@@ -220,8 +222,8 @@ export const usePlayerStore = create<ExtendedPlayerState & PlayerActions>()(
 
         set({ queueIndex: index, isResolving: true })
 
-        // Se já possui áudio direto
-        if (targetItem.source === 'audio' && targetItem.audioUrl) {
+        // 1. Se já possui áudio direto (ex: MP3 extraído do TikTok ou áudio preview)
+        if (targetItem.audioUrl) {
           set({
             source: 'audio',
             currentQueueItem: targetItem,
@@ -242,7 +244,46 @@ export const usePlayerStore = create<ExtendedPlayerState & PlayerActions>()(
           return
         }
 
-        // Se já possui videoId do YouTube
+        // 2. Se for um link do TikTok sem áudio direto ainda, tenta extrair o MP3 na hora
+        if (targetItem.source === 'tiktok' && (targetItem.tiktokUrl || targetItem.tiktokPostId)) {
+          try {
+            const { extractTikTokAudioAndMetadata } = await import('@/api/tiktokService')
+            const urlToUse = targetItem.tiktokUrl || `https://www.tiktok.com/@user/video/${targetItem.tiktokPostId}`
+            const data = await extractTikTokAudioAndMetadata(urlToUse)
+            if (data.audioUrl) {
+              const updatedQueue = [...queue]
+              updatedQueue[index] = {
+                ...targetItem,
+                title: data.soundTitle || targetItem.title,
+                subtitle: data.soundAuthor || targetItem.subtitle,
+                audioUrl: data.audioUrl,
+                imageUrl: data.thumbnailUrl || targetItem.imageUrl,
+                durationMs: data.durationSeconds * 1000,
+              }
+              set({
+                queue: updatedQueue,
+                source: 'audio',
+                currentQueueItem: updatedQueue[index],
+                audioTrack: {
+                  id: targetItem.id,
+                  title: data.soundTitle || targetItem.title,
+                  artist: data.soundAuthor || targetItem.subtitle,
+                  artworkUrl: data.thumbnailUrl || targetItem.imageUrl,
+                  audioUrl: data.audioUrl,
+                  durationMs: data.durationSeconds * 1000,
+                },
+                youtubeVideo: null,
+                isPlaying: true,
+                isResolving: false,
+              })
+              return
+            }
+          } catch {
+            // segue para conversão via busca
+          }
+        }
+
+        // 3. Se já possui videoId do YouTube
         if (targetItem.videoId) {
           set({
             source: 'youtube',
@@ -265,7 +306,7 @@ export const usePlayerStore = create<ExtendedPlayerState & PlayerActions>()(
           return
         }
 
-        // Resolver via motor de conversão cruzada
+        // 4. Resolver via motor de conversão cruzada para áudio do YouTube
         try {
           const { resolvePlayable } = await import('@/api/crossPlatformService')
           const resolved = await resolvePlayable(targetItem)
@@ -295,7 +336,6 @@ export const usePlayerStore = create<ExtendedPlayerState & PlayerActions>()(
               isResolving: false,
             })
           } else {
-            // Fallback
             set({ isPlaying: false, isResolving: false })
           }
         } catch {

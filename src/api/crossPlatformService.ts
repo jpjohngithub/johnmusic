@@ -6,7 +6,6 @@
 // equivalente no YouTube e tocados pelo player IFrame.
 
 import { searchYouTubeKeyless, cacheSet, cacheGet, type YouTubeMatch } from './youtubeSearchService'
-import { getTikTokOEmbed } from './tiktokService'
 import type { PlaylistItem, QueueItem } from '@/types'
 
 const RESOLVE_PREFIX = 'yt-resolve:'
@@ -94,16 +93,17 @@ export async function resolvePlayable(
       channelTitle = item.subtitle
     }
   } else if (item.source === 'tiktok') {
-    // Query de conversão via music_info do oEmbed
-    let query = item.title
+    let query = `${item.title} ${item.subtitle}`.trim()
     let targetDuration: number | undefined
+
     try {
       const url = (item as PlaylistItem).url || (item as QueueItem).tiktokUrl
-      if (url) {
-        const oembed = await getTikTokOEmbed(url)
-        if (oembed.title) {
-          query = oembed.title
-          targetDuration = (oembed as any).duration
+      if (url && (!item.title || item.title === 'TikTok Video' || item.title === 'Música do TikTok')) {
+        const { extractTikTokAudioAndMetadata } = await import('./tiktokService')
+        const data = await extractTikTokAudioAndMetadata(url)
+        if (data.soundTitle) {
+          query = `${data.soundTitle} ${data.soundAuthor}`.trim()
+          targetDuration = data.durationSeconds
         }
       }
     } catch {

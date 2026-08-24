@@ -59,12 +59,39 @@ export function Home() {
     setInputFeedback(null)
 
     try {
+      // 1. Spotify URL
       if (isValidSpotifyUrl(val)) {
+        const { parseSpotifyUrl } = await import('@/api/spotifyUrlService')
+        const parsed = parseSpotifyUrl(val)
+
+        if (parsed?.type === 'playlist' || parsed?.type === 'album') {
+          setInputFeedback('Separando faixas da playlist do Spotify...')
+          const pl = await importSpotifyPlaylist(val)
+          useLibraryStore.getState().addCustomPlaylist(pl)
+          setUniversalInput('')
+          setInputFeedback(`Playlist "${pl.name}" importada com ${pl.items.length} faixas!`)
+
+          if (pl.items.length > 0) {
+            const queueItems: QueueItem[] = pl.items.map((i) => ({
+              id: i.id,
+              source: 'spotify',
+              title: i.title,
+              subtitle: i.subtitle,
+              imageUrl: i.imageUrl,
+              uri: i.uri,
+              durationMs: i.durationMs,
+            }))
+            await playUniversal(queueItems, 0)
+          }
+          navigate(`/playlist/${pl.id}`)
+          return
+        }
+
+        // Música individual do Spotify
         const item = await createSpotifyItemFromUrl(val)
         addSpotifyItem(item)
         setUniversalInput('')
-        setInputFeedback('Música/Playlist do Spotify adicionada!')
-        // Toca imediatamente
+        setInputFeedback('Música do Spotify adicionada!')
         const queueItem: QueueItem = {
           id: item.id,
           source: 'spotify',
@@ -74,7 +101,32 @@ export function Home() {
           uri: `spotify:${item.type}:${item.spotifyId}`,
         }
         await playUniversal([queueItem], 0)
-      } else if (isValidYouTubeUrl(val)) {
+      } else if (isValidYouTubeUrl(val) || val.includes('list=')) {
+        // 2. YouTube Playlist ou Vídeo
+        if (val.includes('list=')) {
+          setInputFeedback('Separando vídeos da playlist do YouTube...')
+          const { importYouTubePlaylist } = await import('@/api/playlistImportService')
+          const pl = await importYouTubePlaylist(val)
+          useLibraryStore.getState().addCustomPlaylist(pl)
+          setUniversalInput('')
+          setInputFeedback(`Playlist "${pl.name}" importada com ${pl.items.length} vídeos!`)
+
+          if (pl.items.length > 0) {
+            const queueItems: QueueItem[] = pl.items.map((i) => ({
+              id: i.id,
+              source: 'youtube',
+              title: i.title,
+              subtitle: i.subtitle,
+              imageUrl: i.imageUrl,
+              videoId: i.videoId,
+              durationMs: i.durationMs,
+            }))
+            await playUniversal(queueItems, 0)
+          }
+          navigate(`/playlist/${pl.id}`)
+          return
+        }
+
         const video = await createYouTubeVideoFromUrl(val)
         addYouTubeVideo(video)
         setUniversalInput('')
@@ -89,18 +141,22 @@ export function Home() {
         }
         await playUniversal([queueItem], 0)
       } else if (isValidTikTokUrl(val)) {
+        // 3. TikTok Audio Extraído
+        setInputFeedback('Extraindo áudio do vídeo do TikTok...')
         const video = await createTikTokVideoFromUrl(val)
         addTikTokVideo(video)
         setUniversalInput('')
-        setInputFeedback('Som do TikTok adicionado!')
+        setInputFeedback(`Áudio extraído com sucesso: "${video.title}"!`)
         const queueItem: QueueItem = {
           id: video.id,
           source: 'tiktok',
-          title: video.title,
-          subtitle: `@${video.authorName}`,
+          title: video.soundTitle || video.title,
+          subtitle: video.soundAuthor || `@${video.authorName}`,
           imageUrl: video.thumbnailUrl,
+          audioUrl: video.audioUrl,
           tiktokPostId: video.postId,
           tiktokUrl: video.url,
+          durationMs: (video.durationSeconds || 30) * 1000,
         }
         await playUniversal([queueItem], 0)
       } else {

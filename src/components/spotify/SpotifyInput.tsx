@@ -32,6 +32,31 @@ export function SpotifyInput({ onItemAdded, autoPlay = true }: SpotifyInputProps
     setError(null)
 
     try {
+      const { parseSpotifyUrl } = await import('@/api/spotifyUrlService')
+      const parsed = parseSpotifyUrl(url.trim())
+
+      if (parsed?.type === 'playlist' || parsed?.type === 'album') {
+        const { importSpotifyPlaylist } = await import('@/api/playlistImportService')
+        const pl = await importSpotifyPlaylist(url.trim())
+        useLibraryStore.getState().addCustomPlaylist(pl)
+        setUrl('')
+
+        if (autoPlay && pl.items.length > 0) {
+          const { playUniversal } = usePlayerStore.getState()
+          const queueItems = pl.items.map((i) => ({
+            id: i.id,
+            source: 'spotify' as const,
+            title: i.title,
+            subtitle: i.subtitle,
+            imageUrl: i.imageUrl,
+            uri: i.uri,
+            durationMs: i.durationMs,
+          }))
+          await playUniversal(queueItems, 0)
+        }
+        return
+      }
+
       const item = await createSpotifyItemFromUrl(url.trim())
       addSpotifyItem(item)
       setLastAdded(item)

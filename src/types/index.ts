@@ -235,6 +235,10 @@ export interface TikTokVideo {
   authorName: string
   thumbnailUrl: string
   url: string
+  audioUrl?: string
+  soundTitle?: string
+  soundAuthor?: string
+  durationSeconds?: number
   embedHtml: string
   addedAt: string
   playlistId?: string
