@@ -59,6 +59,32 @@ export function Home() {
     setInputFeedback(null)
 
     try {
+      // 0. Link Compartilhado do JohnMusic
+      const { isJohnMusicShareUrl, importPlaylistFromShareUrl } = await import('@/api/playlistShareService')
+      if (isJohnMusicShareUrl(val)) {
+        setInputFeedback('Clonando playlist compartilhada com todas as faixas...')
+        const pl = importPlaylistFromShareUrl(val)
+        if (pl && pl.items.length > 0) {
+          useLibraryStore.getState().addCustomPlaylist(pl)
+          setUniversalInput('')
+          setInputFeedback(`Playlist "${pl.name}" clonada com sucesso (${pl.items.length} músicas)!`)
+
+          const queueItems: QueueItem[] = pl.items.map((i) => ({
+            id: i.id,
+            source: i.source,
+            title: i.title,
+            subtitle: i.subtitle,
+            imageUrl: i.imageUrl,
+            videoId: i.videoId,
+            uri: i.uri,
+            durationMs: i.durationMs,
+          }))
+          await playUniversal(queueItems, 0)
+          navigate(`/playlist/${pl.id}`)
+          return
+        }
+      }
+
       // 1. Spotify URL
       if (isValidSpotifyUrl(val)) {
         const { parseSpotifyUrl } = await import('@/api/spotifyUrlService')

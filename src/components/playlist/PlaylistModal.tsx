@@ -49,6 +49,22 @@ export function PlaylistModal({ isOpen, onClose }: PlaylistModalProps) {
     setError(null)
 
     try {
+      const { isJohnMusicShareUrl, importPlaylistFromShareUrl } = await import('@/api/playlistShareService')
+      if (isJohnMusicShareUrl(trimmed)) {
+        const imported = importPlaylistFromShareUrl(trimmed)
+        if (imported) {
+          addCustomPlaylist(imported)
+          setImportUrl('')
+          setSuccess(`Playlist "${imported.name}" clonada com ${imported.items.length} músicas!`)
+          setTimeout(() => {
+            setSuccess(null)
+            onClose()
+            navigate(`/playlist/${imported.id}`)
+          }, 600)
+          return
+        }
+      }
+
       if (isValidSpotifyUrl(trimmed)) {
         const imported = await importSpotifyPlaylist(trimmed)
         addCustomPlaylist(imported)
@@ -70,7 +86,7 @@ export function PlaylistModal({ isOpen, onClose }: PlaylistModalProps) {
           navigate(`/playlist/${imported.id}`)
         }, 600)
       } else {
-        setError('URL inválida. Cole um link de playlist do Spotify ou YouTube.')
+        setError('URL inválida. Cole um link do JohnMusic, Spotify ou YouTube.')
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Falha ao importar playlist')

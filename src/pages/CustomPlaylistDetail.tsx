@@ -31,10 +31,13 @@ import {
   Clock,
   FolderPlus,
   GripVertical,
+  Share2,
+  Link2,
 } from 'lucide-react'
 import { useLibraryStore } from '@/store/libraryStore'
 import { usePlayerStore } from '@/store/playerStore'
 import { AddToPlaylistModal } from '@/components/playlist/AddToPlaylistModal'
+import { generatePlaylistShareUrl } from '@/api/playlistShareService'
 import { createSpotifyItemFromUrl, isValidSpotifyUrl } from '@/api/spotifyUrlService'
 import { createYouTubeVideoFromUrl, isValidYouTubeUrl } from '@/api/youtubeService'
 import { createTikTokVideoFromUrl, isValidTikTokUrl } from '@/api/tiktokService'
@@ -93,6 +96,9 @@ export function CustomPlaylistDetail() {
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null)
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null)
 
+  // Feedback de Compartilhamento
+  const [shareFeedback, setShareFeedback] = useState<string | null>(null)
+
   const playlist = customPlaylists.find((p) => p.id === id)
 
   if (!playlist) {
@@ -132,6 +138,18 @@ export function CustomPlaylistDetail() {
     const clone = duplicateCustomPlaylist(playlist.id)
     if (clone) {
       navigate(`/playlist/${clone.id}`)
+    }
+  }
+
+  const handleSharePlaylist = async () => {
+    try {
+      const shareUrl = generatePlaylistShareUrl(playlist)
+      await navigator.clipboard.writeText(shareUrl)
+      setShareFeedback('Link copiado! Ao colar esse link no site, a playlist é duplicada exatamente como está.')
+      setTimeout(() => setShareFeedback(null), 5000)
+    } catch {
+      const shareUrl = generatePlaylistShareUrl(playlist)
+      window.prompt('Copie o link da sua playlist abaixo:', shareUrl)
     }
   }
 
@@ -412,6 +430,15 @@ export function CustomPlaylistDetail() {
           </button>
 
           <button
+            onClick={handleSharePlaylist}
+            className="flex items-center gap-1.5 px-4 py-2.5 rounded-full bg-spotify-green/20 hover:bg-spotify-green/30 text-spotify-green font-bold text-xs transition-all border border-spotify-green/40 active:scale-95 shadow-sm"
+            title="Copiar URL para Compartilhar/Duplicar Playlist"
+          >
+            <Share2 size={14} />
+            <span>Copiar Link</span>
+          </button>
+
+          <button
             onClick={handleDuplicate}
             className="p-2.5 rounded-full bg-white/5 hover:bg-white/10 text-white/60 hover:text-white transition-all border border-white/5 active:scale-95"
             title="Duplicar Playlist"
@@ -428,6 +455,17 @@ export function CustomPlaylistDetail() {
           </button>
         </div>
       </div>
+
+      {/* Share Toast Banner */}
+      {shareFeedback && (
+        <div className="flex items-center gap-3 p-4 rounded-2xl bg-spotify-green/10 border border-spotify-green/30 text-spotify-green text-xs font-semibold shadow-xl animate-slide-up">
+          <Check size={18} className="flex-shrink-0" />
+          <span className="flex-1">{shareFeedback}</span>
+          <button onClick={() => setShareFeedback(null)} className="text-white/40 hover:text-white">
+            <X size={14} />
+          </button>
+        </div>
+      )}
 
       {/* ─── QUICK ADD MUSIC FORM (EXPANDABLE) ────────── */}
       {showQuickAdd && (

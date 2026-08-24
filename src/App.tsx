@@ -1,10 +1,12 @@
-import { lazy, Suspense } from 'react'
-import { Routes, Route } from 'react-router-dom'
+import { lazy, Suspense, useEffect } from 'react'
+import { Routes, Route, useNavigate } from 'react-router-dom'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { MainContent } from '@/components/layout/MainContent'
 import { PlayerBar } from '@/components/layout/PlayerBar'
 import { Home } from '@/pages/Home'
 import { YouTubePlayer } from '@/components/youtube/YouTubePlayer'
+import { useLibraryStore } from '@/store/libraryStore'
+import { isJohnMusicShareUrl, importPlaylistFromShareUrl } from '@/api/playlistShareService'
 import { Loader2 } from 'lucide-react'
 
 // Lazy loaded routes for ultra-fast initial page load
@@ -26,6 +28,23 @@ function PageFallback() {
 }
 
 export function App() {
+  const navigate = useNavigate()
+  const { addCustomPlaylist } = useLibraryStore()
+
+  // Listener para URLs compartilhadas na inicialização (ex: ?playlist=... ou ?share=...)
+  useEffect(() => {
+    const search = window.location.search
+    if (search && isJohnMusicShareUrl(search)) {
+      const pl = importPlaylistFromShareUrl(search)
+      if (pl && pl.items.length > 0) {
+        addCustomPlaylist(pl)
+        // Limpa a URL para manter limpo o histórico
+        window.history.replaceState({}, document.title, window.location.pathname)
+        navigate(`/playlist/${pl.id}`)
+      }
+    }
+  }, [addCustomPlaylist, navigate])
+
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-black select-none">
       <Sidebar />
