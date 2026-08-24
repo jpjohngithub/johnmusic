@@ -71,11 +71,11 @@ export function CustomPlaylistDetail() {
       title: i.title,
       subtitle: i.subtitle,
       imageUrl: i.imageUrl,
-      audioUrl: i.url,
+      audioUrl: i.source === 'audio' ? i.url : undefined,
       uri: i.uri,
       videoId: i.videoId,
       tiktokPostId: i.tiktokPostId,
-      tiktokUrl: i.url,
+      tiktokUrl: i.source === 'tiktok' ? i.url : undefined,
       durationMs: i.durationMs,
     }))
 
