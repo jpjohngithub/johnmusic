@@ -55,15 +55,35 @@ export function generatePlaylistShareUrl(playlist: CustomPlaylist): string {
     n: playlist.name,
     desc: playlist.description || '',
     cov: playlist.coverUrl || '',
-    items: playlist.items.map((i) => ({
-      s: i.source,
-      t: i.title,
-      a: i.subtitle,
-      img: i.imageUrl || '',
-      v: i.videoId,
-      u: i.uri || i.url,
-      d: i.durationMs,
-    })),
+    items: playlist.items.map((i) => {
+      let vid = i.videoId
+      if (!vid && typeof localStorage !== 'undefined') {
+        try {
+          const resolveKey = i.source === 'spotify'
+            ? `yt-resolve:spotify:${i.uri || i.id}`
+            : i.source === 'tiktok'
+            ? `yt-resolve:tiktok:${i.tiktokPostId || i.id}`
+            : `yt-resolve:youtube:${i.videoId || i.id}`
+          const raw = localStorage.getItem('yt-search-cache:' + resolveKey.toLowerCase())
+          if (raw) {
+            const entry = JSON.parse(raw)
+            if (entry?.data?.videoId) {
+              vid = entry.data.videoId
+            }
+          }
+        } catch {}
+      }
+
+      return {
+        s: i.source,
+        t: i.title,
+        a: i.subtitle,
+        img: i.imageUrl || '',
+        v: vid,
+        u: i.uri || i.url,
+        d: i.durationMs,
+      }
+    }),
   }
 
   const jsonStr = JSON.stringify(payload)

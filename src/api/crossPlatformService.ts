@@ -3,14 +3,16 @@
 // ============================================================
 // O YouTube é o "motor de reprodução": faixas do Spotify (sem
 // login Premium) e sons do TikTok são convertidos para o vídeo
-// equivalente no YouTube e tocados pelo player IFrame.
+// oficial equivalente no YouTube e tocados pelo player IFrame.
+// ============================================================
 
 import { searchYouTubeKeyless, cacheSet, cacheGet, type YouTubeMatch } from './youtubeSearchService'
+import { useLibraryStore } from '@/store/libraryStore'
 import type { PlaylistItem, QueueItem } from '@/types'
 
 const RESOLVE_PREFIX = 'yt-resolve:'
 
-// ─── Score de um candidato ────────────────────────────────────
+// ─── Score de um candidato para Áudio Oficial de Estúdio ───────
 
 function scoreCandidate(
   m: YouTubeMatch,
@@ -25,43 +27,51 @@ function scoreCandidate(
   const songLower = (songTitle || '').toLowerCase()
   const artistLower = (artistName || '').toLowerCase()
 
-  // 1. Correspondência do nome da música
-  if (songLower && titleLower.includes(songLower)) score += 40
-
-  // 2. Correspondência do nome do artista
-  if (artistLower && (channelLower.includes(artistLower) || titleLower.includes(artistLower))) {
-    score += 30
+  // 1. Tópico Oficial do YouTube Music / Gravadora (- Topic) = ÁUDIO DE ESTÚDIO ORIGINAL
+  if (channelLower.includes('- topic') || channelLower.includes('topic')) {
+    score += 60
+  } else if (
+    channelLower.includes('vevo') ||
+    channelLower.includes('official') ||
+    channelLower.includes('oficial')
+  ) {
+    score += 35
   }
 
-  // 3. Canais oficiais de áudio do artista (- Topic, VEVO, Oficial, Official)
-  if (
-    channelLower.includes('topic') ||
-    channelLower.includes('vevo') ||
-    channelLower.includes('oficial') ||
-    channelLower.includes('official')
-  ) {
-    score += 25
+  // 2. Correspondência exata do nome da música
+  if (songLower && titleLower.includes(songLower)) score += 40
+
+  // 3. Correspondência do nome do artista
+  if (artistLower && (channelLower.includes(artistLower) || titleLower.includes(artistLower))) {
+    score += 30
   }
 
   // 4. Termos de áudio de estúdio oficial
   if (
     titleLower.includes('official audio') ||
     titleLower.includes('audio oficial') ||
+    titleLower.includes('áudio oficial') ||
     titleLower.includes('official music video') ||
     titleLower.includes('clipe oficial') ||
     titleLower.includes('visualizer')
   ) {
-    score += 15
+    score += 25
   }
 
-  // 5. Penalidade severa para termos indesejados (covers, remixes, reacts, tutoriais)
+  // 5. Penalidade severa para versões ao vivo, covers, remixes e reacts
   const badKeywords = [
+    'ao vivo',
+    'en vivo',
+    'live',
+    'show',
     'cover',
     'karaoke',
     'remix',
     'react',
+    'reaction',
     'tutorial',
     'parodia',
+    'paródia',
     'slowed',
     'reverb',
     'bass boosted',
@@ -70,10 +80,17 @@ function scoreCandidate(
     'edit',
     'status',
     'instrumental',
+    'acoustic',
+    'acústico',
+    'acustico',
+    'tributo',
+    'tribute',
+    'sped up',
+    'speed up',
   ]
   for (const bad of badKeywords) {
     if (titleLower.includes(bad) && !songLower.includes(bad)) {
-      score -= 60
+      score -= 80
     }
   }
 
@@ -82,10 +99,9 @@ function scoreCandidate(
   const target = targetDurationSec || 0
   if (target > 0 && m.durationSeconds > 0) {
     const diff = Math.abs(m.durationSeconds - target)
-    const ratio = diff / target
-    if (ratio <= 0.05) score += 10
-    else if (ratio <= 0.15) score += 5
-    else if (ratio > 1) score -= 15
+    if (diff <= 3) score += 30
+    else if (diff <= 10) score += 15
+    else if (diff > 45) score -= 40
   }
 
   return score
@@ -113,7 +129,7 @@ export async function findYouTubeMatch(
 
 // ─── Cache de resolução sourceId → videoId ────────────────────
 
-function resolveKey(item: PlaylistItem | QueueItem): string {
+export function resolveKey(item: PlaylistItem | QueueItem): string {
   if (item.source === 'spotify') return `spotify:${item.uri || item.id}`
   if (item.source === 'tiktok') return `tiktok:${item.tiktokPostId || item.id}`
   return `youtube:${item.videoId || item.id}`
@@ -126,6 +142,16 @@ export async function resolvePlayable(
 ): Promise<{ videoId: string; title: string; channelTitle: string; thumbnailUrl: string } | null> {
   // YouTube já é direto
   if (item.source === 'youtube' && item.videoId) {
+    return {
+      videoId: item.videoId,
+      title: item.title,
+      channelTitle: item.subtitle,
+      thumbnailUrl: item.imageUrl,
+    }
+  }
+
+  // Se o item já tem videoId associado
+  if (item.videoId) {
     return {
       videoId: item.videoId,
       title: item.title,
@@ -195,5 +221,26 @@ export async function resolvePlayable(
 
   const resolved = { videoId, title, channelTitle, thumbnailUrl }
   cacheSet(key, resolved)
+
+  // Persiste videoId nos itens da biblioteca se fizer parte de uma playlist
+  try {
+    const store = useLibraryStore.getState()
+    const playlists = store.customPlaylists
+    let found = false
+    const updated = playlists.map((p) => {
+      const idx = p.items.findIndex((i) => i.id === item.id || (i.uri && i.uri === (item as any).uri))
+      if (idx !== -1) {
+        found = true
+        const newItems = [...p.items]
+        newItems[idx] = { ...newItems[idx], videoId: videoId! }
+        return { ...p, items: newItems }
+      }
+      return p
+    })
+    if (found) {
+      useLibraryStore.setState({ customPlaylists: updated })
+    }
+  } catch {}
+
   return resolved
 }
