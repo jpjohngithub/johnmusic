@@ -111,29 +111,52 @@ async function searchYouTubeCatalog(query: string): Promise<SearchTrackItem[]> {
 // ─── 3. Busca no TikTok (Sons Virais e Tendências) ─────────────
 
 async function searchTikTokCatalog(query: string): Promise<SearchTrackItem[]> {
+  const results: SearchTrackItem[] = []
+
+  // 1. Busca vídeos, remixes e áudios virais do TikTok com play imediato
   try {
-    // Busca faixas em alta / virais do TikTok associadas ao termo
-    const encoded = encodeURIComponent(`${query} tiktok`)
-    const url = `https://itunes.apple.com/search?term=${encoded}&media=music&entity=song&limit=10&country=BR`
-    const response = await fetch(url, { signal: AbortSignal.timeout(4000) })
-    if (response.ok) {
-      const data = await response.json()
-      if (Array.isArray(data.results)) {
-        return data.results.map((item: any) => ({
-          id: `tt-${item.trackId}`,
-          source: 'tiktok' as const,
-          title: item.trackName || 'Som do TikTok',
-          subtitle: item.artistName ? `TikTok Viral • ${item.artistName}` : 'TikTok Sound',
-          albumName: 'TikTok Trending',
-          artworkUrl: (item.artworkUrl100 || '').replace('100x100bb', '600x600bb'),
-          durationMs: Math.min(item.trackTimeMillis || 60000, 90000), // Sons do TikTok são mais curtos
-          previewUrl: item.previewUrl || null,
-        }))
-      }
-    }
+    const ytMatches = await searchYouTubeKeyless(`${query} tiktok`, 12)
+    ytMatches.forEach((m) => {
+      results.push({
+        id: `tt-yt-${m.videoId}`,
+        source: 'tiktok' as const,
+        title: m.title.replace(/\s*\(?(?:tiktok|tik tok|tiktok song|tiktok viral|tiktok remix)\)?/gi, '').trim() || m.title,
+        subtitle: m.channelTitle ? `TikTok • ${m.channelTitle}` : 'TikTok Viral',
+        artworkUrl: m.thumbnailUrl || `https://i.ytimg.com/vi/${m.videoId}/hqdefault.jpg`,
+        videoId: m.videoId,
+        durationMs: (m.durationSeconds || 60) * 1000,
+        previewUrl: null,
+      })
+    })
   } catch {}
 
-  return []
+  // 2. Se houver poucos resultados, busca catálogo viral do Apple Music / TikTok
+  if (results.length < 5) {
+    try {
+      const encoded = encodeURIComponent(`${query} tiktok`)
+      const url = `https://itunes.apple.com/search?term=${encoded}&media=music&entity=song&limit=10&country=BR`
+      const response = await fetch(url, { signal: AbortSignal.timeout(3500) })
+      if (response.ok) {
+        const data = await response.json()
+        if (Array.isArray(data.results)) {
+          data.results.forEach((item: any) => {
+            results.push({
+              id: `tt-${item.trackId}`,
+              source: 'tiktok' as const,
+              title: item.trackName || 'Som do TikTok',
+              subtitle: item.artistName ? `TikTok Viral • ${item.artistName}` : 'TikTok Sound',
+              albumName: 'TikTok Trending',
+              artworkUrl: (item.artworkUrl100 || '').replace('100x100bb', '600x600bb'),
+              durationMs: Math.min(item.trackTimeMillis || 60000, 90000),
+              previewUrl: item.previewUrl || null,
+            })
+          })
+        }
+      }
+    } catch {}
+  }
+
+  return results
 }
 
 // ─── Função Principal de Busca Universal Multi-Plataforma ────

@@ -192,7 +192,10 @@ export async function resolvePlayable(
       channelTitle = match.channelTitle || item.subtitle
     }
   } else if (item.source === 'tiktok') {
-    let query = `${item.title} ${item.subtitle}`.trim()
+    const cleanSub = item.subtitle
+      ? item.subtitle.replace(/TikTok\s*(?:Viral|Sound)?\s*•?\s*/gi, '').replace(/@/g, '').trim()
+      : ''
+    let query = `${item.title} ${cleanSub}`.trim()
     let targetDuration: number | undefined
 
     try {
