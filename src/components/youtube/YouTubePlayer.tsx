@@ -68,6 +68,7 @@ export function YouTubePlayer() {
       isTransitioningRef.current = false
       try {
         store.setDuration(e.target.getDuration())
+        e.target.setVolume(store.isMuted ? 0 : (store.volume ?? 50))
       } catch {}
       store.setIsPlaying(true)
       startProgressLoop(e.target)
@@ -149,9 +150,15 @@ export function YouTubePlayer() {
         isTransitioningRef.current = true
         if (isPlaying) {
           player.loadVideoById(queueVideoId)
-          try { player.playVideo() } catch {}
+          try {
+            player.setVolume(usePlayerStore.getState().isMuted ? 0 : (usePlayerStore.getState().volume ?? 50))
+            player.playVideo()
+          } catch {}
         } else {
           player.cueVideoById(queueVideoId)
+          try {
+            player.setVolume(usePlayerStore.getState().isMuted ? 0 : (usePlayerStore.getState().volume ?? 50))
+          } catch {}
         }
         setTimeout(() => {
           isTransitioningRef.current = false

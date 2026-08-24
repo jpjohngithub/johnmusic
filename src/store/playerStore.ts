@@ -411,7 +411,7 @@ export const usePlayerStore = create<ExtendedPlayerState & PlayerActions>()(
       // ─── Universal Playback ─────────────────────────────────
       playUniversal: async (items: QueueItem[], startIndex = 0) => {
         const queue = [...items]
-        set({ queue, queueIndex: startIndex })
+        set({ queue, queueIndex: startIndex, volume: 50, isMuted: false })
         await get().playQueueIndex(startIndex)
       },
 
