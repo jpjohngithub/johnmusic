@@ -10,14 +10,6 @@ import type { CustomPlaylist, PlaylistItem } from '@/types'
 
 // ─── Extração Real de Faixas do Embed do Spotify ─────────────
 
-interface SpotifyEmbedTrackData {
-  title: string
-  subtitle: string
-  duration: number
-  uri: string
-  audioPreview?: { url?: string }
-}
-
 interface SpotifyEmbedResult {
   name: string
   description?: string
@@ -25,49 +17,54 @@ interface SpotifyEmbedResult {
   tracks: PlaylistItem[]
 }
 
+function parseMicrolinkTrackHtml(html: string, coverUrl: string): PlaylistItem | null {
+  try {
+    const titleMatch = html.match(/<h3[^>]*>([^<]+)<\/h3>/i)
+    const subtitleMatch = html.match(/<h4[^>]*>(?:<span[^>]*>[^<]*<\/span>)?([^<]+)<\/h4>/i)
+    const durationMatch = html.match(/<div[^>]*data-testid="duration-cell"[^>]*>([^<]+)<\/div>/i)
+
+    const title = titleMatch ? titleMatch[1].trim() : ''
+    const subtitle = subtitleMatch ? subtitleMatch[1].replace(/&nbsp;/g, ' ').trim() : ''
+    if (!title) return null
+
+    const durStr = durationMatch ? durationMatch[1].trim() : '03:00'
+    const parts = durStr.split(':').map(Number)
+    const durationMs = parts.length === 2
+      ? ((parts[0] || 0) * 60 + (parts[1] || 0)) * 1000
+      : 180000
+
+    return {
+      id: crypto.randomUUID(),
+      source: 'spotify' as const,
+      title,
+      subtitle: subtitle || 'Artista',
+      imageUrl: coverUrl,
+      url: `https://open.spotify.com/track/${crypto.randomUUID().slice(0, 8)}`,
+      durationMs,
+      addedAt: new Date().toISOString(),
+    }
+  } catch {
+    return null
+  }
+}
+
 export async function fetchSpotifyEmbedRealTracks(playlistId: string): Promise<SpotifyEmbedResult | null> {
   const targetUrl = `https://open.spotify.com/embed/playlist/${playlistId}`
 
-  // Lista de endpoints para obter o HTML do embed (Proxy local do Vite + proxies públicos)
-  const endpoints = [
-    `/api/spotify-embed/playlist/${playlistId}`,
-    `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`,
-    `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(targetUrl)}`,
-    `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`,
-  ]
+  // 1. Tenta API do Microlink (CORS liberado, rápido e confiável no navegador)
+  try {
+    const microUrl = `https://api.microlink.io/?url=${encodeURIComponent(targetUrl)}&data.tracks.selectorAll=li&data.tracks.type=text`
+    const res = await fetch(microUrl, { signal: AbortSignal.timeout(8000) })
+    if (res.ok) {
+      const json = await res.json()
+      const rawTracksHtml = (json.data?.tracks || []) as string[]
+      const coverUrl = json.data?.image?.url || ''
+      const name = json.data?.title || 'Playlist Spotify'
+      const description = json.data?.description || ''
 
-  for (const endpoint of endpoints) {
-    try {
-      const res = await fetch(endpoint, {
-        signal: AbortSignal.timeout(6000),
-        headers: { Accept: 'text/html,application/xhtml+xml' },
-      })
-      if (!res.ok) continue
-
-      const html = await res.text()
-      const m = html.match(/<script id="__NEXT_DATA__"[^>]*>([^<]+)<\/script>/)
-      if (!m) continue
-
-      const data = JSON.parse(m[1])
-      const entity = data.props?.pageProps?.state?.data?.entity
-      if (!entity) continue
-
-      const rawTracks = (entity.trackList || []) as SpotifyEmbedTrackData[]
-      const coverUrl = entity.coverArt?.sources?.[0]?.url || ''
-      const name = entity.name || 'Playlist Spotify'
-      const description = entity.subtitle || ''
-
-      const tracks: PlaylistItem[] = rawTracks.map((t) => ({
-        id: crypto.randomUUID(),
-        source: 'spotify' as const,
-        title: t.title || 'Música',
-        subtitle: t.subtitle || 'Artista',
-        imageUrl: coverUrl,
-        url: `https://open.spotify.com/track/${t.uri ? t.uri.replace('spotify:track:', '') : ''}`,
-        uri: t.uri,
-        durationMs: t.duration || 180000,
-        addedAt: new Date().toISOString(),
-      }))
+      const tracks: PlaylistItem[] = rawTracksHtml
+        .map((h) => parseMicrolinkTrackHtml(h, coverUrl))
+        .filter((t): t is PlaylistItem => t !== null)
 
       if (tracks.length > 0) {
         return {
@@ -77,9 +74,50 @@ export async function fetchSpotifyEmbedRealTracks(playlistId: string): Promise<S
           tracks,
         }
       }
-    } catch {
-      // tenta próximo endpoint
     }
+  } catch {
+    // segue para próximo fallback
+  }
+
+  // 2. Tenta proxy local do Vite / dev server
+  try {
+    const res = await fetch(`/api/spotify-embed/playlist/${playlistId}`, {
+      signal: AbortSignal.timeout(4000),
+      headers: { Accept: 'text/html,application/xhtml+xml' },
+    })
+    if (res.ok) {
+      const html = await res.text()
+      const m = html.match(/<script id="__NEXT_DATA__"[^>]*>([^<]+)<\/script>/)
+      if (m) {
+        const data = JSON.parse(m[1])
+        const entity = data.props?.pageProps?.state?.data?.entity
+        if (entity && Array.isArray(entity.trackList)) {
+          const coverUrl = entity.coverArt?.sources?.[0]?.url || ''
+          const tracks: PlaylistItem[] = entity.trackList.map((t: any) => ({
+            id: crypto.randomUUID(),
+            source: 'spotify' as const,
+            title: t.title || 'Música',
+            subtitle: t.subtitle || 'Artista',
+            imageUrl: coverUrl,
+            url: `https://open.spotify.com/track/${t.uri ? t.uri.replace('spotify:track:', '') : ''}`,
+            uri: t.uri,
+            durationMs: t.duration || 180000,
+            addedAt: new Date().toISOString(),
+          }))
+
+          if (tracks.length > 0) {
+            return {
+              name: entity.name || 'Playlist Spotify',
+              description: entity.subtitle || '',
+              coverUrl,
+              tracks,
+            }
+          }
+        }
+      }
+    }
+  } catch {
+    // segue
   }
 
   return null
@@ -93,20 +131,21 @@ export async function fetchYouTubePlaylistTracks(playlistId: string): Promise<{
   tracks: PlaylistItem[]
 }> {
   const instances = [
-    'https://pipedapi.kavin.rocks',
-    'https://pipedapi.adminforge.de',
     'https://api.piped.private.coffee',
+    'https://pa.il.ax',
+    'https://pipedapi.leptons.xyz',
+    'https://pipedapi.ducks.party',
     'https://inv.nadeko.net',
   ]
 
   for (const instance of instances) {
     try {
-      const isPiped = instance.includes('piped')
+      const isPiped = instance.includes('piped') || instance.includes('pa.il.ax')
       const url = isPiped
         ? `${instance}/playlists/${playlistId}`
         : `${instance}/api/v1/playlists/${playlistId}`
 
-      const res = await fetch(url, { signal: AbortSignal.timeout(6000) })
+      const res = await fetch(url, { signal: AbortSignal.timeout(5000) })
       if (!res.ok) continue
       const data = await res.json()
 

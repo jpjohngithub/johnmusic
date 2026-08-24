@@ -209,9 +209,6 @@ export function PlayerBar({ onExpandPlayer }: PlayerBarProps) {
         onEnded={handleAudioEnded}
       />
 
-      {/* Background YouTube Audio Engine */}
-      <YouTubePlayer />
-
       {/* Main Persistent Universal Bar */}
       <div className="fixed bottom-0 left-0 right-0 z-50 bg-black/95 backdrop-blur-md border-t border-white/10 px-4 py-3 select-none">
         <div className="max-w-screen-xl mx-auto flex items-center gap-4">

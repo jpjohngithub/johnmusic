@@ -28,12 +28,14 @@ export function YouTubePlayer() {
     stopProgressLoop()
     progressTimerRef.current = window.setInterval(() => {
       const store = usePlayerStore.getState()
-      const current = player.getCurrentTime() || 0
-      const duration = player.getDuration() || 0
-      store.setCurrentTime(current)
-      if (duration > 0) {
-        store.setProgress((current / duration) * 100)
-      }
+      try {
+        const current = player.getCurrentTime() || 0
+        const duration = player.getDuration() || 0
+        store.setCurrentTime(current)
+        if (duration > 0) {
+          store.setProgress((current / duration) * 100)
+        }
+      } catch {}
     }, 500)
   }
 
@@ -47,8 +49,10 @@ export function YouTubePlayer() {
   async function handleEnded() {
     const store = usePlayerStore.getState()
     if (store.repeatMode === 'one') {
-      playerRef.current?.seekTo(0, true)
-      playerRef.current?.playVideo()
+      try {
+        playerRef.current?.seekTo(0, true)
+        playerRef.current?.playVideo()
+      } catch {}
     } else {
       await store.playNext()
     }
@@ -59,7 +63,9 @@ export function YouTubePlayer() {
     const YTState = window.YT?.PlayerState || {}
 
     if (e.data === YTState.PLAYING) {
-      store.setDuration(e.target.getDuration())
+      try {
+        store.setDuration(e.target.getDuration())
+      } catch {}
       store.setIsPlaying(true)
       startProgressLoop(e.target)
     } else if (e.data === YTState.PAUSED) {
@@ -89,7 +95,21 @@ export function YouTubePlayer() {
       },
       events: {
         onReady: (e: any) => {
-          e.target.setVolume(usePlayerStore.getState().volume)
+          const store = usePlayerStore.getState()
+          try {
+            e.target.setVolume(store.isMuted ? 0 : store.volume)
+            const currentVid =
+              store.source === 'youtube'
+                ? store.youtubeVideo?.videoId || store.queue[store.queueIndex]?.videoId || null
+                : null
+            if (currentVid) {
+              if (store.isPlaying) {
+                e.target.loadVideoById(currentVid)
+              } else {
+                e.target.cueVideoById(currentVid)
+              }
+            }
+          } catch {}
         },
         onStateChange: onPlayerStateChange,
       },
@@ -98,11 +118,12 @@ export function YouTubePlayer() {
     return () => {
       stopProgressLoop()
       if (playerRef.current?.destroy) {
-        playerRef.current.destroy()
+        try {
+          playerRef.current.destroy()
+        } catch {}
         playerRef.current = null
       }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ready])
 
   // Carrega novo vídeo quando muda a faixa na fila
@@ -110,10 +131,17 @@ export function YouTubePlayer() {
     const player = playerRef.current
     if (!player?.loadVideoById || !queueVideoId) return
 
-    if (player.getVideoData?.().video_id !== queueVideoId) {
-      player.loadVideoById(queueVideoId)
-    }
-  }, [queueVideoId])
+    try {
+      const currentId = player.getVideoData?.()?.video_id
+      if (currentId !== queueVideoId) {
+        if (isPlaying) {
+          player.loadVideoById(queueVideoId)
+        } else {
+          player.cueVideoById(queueVideoId)
+        }
+      }
+    } catch {}
+  }, [queueVideoId, isPlaying])
 
   // Sincroniza play/pause
   useEffect(() => {
@@ -121,25 +149,31 @@ export function YouTubePlayer() {
     if (!player?.playVideo) return
     if (usePlayerStore.getState().source !== 'youtube') return
 
-    if (isPlaying) {
-      player.playVideo()
-    } else {
-      player.pauseVideo()
-    }
+    try {
+      if (isPlaying) {
+        player.playVideo()
+      } else {
+        player.pauseVideo()
+      }
+    } catch {}
   }, [isPlaying, queueVideoId])
 
   // Sincroniza volume
   useEffect(() => {
     const player = playerRef.current
     if (!player?.setVolume) return
-    player.setVolume(isMuted ? 0 : volume)
+    try {
+      player.setVolume(isMuted ? 0 : volume)
+    } catch {}
   }, [volume, isMuted])
 
   // Seek via evento customizado (PlayerBar → aqui)
   useEffect(() => {
     const handler = (e: Event) => {
       const detail = (e as CustomEvent).detail as { seconds: number }
-      playerRef.current?.seekTo(detail.seconds, true)
+      try {
+        playerRef.current?.seekTo(detail.seconds, true)
+      } catch {}
     }
     window.addEventListener('yt-player-seek', handler)
     return () => window.removeEventListener('yt-player-seek', handler)

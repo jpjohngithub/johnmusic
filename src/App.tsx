@@ -11,6 +11,7 @@ import { CustomPlaylistDetail } from '@/pages/CustomPlaylistDetail'
 import { YouTubeLibrary } from '@/pages/YouTubeLibrary'
 import { TikTokLibrary } from '@/pages/TikTokLibrary'
 import { Search } from '@/pages/Search'
+import { YouTubePlayer } from '@/components/youtube/YouTubePlayer'
 import { usePlayerStore } from '@/store/playerStore'
 import type { SpotifyTrack } from '@/types'
 
@@ -66,6 +67,9 @@ export function App() {
           <Route path="/search" element={<Search isAuthenticated={false} onPlayTrack={handlePlaySpotifyTrack} />} />
         </Routes>
       </MainContent>
+
+      {/* Global Persistent YouTube Engine */}
+      <YouTubePlayer />
 
       <PlayerBar spotifyPlayer={null} />
     </div>
