@@ -25,11 +25,9 @@ import type { PlaylistItem, QueueItem, SpotifySavedItem } from '@/types'
 
 const TikTokIcon = () => (
   <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
-    <path d="M19.59 6.69a4.83 4.83 0 01-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 01-2.88 2.5 2.89 2.89 0 01-2.89-2.89 2.89 2.89 0 012.89-2.89c.28 0 .54.04.79.1V9.01a6.33 6.33 0 00-.79-.05 6.34 6.34 0 00-6.34 6.34 6.34 6.34 0 006.33-6.34V8.69a8.17 8.17 0 004.79 1.53V6.78a4.85 4.85 0 01-1.02-.09z" />
+    <path d="M19.59 6.69a4.83 4.83 0 01-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 01-2.88 2.5 2.89 2.89 0 01-2.89-2.89c.28 0 .54.04.79.1V9.01a6.33 6.33 0 00-.79-.05 6.34 6.34 0 00-6.34 6.34 6.34 6.34 0 006.33-6.34V8.69a8.17 8.17 0 004.79 1.53V6.78a4.85 4.85 0 01-1.02-.09z" />
   </svg>
 )
-
-type SearchFilterType = 'all' | 'tracks' | 'playlists' | 'youtube' | 'tiktok'
 
 interface SearchProps {
   isAuthenticated?: boolean
@@ -42,7 +40,6 @@ export function Search({ isAuthenticated = false }: SearchProps) {
 
   const [query, setQuery] = useState(initialQuery)
   const [debouncedQuery, setDebouncedQuery] = useState(initialQuery)
-  const [filterType, setFilterType] = useState<SearchFilterType>('all')
   const [modalItem, setModalItem] = useState<PlaylistItem | null>(null)
 
   const {
@@ -189,10 +186,10 @@ export function Search({ isAuthenticated = false }: SearchProps) {
     await playUniversal([queueItem], 0)
   }
 
-  const showTracks = filterType === 'all' || filterType === 'tracks'
-  const showPlaylists = filterType === 'all' || filterType === 'playlists'
-  const showYouTube = filterType === 'all' || filterType === 'youtube'
-  const showTikTok = filterType === 'all' || filterType === 'tiktok'
+  const showTracks = true
+  const showPlaylists = true
+  const showYouTube = true
+  const showTikTok = true
 
   return (
     <div className="space-y-8 max-w-7xl mx-auto select-none pb-16">
@@ -222,31 +219,6 @@ export function Search({ isAuthenticated = false }: SearchProps) {
           {isLoading && (
             <Loader2 size={18} className="absolute right-4 top-1/2 -translate-y-1/2 text-spotify-green animate-spin" />
           )}
-        </div>
-
-        {/* Filter Selection Tabs */}
-        <div className="flex items-center justify-center gap-2 flex-wrap pt-2">
-          {[
-            { id: 'all', label: 'Tudo', icon: Layers },
-            { id: 'tracks', label: 'Músicas', icon: Music2 },
-            { id: 'playlists', label: 'Playlists', icon: ListMusic },
-            { id: 'youtube', label: 'YouTube', icon: Youtube },
-            { id: 'tiktok', label: 'TikTok', icon: Disc3 },
-          ].map(({ id, label, icon: Icon }) => (
-            <button
-              key={id}
-              onClick={() => setFilterType(id as SearchFilterType)}
-              className={cn(
-                'flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-bold transition-all',
-                filterType === id
-                  ? 'bg-spotify-green text-black shadow-lg shadow-spotify-green/20 scale-105'
-                  : 'bg-white/5 hover:bg-white/10 text-white/60 hover:text-white border border-white/5'
-              )}
-            >
-              <Icon size={14} />
-              <span>{label}</span>
-            </button>
-          ))}
         </div>
       </div>
 
