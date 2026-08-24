@@ -1,5 +1,6 @@
 // ============================================================
-// SIDEBAR — Navegação + Playlists Customizadas & Spotify
+// SIDEBAR — Navegação Principal + Playlists Multiplataforma
+// 100% Sem Necessidade de Login
 // ============================================================
 
 import { useState } from 'react'
@@ -12,17 +13,12 @@ import {
   Library,
   ChevronDown,
   ChevronRight,
-  Disc3,
-  Sparkles,
   Plus,
-  ListMusic,
-  LogOut,
+  Disc3,
+  Layers,
 } from 'lucide-react'
-import { CURATED_PUBLIC_SPOTIFY } from '@/api/spotifyUrlService'
 import { PlaylistModal } from '@/components/playlist/PlaylistModal'
 import { useLibraryStore } from '@/store/libraryStore'
-import { usePlayerStore } from '@/store/playerStore'
-import { useSpotifyAuth } from '@/hooks/useSpotifyAuth'
 import { cn } from '@/lib/utils'
 
 interface SidebarProps {
@@ -41,9 +37,7 @@ const navItems = [
 export function Sidebar({ collapsed = false }: SidebarProps) {
   const [showPlaylists, setShowPlaylists] = useState(true)
   const [isPlaylistModalOpen, setIsPlaylistModalOpen] = useState(false)
-  const { customPlaylists, spotifyItems, youtubeVideos, tiktokVideos } = useLibraryStore()
-  const { playSpotifySavedItem } = usePlayerStore()
-  const { isAuthenticated, isLoading: authLoading, user, login, logout } = useSpotifyAuth()
+  const { customPlaylists } = useLibraryStore()
 
   return (
     <>
@@ -71,7 +65,7 @@ export function Sidebar({ collapsed = false }: SidebarProps) {
         </div>
 
         {/* Navigation */}
-        <nav className="px-2 py-3 space-y-1">
+        <nav className="px-2 py-4 space-y-1">
           {navItems.map(({ to, icon: Icon, label }) => (
             <NavLink
               key={to}
@@ -79,40 +73,20 @@ export function Sidebar({ collapsed = false }: SidebarProps) {
               end={to === '/'}
               className={({ isActive }) =>
                 cn(
-                  'flex items-center justify-between px-3 py-2 rounded-lg text-sm font-medium transition-all duration-150',
+                  'flex items-center gap-3.5 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all duration-150',
                   isActive
                     ? 'bg-white/10 text-white shadow-sm'
                     : 'text-white/60 hover:text-white hover:bg-white/5'
                 )
               }
             >
-              <div className="flex items-center gap-3">
-                <Icon size={18} className="flex-shrink-0" />
-                {!collapsed && <span>{label}</span>}
-              </div>
-
-              {!collapsed && to === '/spotify' && spotifyItems.length > 0 && (
-                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-spotify-green/20 text-spotify-green font-semibold">
-                  {spotifyItems.length}
-                </span>
-              )}
-
-              {!collapsed && to === '/youtube' && youtubeVideos.length > 0 && (
-                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-youtube-red/20 text-youtube-red font-semibold">
-                  {youtubeVideos.length}
-                </span>
-              )}
-
-              {!collapsed && to === '/tiktok' && tiktokVideos.length > 0 && (
-                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-tiktok-pink/20 text-tiktok-pink font-semibold">
-                  {tiktokVideos.length}
-                </span>
-              )}
+              <Icon size={18} className="flex-shrink-0" />
+              {!collapsed && <span>{label}</span>}
             </NavLink>
           ))}
         </nav>
 
-        {/* Create / Import Playlist Button */}
+        {/* Action Button: Criar ou Importar Playlist */}
         {!collapsed && (
           <div className="px-3 pb-3">
             <button
@@ -125,144 +99,77 @@ export function Sidebar({ collapsed = false }: SidebarProps) {
           </div>
         )}
 
-        {/* Spotify Login / User */}
-        {!collapsed && (
-          <div className="px-3 pb-3">
-            {isAuthenticated ? (
-              <button
-                onClick={logout}
-                className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 transition-all"
-                title="Sair do Spotify"
-              >
-                {user?.images?.[0]?.url ? (
-                  <img src={user.images[0].url} alt="" className="w-7 h-7 rounded-full object-cover" />
-                ) : (
-                  <div className="w-7 h-7 rounded-full bg-spotify-green flex items-center justify-center">
-                    <Music2 size={12} className="text-black" />
-                  </div>
-                )}
-                <span className="flex-1 text-left text-xs font-semibold text-white truncate">
-                  {user?.display_name || 'Spotify'}
-                </span>
-                <LogOut size={13} className="text-white/40" />
-              </button>
-            ) : (
-              <button
-                onClick={() => login()}
-                disabled={authLoading}
-                className="w-full flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl bg-spotify-green hover:bg-green-400 disabled:opacity-50 text-black font-bold text-xs transition-all active:scale-95 shadow-sm"
-              >
-                <Music2 size={15} />
-                <span>{authLoading ? 'Verificando...' : 'Entrar com Spotify'}</span>
-              </button>
-            )}
-          </div>
-        )}
-
         {/* Divider */}
         <div className="mx-3 border-t border-white/5" />
 
         {/* Playlists Section */}
         {!collapsed && (
           <div className="flex-1 overflow-hidden flex flex-col mt-2">
-            <div className="px-4 py-2">
+            <div className="px-4 py-2 flex items-center justify-between">
               <button
                 onClick={() => setShowPlaylists((v) => !v)}
-                className="flex items-center justify-between w-full text-white/50 hover:text-white transition-colors"
+                className="flex items-center gap-2 text-white/50 hover:text-white transition-colors flex-1"
               >
-                <div className="flex items-center gap-2">
-                  <Library size={14} />
-                  <span className="text-xs font-semibold uppercase tracking-wider">
-                    Sua Biblioteca
-                  </span>
-                </div>
+                <Library size={14} />
+                <span className="text-[11px] font-bold uppercase tracking-wider">
+                  Suas Playlists ({customPlaylists.length})
+                </span>
                 {showPlaylists ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
               </button>
             </div>
 
             {showPlaylists && (
-              <div className="flex-1 overflow-y-auto px-2 pb-4 space-y-0.5 scrollbar-thin">
-                {/* Custom / Imported Playlists */}
-                {customPlaylists.length > 0 && (
-                  <>
-                    <div className="pt-2 pb-1 px-3">
-                      <span className="text-[10px] uppercase font-bold text-white/40 tracking-wider">
-                        Playlists Criadas / Importadas
-                      </span>
-                    </div>
-
-                    {customPlaylists.map((playlist) => (
-                      <NavLink
-                        key={playlist.id}
-                        to={`/playlist/${playlist.id}`}
-                        className={({ isActive }) =>
-                          cn(
-                            'flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-all',
-                            isActive
-                              ? 'bg-white/10 text-white'
-                              : 'text-white/60 hover:text-white hover:bg-white/5'
-                          )
-                        }
-                      >
+              <div className="flex-1 overflow-y-auto px-2 pb-4 space-y-1 scrollbar-hide">
+                {customPlaylists.length === 0 ? (
+                  <div className="px-3 py-4 text-center">
+                    <p className="text-white/30 text-[11px]">
+                      Nenhuma playlist criada ainda.
+                    </p>
+                    <p className="text-white/20 text-[10px] mt-1">
+                      Cole um link ou clique no botão acima para criar.
+                    </p>
+                  </div>
+                ) : (
+                  customPlaylists.map((playlist) => (
+                    <NavLink
+                      key={playlist.id}
+                      to={`/playlist/${playlist.id}`}
+                      className={({ isActive }) =>
+                        cn(
+                          'flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-xs transition-all group',
+                          isActive
+                            ? 'bg-white/10 text-white font-bold'
+                            : 'text-white/70 hover:text-white hover:bg-white/5'
+                        )
+                      }
+                    >
+                      <div className="w-8 h-8 rounded-lg overflow-hidden bg-white/10 flex-shrink-0 flex items-center justify-center">
                         {playlist.coverUrl ? (
                           <img
                             src={playlist.coverUrl}
-                            alt={playlist.name}
-                            className="w-8 h-8 rounded object-cover flex-shrink-0"
+                            alt=""
+                            className="w-full h-full object-cover"
                           />
                         ) : (
-                          <div className="w-8 h-8 rounded bg-spotify-green/20 text-spotify-green flex items-center justify-center flex-shrink-0">
-                            <ListMusic size={14} />
-                          </div>
+                          <Layers size={14} className="text-spotify-green" />
                         )}
-                        <div className="min-w-0">
-                          <p className="truncate text-xs font-semibold text-white">{playlist.name}</p>
-                          <p className="truncate text-[10px] text-white/40">
-                            {playlist.items.length} itens
-                          </p>
-                        </div>
-                      </NavLink>
-                    ))}
-                  </>
-                )}
-
-                {/* Curated Public Playlists */}
-                <div className="pt-3 pb-1 px-3">
-                  <span className="text-[10px] uppercase font-bold text-spotify-green tracking-wider flex items-center gap-1">
-                    <Sparkles size={10} /> Destaques Spotify
-                  </span>
-                </div>
-
-                {CURATED_PUBLIC_SPOTIFY.map((item) => (
-                  <button
-                    key={item.id}
-                    onClick={() => playSpotifySavedItem(item)}
-                    className="flex items-center gap-3 w-full px-3 py-2 rounded-md text-sm text-left text-white/60 hover:text-white hover:bg-white/5 transition-all"
-                  >
-                    {item.thumbnailUrl ? (
-                      <img
-                        src={item.thumbnailUrl}
-                        alt={item.title}
-                        className="w-8 h-8 rounded object-cover flex-shrink-0"
-                      />
-                    ) : (
-                      <div className="w-8 h-8 rounded bg-spotify-green/20 text-spotify-green flex items-center justify-center flex-shrink-0">
-                        <Music2 size={12} />
                       </div>
-                    )}
-                    <div className="min-w-0">
-                      <p className="truncate text-xs font-semibold text-white">{item.title}</p>
-                      <p className="truncate text-[10px] text-white/40">{item.subtitle}</p>
-                    </div>
-                  </button>
-                ))}
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate leading-snug">{playlist.name}</p>
+                        <p className="text-[10px] text-white/40 truncate">
+                          {playlist.items.length} faixas
+                        </p>
+                      </div>
+                    </NavLink>
+                  ))
+                )}
               </div>
             )}
           </div>
         )}
       </aside>
 
-      {/* Playlist Creation / Import Modal */}
+      {/* Modal Criar/Importar Playlist */}
       <PlaylistModal
         isOpen={isPlaylistModalOpen}
         onClose={() => setIsPlaylistModalOpen(false)}
