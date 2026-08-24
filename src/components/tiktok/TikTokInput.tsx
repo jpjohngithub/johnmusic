@@ -93,23 +93,36 @@ export function TikTokInput({ onVideoAdded, autoPlay = true }: TikTokInputProps)
       {lastAdded && (
         <div className="flex items-center justify-between gap-3 bg-white/[0.04] border border-white/10 rounded-xl p-3">
           <div className="flex items-center gap-3 min-w-0">
-            <div className="w-10 h-10 rounded-lg bg-tiktok-pink/20 text-tiktok-pink flex items-center justify-center flex-shrink-0">
-              <TikTokIcon />
-            </div>
-            <div className="min-w-0">
+            {lastAdded.thumbnailUrl ? (
+              <img
+                src={lastAdded.thumbnailUrl}
+                alt={lastAdded.title}
+                className="w-12 h-16 object-cover rounded-lg flex-shrink-0 shadow-sm"
+              />
+            ) : (
+              <div className="w-12 h-16 rounded-lg bg-tiktok-pink/20 text-tiktok-pink flex items-center justify-center flex-shrink-0">
+                <TikTokIcon />
+              </div>
+            )}
+            <div className="min-w-0 space-y-0.5">
               <div className="flex items-center gap-1.5 text-tiktok-pink text-[11px] font-semibold">
                 <Sparkles size={12} />
-                <span>TikTok salvo na sua Biblioteca!</span>
+                <span>Capa e Áudio do TikTok Capturados!</span>
               </div>
               <p className="text-white text-xs font-semibold truncate">{lastAdded.title || 'Vídeo do TikTok'}</p>
-              <p className="text-white/40 text-[10px] truncate">{lastAdded.authorName}</p>
+              {lastAdded.soundTitle && (
+                <p className="text-tiktok-pink text-[11px] font-medium truncate">
+                  🎵 {lastAdded.soundTitle}
+                </p>
+              )}
+              <p className="text-white/40 text-[10px] truncate">@{lastAdded.authorName}</p>
             </div>
           </div>
           <button
             onClick={() => playTikTokVideo(lastAdded)}
-            className="px-3 py-1.5 bg-white/10 hover:bg-white/20 text-white rounded-lg text-xs font-medium transition-colors flex-shrink-0"
+            className="px-4 py-2 bg-tiktok-pink hover:bg-pink-600 active:scale-95 text-white rounded-lg text-xs font-bold transition-all flex-shrink-0 shadow-md"
           >
-            Abrir Player
+            Tocar Áudio
           </button>
         </div>
       )}

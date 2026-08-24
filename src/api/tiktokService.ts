@@ -1,6 +1,6 @@
 // ============================================================
-// TIKTOK SERVICE — Extração Direta de Áudio MP3 e Metadados
-// Suporte a links normais, curtos (vm/vt/t) e extração de áudio
+// TIKTOK SERVICE — Extração Direta de Capa, Nome do Vídeo,
+// Nome do Áudio e Stream MP3 (Zero Login)
 // ============================================================
 
 import type { TikTokVideo } from '@/types'
@@ -8,12 +8,12 @@ import type { TikTokVideo } from '@/types'
 export interface TikTokAudioResult {
   id: string
   postId: string
-  title: string
-  authorName: string
-  soundTitle: string
-  soundAuthor: string
-  audioUrl?: string
-  thumbnailUrl: string
+  title: string // Nome do Vídeo
+  soundTitle: string // Nome do Áudio / Som
+  authorName: string // Nome do Criador do Vídeo
+  soundAuthor: string // Autor da Música
+  audioUrl?: string // Stream direto do MP3
+  thumbnailUrl: string // Capa oficial do Vídeo
   url: string
   durationSeconds: number
 }
@@ -47,12 +47,12 @@ export function buildTikTokEmbedUrl(postId: string): string {
   return `https://www.tiktok.com/player/v1/${postId}?music_info=1&description=1&autoplay=1`
 }
 
-// ─── Extração de Áudio MP3 e Metadados via TikWM / API ────────
+// ─── Extração Completa de Metadados e Áudio ──────────────────
 
 export async function extractTikTokAudioAndMetadata(url: string): Promise<TikTokAudioResult> {
   const trimmed = url.trim()
 
-  // 1. Método principal: TikWM API via POST
+  // 1. TikWM API via POST
   try {
     const formData = new FormData()
     formData.append('url', trimmed)
@@ -68,27 +68,29 @@ export async function extractTikTokAudioAndMetadata(url: string): Promise<TikTok
       const json = await res.json()
       if (json.code === 0 && json.data) {
         const d = json.data
-        const soundTitle = d.music_info?.title || d.music_info?.album || 'Áudio do TikTok'
+        const soundTitle = d.music_info?.title || d.music_info?.album || 'Som Original'
         const soundAuthor = d.music_info?.author || d.author?.nickname || 'TikTok'
-        const displayTitle = d.title || soundTitle
+        const videoTitle = d.title || soundTitle || 'Vídeo do TikTok'
+        const authorName = d.author?.nickname || d.author?.unique_id || 'TikTok User'
         const postId = d.id || extractTikTokPostId(trimmed) || crypto.randomUUID()
+        const coverUrl = d.cover || d.origin_cover || d.dynamic_cover || ''
 
         return {
           id: crypto.randomUUID(),
           postId,
-          title: displayTitle,
-          authorName: d.author?.nickname || d.author?.unique_id || 'TikTok User',
+          title: videoTitle,
           soundTitle,
+          authorName,
           soundAuthor,
           audioUrl: d.music || undefined,
-          thumbnailUrl: d.cover || d.origin_cover || '',
+          thumbnailUrl: coverUrl,
           url: trimmed,
           durationSeconds: d.duration || 30,
         }
       }
     }
   } catch (e) {
-    console.warn('TikWM extraction fallback:', e)
+    console.warn('TikWM extraction:', e)
   }
 
   // 2. Fallback: Official oEmbed
@@ -101,9 +103,9 @@ export async function extractTikTokAudioAndMetadata(url: string): Promise<TikTok
       return {
         id: crypto.randomUUID(),
         postId,
-        title: oembed.title || 'Som do TikTok',
-        authorName: oembed.author_name || 'TikTok User',
+        title: oembed.title || 'Vídeo do TikTok',
         soundTitle: oembed.title || 'Som do TikTok',
+        authorName: oembed.author_name || 'TikTok User',
         soundAuthor: oembed.author_name || 'TikTok',
         thumbnailUrl: oembed.thumbnail_url || '',
         url: trimmed,
@@ -119,9 +121,9 @@ export async function extractTikTokAudioAndMetadata(url: string): Promise<TikTok
   return {
     id: crypto.randomUUID(),
     postId,
-    title: 'Música do TikTok',
+    title: 'Vídeo do TikTok',
+    soundTitle: 'Som Original',
     authorName: 'TikTok',
-    soundTitle: 'Música do TikTok',
     soundAuthor: 'TikTok',
     thumbnailUrl: '',
     url: trimmed,
@@ -141,13 +143,13 @@ export async function createTikTokVideoFromUrl(url: string): Promise<TikTokVideo
   return {
     id: result.id,
     postId: result.postId,
-    title: result.soundTitle || result.title,
-    authorName: result.soundAuthor || result.authorName,
-    thumbnailUrl: result.thumbnailUrl,
+    title: result.title, // Nome do Vídeo
+    soundTitle: result.soundTitle, // Nome do Áudio
+    authorName: result.authorName,
+    soundAuthor: result.soundAuthor,
+    thumbnailUrl: result.thumbnailUrl, // Capa oficial do Vídeo
     url: result.url,
     audioUrl: result.audioUrl,
-    soundTitle: result.soundTitle,
-    soundAuthor: result.soundAuthor,
     durationSeconds: result.durationSeconds,
     embedHtml: `<iframe src="${buildTikTokEmbedUrl(result.postId)}" width="325" height="580" frameborder="0" allow="encrypted-media; autoplay" allowfullscreen></iframe>`,
     addedAt: new Date().toISOString(),

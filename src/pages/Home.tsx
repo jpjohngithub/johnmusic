@@ -506,14 +506,21 @@ export function Home() {
                     </div>
                   </div>
                 </div>
-                <div>
+                <div className="space-y-0.5">
                   <p
                     onClick={() => playSavedTikTok(video)}
                     className="text-white text-xs font-semibold truncate cursor-pointer hover:underline"
+                    title={video.title}
                   >
-                    {video.title || 'TikTok'}
+                    {video.title || 'Vídeo do TikTok'}
                   </p>
-                  <p className="text-white/40 text-[10px] truncate">@{video.authorName}</p>
+                  {video.soundTitle && (
+                    <p className="text-tiktok-pink text-[10px] font-medium truncate flex items-center gap-1" title={video.soundTitle}>
+                      <span>🎵</span>
+                      <span>{video.soundTitle}</span>
+                    </p>
+                  )}
+                  <p className="text-white/40 text-[9px] truncate">@{video.authorName}</p>
                 </div>
                 <div className="flex items-center justify-between pt-1 border-t border-white/5">
                   <button
@@ -521,8 +528,8 @@ export function Home() {
                       setModalItem({
                         id: video.id,
                         source: 'tiktok',
-                        title: video.title || 'TikTok Music',
-                        subtitle: `@${video.authorName}`,
+                        title: video.title || 'Vídeo do TikTok',
+                        subtitle: video.soundTitle ? `Som: ${video.soundTitle} • @${video.authorName}` : `@${video.authorName}`,
                         imageUrl: video.thumbnailUrl,
                         tiktokPostId: video.postId,
                         url: video.url,

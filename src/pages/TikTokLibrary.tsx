@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Trash2, Play, Plus, Search, ListPlus } from 'lucide-react'
+import { Trash2, Play, Plus, Search, ListPlus, Music2, Sparkles } from 'lucide-react'
 import { TikTokInput } from '@/components/tiktok/TikTokInput'
 import { useLibraryStore } from '@/store/libraryStore'
 import { usePlayerStore } from '@/store/playerStore'
@@ -23,18 +23,21 @@ export function TikTokLibrary() {
     const queueItem: QueueItem = {
       id: video.id,
       source: 'tiktok',
-      title: video.title || 'TikTok Music',
-      subtitle: `@${video.authorName}`,
+      title: video.title || 'Vídeo do TikTok',
+      subtitle: video.soundTitle ? `Som: ${video.soundTitle} • @${video.authorName}` : `@${video.authorName}`,
       imageUrl: video.thumbnailUrl,
+      audioUrl: video.audioUrl,
       tiktokPostId: video.postId,
       tiktokUrl: video.url,
+      durationMs: (video.durationSeconds || 30) * 1000,
     }
     await playUniversal([queueItem], 0)
   }
 
   const filteredVideos = tiktokVideos.filter((v) =>
-    v.title.toLowerCase().includes(filter.toLowerCase()) ||
-    v.authorName.toLowerCase().includes(filter.toLowerCase())
+    (v.title || '').toLowerCase().includes(filter.toLowerCase()) ||
+    (v.soundTitle || '').toLowerCase().includes(filter.toLowerCase()) ||
+    (v.authorName || '').toLowerCase().includes(filter.toLowerCase())
   )
 
   return (
@@ -54,7 +57,7 @@ export function TikTokLibrary() {
             <span>Biblioteca TikTok</span>
           </h1>
           <p className="text-white/40 text-sm mt-1">
-            {tiktokVideos.length} som(ns) e vídeo(s) adicionados por link • reprodução unificada
+            {tiktokVideos.length} som(ns) e vídeo(s) com capa original, nome do vídeo e nome do áudio
           </p>
         </div>
       </div>
@@ -77,7 +80,7 @@ export function TikTokLibrary() {
               type="text"
               value={filter}
               onChange={(e) => setFilter(e.target.value)}
-              placeholder="Filtrar TikToks..."
+              placeholder="Filtrar por vídeo ou áudio..."
               className="w-full bg-white/5 border border-white/10 rounded-lg pl-9 pr-3 py-2 text-white text-xs placeholder-white/30 focus:outline-none focus:border-tiktok-pink/50"
             />
           </div>
@@ -101,7 +104,7 @@ export function TikTokLibrary() {
                   isCurrentPlaying ? 'border-tiktok-pink/50 bg-tiktok-pink/5' : 'border-white/5'
                 )}
               >
-                {/* Vertical Thumbnail */}
+                {/* Vertical Thumbnail (Capa oficial do vídeo) */}
                 <div
                   onClick={() => handlePlayTikTok(video)}
                   className="relative aspect-[9/16] rounded-xl overflow-hidden bg-black/60 cursor-pointer shadow-md flex items-center justify-center"
@@ -114,7 +117,7 @@ export function TikTokLibrary() {
                     />
                   ) : (
                     <div className="text-tiktok-pink/40">
-                      <TikTokIcon />
+                      <Music2 size={32} />
                     </div>
                   )}
 
@@ -125,15 +128,22 @@ export function TikTokLibrary() {
                   </div>
                 </div>
 
-                {/* Info */}
-                <div>
+                {/* Info (Nome do Vídeo + Nome do Áudio) */}
+                <div className="space-y-0.5">
                   <p
                     onClick={() => handlePlayTikTok(video)}
                     className="text-white text-xs font-semibold truncate hover:underline cursor-pointer"
+                    title={video.title}
                   >
-                    {video.title || 'TikTok'}
+                    {video.title || 'Vídeo do TikTok'}
                   </p>
-                  <p className="text-white/40 text-[10px] truncate mt-0.5">@{video.authorName}</p>
+                  {video.soundTitle && (
+                    <p className="text-tiktok-pink text-[11px] font-medium truncate flex items-center gap-1" title={video.soundTitle}>
+                      <span className="text-[10px]">🎵</span>
+                      <span>{video.soundTitle}</span>
+                    </p>
+                  )}
+                  <p className="text-white/40 text-[10px] truncate">@{video.authorName}</p>
                 </div>
 
                 {/* Action buttons */}
@@ -143,25 +153,25 @@ export function TikTokLibrary() {
                       setModalItem({
                         id: video.id,
                         source: 'tiktok',
-                        title: video.title || 'TikTok Music',
-                        subtitle: `@${video.authorName}`,
+                        title: video.title || 'Vídeo do TikTok',
+                        subtitle: video.soundTitle ? `Som: ${video.soundTitle} • @${video.authorName}` : `@${video.authorName}`,
                         imageUrl: video.thumbnailUrl,
                         tiktokPostId: video.postId,
                         url: video.url,
                         addedAt: video.addedAt,
                       })
                     }
-                    className="p-1 text-white/40 hover:text-tiktok-pink transition-colors"
+                    className="p-1.5 rounded-lg text-white/40 hover:text-tiktok-pink hover:bg-white/5 transition-colors"
                     title="Adicionar à Playlist"
                   >
-                    <ListPlus size={13} />
+                    <ListPlus size={14} />
                   </button>
                   <button
                     onClick={() => removeTikTokVideo(video.id)}
-                    className="p-1 rounded-lg text-white/30 hover:text-red-400 hover:bg-red-500/10 transition-colors"
-                    title="Remover"
+                    className="p-1.5 rounded-lg text-white/40 hover:text-red-400 hover:bg-white/5 transition-colors"
+                    title="Remover da Biblioteca"
                   >
-                    <Trash2 size={12} />
+                    <Trash2 size={14} />
                   </button>
                 </div>
               </div>
@@ -170,14 +180,11 @@ export function TikTokLibrary() {
         </div>
       ) : (
         <div className="flex flex-col items-center justify-center py-20 text-center space-y-3">
-          <div className="w-16 h-16 rounded-2xl bg-tiktok-pink/10 text-tiktok-pink flex items-center justify-center">
-            <TikTokIcon />
+          <div className="w-16 h-16 rounded-full bg-tiktok-pink/10 flex items-center justify-center text-tiktok-pink">
+            <Sparkles size={28} />
           </div>
-          <p className="text-white/60 text-sm font-medium">
-            {tiktokVideos.length === 0
-              ? 'Nenhum vídeo do TikTok adicionado. Cole um link acima!'
-              : 'Nenhum vídeo encontrado para este filtro.'}
-          </p>
+          <p className="text-white/60 text-sm">Nenhum som do TikTok adicionado ainda.</p>
+          <p className="text-white/30 text-xs">Cole uma URL acima para capturar a capa, nome do vídeo e o áudio exato.</p>
         </div>
       )}
     </div>
