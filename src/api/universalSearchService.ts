@@ -1,10 +1,6 @@
-// ============================================================
-// UNIVERSAL SEARCH SERVICE — Puxa músicas e playlists do Spotify
-// ============================================================
-
 import { searchSpotify } from './spotifyService'
 import { getValidAccessToken } from './spotifyAuth'
-import { parseSpotifyUrl, createSpotifyItemFromUrl, CURATED_PUBLIC_SPOTIFY } from './spotifyUrlService'
+import { parseSpotifyUrl, createSpotifyItemFromUrl } from './spotifyUrlService'
 import type { SpotifyTrack, SpotifySavedItem } from '@/types'
 
 export interface UniversalTrackResult {
@@ -82,14 +78,7 @@ export async function executeUniversalSearch(
     }
   }
 
-  // 2. Curated playlists matching query
-  const matchingCurated = CURATED_PUBLIC_SPOTIFY.filter(
-    (p) =>
-      p.title.toLowerCase().includes(trimmed.toLowerCase()) ||
-      p.subtitle.toLowerCase().includes(trimmed.toLowerCase())
-  )
-
-  // 3. Check if we have valid Spotify API access token (OAuth or Client Credentials)
+  // 2. Check if we have valid Spotify API access token (OAuth or Client Credentials)
   const token = await getValidAccessToken()
 
   if (token) {
@@ -124,7 +113,7 @@ export async function executeUniversalSearch(
       return {
         directSpotifyItem,
         tracks,
-        playlists: [...matchingCurated, ...playlists],
+        playlists,
         isSpotifyAuthenticated: true,
       }
     } catch (e) {
@@ -132,13 +121,13 @@ export async function executeUniversalSearch(
     }
   }
 
-  // 4. Fallback: Public music catalog search
+  // 3. Fallback: Public music catalog search
   const publicTracks = await searchPublicMusic(trimmed, 20)
 
   return {
     directSpotifyItem,
     tracks: publicTracks,
-    playlists: matchingCurated,
+    playlists: [],
     isSpotifyAuthenticated: false,
   }
 }

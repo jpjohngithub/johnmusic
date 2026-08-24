@@ -13,14 +13,14 @@ import {
   ListPlus,
   Loader2,
 } from 'lucide-react'
-import { CURATED_PUBLIC_SPOTIFY, isValidSpotifyUrl, createSpotifyItemFromUrl } from '@/api/spotifyUrlService'
+import { isValidSpotifyUrl, createSpotifyItemFromUrl } from '@/api/spotifyUrlService'
 import { isValidYouTubeUrl, createYouTubeVideoFromUrl } from '@/api/youtubeService'
 import { isValidTikTokUrl, createTikTokVideoFromUrl } from '@/api/tiktokService'
 import { importSpotifyPlaylist } from '@/api/playlistImportService'
 import { usePlayerStore } from '@/store/playerStore'
 import { useLibraryStore } from '@/store/libraryStore'
 import { AddToPlaylistModal } from '@/components/playlist/AddToPlaylistModal'
-import type { PlaylistItem, QueueItem, SpotifySavedItem, YouTubeVideo, TikTokVideo } from '@/types'
+import type { PlaylistItem, QueueItem, YouTubeVideo, TikTokVideo } from '@/types'
 
 const TikTokIcon = () => (
   <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
@@ -170,40 +170,6 @@ export function Home() {
     }
   }
 
-  // Toca itens salvos pelo motor unificado
-  const playSavedSpotify = async (item: SpotifySavedItem) => {
-    if (item.type === 'playlist') {
-      try {
-        const pl = await importSpotifyPlaylist(item.spotifyId)
-        if (pl.items.length > 0) {
-          const queueItems: QueueItem[] = pl.items.map((i) => ({
-            id: i.id,
-            source: 'spotify',
-            title: i.title,
-            subtitle: i.subtitle,
-            imageUrl: i.imageUrl,
-            uri: i.uri,
-            durationMs: i.durationMs,
-          }))
-          await playUniversal(queueItems, 0)
-          return
-        }
-      } catch {
-        // fallback
-      }
-    }
-
-    const queueItem: QueueItem = {
-      id: item.id,
-      source: 'spotify',
-      title: item.title,
-      subtitle: item.subtitle,
-      imageUrl: item.thumbnailUrl,
-      uri: `spotify:${item.type}:${item.spotifyId}`,
-    }
-    await playUniversal([queueItem], 0)
-  }
-
   const playSavedYouTube = async (video: YouTubeVideo) => {
     const queueItem: QueueItem = {
       id: video.id,
@@ -333,53 +299,6 @@ export function Home() {
           </div>
         </section>
       )}
-
-      {/* Curated Spotify Playlists */}
-      <section className="space-y-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-xl font-bold text-white tracking-tight flex items-center gap-2">
-              <Music2 size={20} className="text-spotify-green" />
-              <span>Playlists Populares (Spotify)</span>
-            </h2>
-            <p className="text-white/40 text-xs mt-0.5">Toque instantaneamente sem login</p>
-          </div>
-          <Link
-            to="/spotify"
-            className="text-white/40 hover:text-white text-xs font-semibold flex items-center gap-1 transition-colors"
-          >
-            <span>Ver Biblioteca Spotify</span>
-            <ArrowRight size={14} />
-          </Link>
-        </div>
-
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
-          {CURATED_PUBLIC_SPOTIFY.map((item) => (
-            <div
-              key={item.id}
-              onClick={() => playSavedSpotify(item)}
-              className="group p-3 rounded-2xl bg-white/[0.03] hover:bg-white/[0.08] transition-all cursor-pointer border border-white/5 space-y-2 flex flex-col justify-between"
-            >
-              <div className="relative aspect-square rounded-xl overflow-hidden bg-black shadow-md">
-                <img
-                  src={item.thumbnailUrl}
-                  alt={item.title}
-                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                />
-                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                  <div className="w-12 h-12 rounded-full bg-spotify-green flex items-center justify-center shadow-xl transform group-hover:scale-110 active:scale-95 transition-transform">
-                    <Play size={20} className="text-black fill-black ml-0.5" />
-                  </div>
-                </div>
-              </div>
-              <div>
-                <p className="text-white text-xs font-bold truncate leading-snug">{item.title}</p>
-                <p className="text-white/40 text-[11px] truncate">{item.subtitle}</p>
-              </div>
-            </div>
-          ))}
-        </div>
-      </section>
 
       {/* Saved YouTube Videos Grid */}
       {youtubeVideos.length > 0 && (

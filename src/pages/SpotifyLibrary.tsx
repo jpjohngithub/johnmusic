@@ -12,7 +12,6 @@ import {
   ListPlus,
 } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
-import { CURATED_PUBLIC_SPOTIFY } from '@/api/spotifyUrlService'
 import { SpotifyInput } from '@/components/spotify/SpotifyInput'
 import { usePlayerStore } from '@/store/playerStore'
 import { useLibraryStore } from '@/store/libraryStore'
@@ -345,44 +344,6 @@ export function SpotifyLibrary() {
           </div>
         </section>
       )}
-
-      {/* ─── Coleções Oficiais ─── */}
-      <section className="space-y-4">
-        <div>
-          <h2 className="text-xl font-bold text-white tracking-tight flex items-center gap-2">
-            <Music2 size={20} className="text-spotify-green" />
-            <span>Coleções Oficiais do Spotify</span>
-          </h2>
-          <p className="text-white/40 text-xs mt-0.5">Toque instantaneamente no player unificado</p>
-        </div>
-
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
-          {CURATED_PUBLIC_SPOTIFY.map((item) => (
-            <div
-              key={item.id}
-              onClick={() => handlePlayItem(item)}
-              className="group p-3 rounded-2xl bg-white/[0.03] hover:bg-white/[0.08] transition-all cursor-pointer border border-white/5 space-y-2 flex flex-col justify-between"
-            >
-              <div className="relative aspect-square rounded-xl overflow-hidden bg-black shadow-md">
-                <img
-                  src={item.thumbnailUrl}
-                  alt={item.title}
-                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                />
-                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                  <div className="w-12 h-12 rounded-full bg-spotify-green flex items-center justify-center shadow-xl transform group-hover:scale-110 active:scale-95 transition-transform">
-                    <Play size={20} className="text-black fill-black ml-0.5" />
-                  </div>
-                </div>
-              </div>
-              <div>
-                <p className="text-white text-xs font-bold truncate leading-snug">{item.title}</p>
-                <p className="text-white/40 text-[11px] truncate">{item.subtitle}</p>
-              </div>
-            </div>
-          ))}
-        </div>
-      </section>
     </div>
   )
 }
