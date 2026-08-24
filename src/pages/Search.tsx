@@ -27,6 +27,7 @@ import {
   type SearchTrackItem,
   type SearchPlaylistItem,
 } from '@/api/universalSearchService'
+import { importYouTubePlaylist, importSpotifyPlaylist } from '@/api/playlistImportService'
 import { usePlayerStore } from '@/store/playerStore'
 import { useLibraryStore } from '@/store/libraryStore'
 import { AddToPlaylistModal } from '@/components/playlist/AddToPlaylistModal'
@@ -59,6 +60,7 @@ export function Search({ isAuthenticated = false }: SearchProps) {
   const [activeTrackTab, setActiveTrackTab] = useState<TrackTabType>('all')
   const [activePlaylistTab, setActivePlaylistTab] = useState<PlaylistTabType>('all')
   const [modalItem, setModalItem] = useState<PlaylistItem | null>(null)
+  const [loadingPlaylistId, setLoadingPlaylistId] = useState<string | null>(null)
 
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -175,26 +177,64 @@ export function Search({ isAuthenticated = false }: SearchProps) {
     }
   }
 
-  // Clique em playlist pesquisada
+  // Clique em playlist pesquisada (Importa e toca automaticamente a 50% de volume)
   const handlePlaylistClick = async (pl: SearchPlaylistItem) => {
-    if (pl.source === 'spotify') {
-      const spotifyId = pl.id.replace('sp-pl-', '').replace('sp-album-', '')
-      if (pl.id.startsWith('sp-pl-')) {
+    if (loadingPlaylistId) return
+    setLoadingPlaylistId(pl.id)
+
+    try {
+      if (pl.source === 'spotify') {
+        const spotifyId = pl.id.replace('sp-pl-', '').replace('sp-album-', '')
+        if (isAuthenticated && pl.id.startsWith('sp-pl-')) {
+          navigate(`/spotify/playlist/${spotifyId}`)
+          return
+        }
+        // Importa e toca a playlist do Spotify com capas HD e áudio garantido
+        const customPl = await importSpotifyPlaylist(pl.spotifyUrl || pl.id.replace('sp-pl-', ''))
+        if (customPl && customPl.items.length > 0) {
+          addCustomPlaylist(customPl)
+          await playUniversal(
+            customPl.items.map((i) => ({
+              id: i.id,
+              source: i.source,
+              title: i.title,
+              subtitle: i.subtitle,
+              imageUrl: i.imageUrl,
+              uri: i.uri,
+              videoId: i.videoId,
+              durationMs: i.durationMs,
+            })),
+            0
+          )
+          navigate(`/playlist/${customPl.id}`)
+          return
+        }
         navigate(`/spotify/playlist/${spotifyId}`)
-      } else {
-        navigate(`/spotify/album/${spotifyId}`)
+      } else if (pl.source === 'youtube') {
+        // Importa e toca playlist do YouTube
+        const customPl = await importYouTubePlaylist(pl.youtubeUrl || pl.youtubePlaylistId || '')
+        if (customPl && customPl.items.length > 0) {
+          addCustomPlaylist(customPl)
+          await playUniversal(
+            customPl.items.map((i) => ({
+              id: i.id,
+              source: i.source,
+              title: i.title,
+              subtitle: i.subtitle,
+              imageUrl: i.imageUrl,
+              videoId: i.videoId,
+              durationMs: i.durationMs,
+            })),
+            0
+          )
+          navigate(`/playlist/${customPl.id}`)
+          return
+        }
       }
-    } else if (pl.source === 'youtube') {
-      // Cria ou abre playlist no player
-      const queueItem: QueueItem = {
-        id: pl.id,
-        source: 'youtube',
-        title: pl.title,
-        subtitle: pl.subtitle,
-        imageUrl: pl.artworkUrl,
-        videoId: pl.youtubePlaylistId,
-      }
-      await playUniversal([queueItem], 0)
+    } catch {
+      // fallback caso ocorra erro de rede
+    } finally {
+      setLoadingPlaylistId(null)
     }
   }
 
@@ -877,34 +917,48 @@ export function Search({ isAuthenticated = false }: SearchProps) {
                   </div>
 
                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-                    {searchData.spotifyPlaylists.map((pl) => (
-                      <div
-                        key={pl.id}
-                        onClick={() => handlePlaylistClick(pl)}
-                        className="group p-3 rounded-2xl bg-white/[0.03] hover:bg-white/[0.08] transition-all cursor-pointer border border-white/5 space-y-2.5 flex flex-col justify-between"
-                      >
-                        <div className="relative aspect-square rounded-xl overflow-hidden bg-black shadow-md flex items-center justify-center">
-                          {pl.artworkUrl ? (
-                            <img src={pl.artworkUrl} alt={pl.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
-                          ) : (
-                            <div className="text-spotify-green"><Music2 size={40} /></div>
+                    {searchData.spotifyPlaylists.map((pl) => {
+                      const isLoadingThis = loadingPlaylistId === pl.id
+
+                      return (
+                        <div
+                          key={pl.id}
+                          onClick={() => handlePlaylistClick(pl)}
+                          className={cn(
+                            'group p-3 rounded-2xl bg-white/[0.03] hover:bg-white/[0.08] transition-all cursor-pointer border space-y-2.5 flex flex-col justify-between',
+                            isLoadingThis ? 'border-spotify-green/50 bg-spotify-green/10' : 'border-white/5'
                           )}
-                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                            <div className="w-12 h-12 rounded-full bg-spotify-green flex items-center justify-center shadow-xl transform group-hover:scale-110 active:scale-95 transition-transform">
-                              <Play size={20} className="text-black fill-black ml-0.5" />
+                        >
+                          <div className="relative aspect-square rounded-xl overflow-hidden bg-black shadow-md flex items-center justify-center">
+                            {pl.artworkUrl ? (
+                              <img src={pl.artworkUrl} alt={pl.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                            ) : (
+                              <div className="text-spotify-green"><Music2 size={40} /></div>
+                            )}
+                            <div className={cn(
+                              'absolute inset-0 bg-black/40 transition-opacity flex items-center justify-center',
+                              isLoadingThis ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+                            )}>
+                              <div className="w-12 h-12 rounded-full bg-spotify-green flex items-center justify-center shadow-xl transform group-hover:scale-110 active:scale-95 transition-transform">
+                                {isLoadingThis ? (
+                                  <Loader2 size={22} className="text-black animate-spin" />
+                                ) : (
+                                  <Play size={20} className="text-black fill-black ml-0.5" />
+                                )}
+                              </div>
                             </div>
                           </div>
+                          <div>
+                            <span className="text-[9px] uppercase font-extrabold text-spotify-green tracking-wider">Spotify</span>
+                            <p className="text-white text-sm font-bold truncate leading-snug">{pl.title}</p>
+                            <p className="text-white/40 text-xs truncate">{pl.subtitle}</p>
+                            {pl.trackCount > 0 && (
+                              <p className="text-white/30 text-[11px] mt-0.5">{pl.trackCount} faixas</p>
+                            )}
+                          </div>
                         </div>
-                        <div>
-                          <span className="text-[9px] uppercase font-extrabold text-spotify-green tracking-wider">Spotify</span>
-                          <p className="text-white text-sm font-bold truncate leading-snug">{pl.title}</p>
-                          <p className="text-white/40 text-xs truncate">{pl.subtitle}</p>
-                          {pl.trackCount > 0 && (
-                            <p className="text-white/30 text-[11px] mt-0.5">{pl.trackCount} faixas</p>
-                          )}
-                        </div>
-                      </div>
-                    ))}
+                      )
+                    })}
                   </div>
                 </section>
               )}
@@ -921,36 +975,50 @@ export function Search({ isAuthenticated = false }: SearchProps) {
                   </div>
 
                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-                    {searchData.youtubePlaylists.map((pl) => (
-                      <div
-                        key={pl.id}
-                        onClick={() => handlePlaylistClick(pl)}
-                        className="group p-3 rounded-2xl bg-white/[0.03] hover:bg-white/[0.08] transition-all cursor-pointer border border-white/5 space-y-2.5 flex flex-col justify-between"
-                      >
-                        <div className="relative aspect-video rounded-xl overflow-hidden bg-black shadow-md flex items-center justify-center">
-                          {pl.artworkUrl ? (
-                            <img src={pl.artworkUrl} alt={pl.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
-                          ) : (
-                            <div className="text-youtube-red"><Youtube size={40} /></div>
+                    {searchData.youtubePlaylists.map((pl) => {
+                      const isLoadingThis = loadingPlaylistId === pl.id
+
+                      return (
+                        <div
+                          key={pl.id}
+                          onClick={() => handlePlaylistClick(pl)}
+                          className={cn(
+                            'group p-3 rounded-2xl bg-white/[0.03] hover:bg-white/[0.08] transition-all cursor-pointer border space-y-2.5 flex flex-col justify-between',
+                            isLoadingThis ? 'border-youtube-red/50 bg-youtube-red/10' : 'border-white/5'
                           )}
-                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                            <div className="w-12 h-12 rounded-full bg-youtube-red flex items-center justify-center shadow-xl transform group-hover:scale-110 active:scale-95 transition-transform">
-                              <Play size={20} className="text-white fill-white ml-0.5" />
+                        >
+                          <div className="relative aspect-video rounded-xl overflow-hidden bg-black shadow-md flex items-center justify-center">
+                            {pl.artworkUrl ? (
+                              <img src={pl.artworkUrl} alt={pl.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                            ) : (
+                              <div className="text-youtube-red"><Youtube size={40} /></div>
+                            )}
+                            <div className={cn(
+                              'absolute inset-0 bg-black/40 transition-opacity flex items-center justify-center',
+                              isLoadingThis ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+                            )}>
+                              <div className="w-12 h-12 rounded-full bg-youtube-red flex items-center justify-center shadow-xl transform group-hover:scale-110 active:scale-95 transition-transform">
+                                {isLoadingThis ? (
+                                  <Loader2 size={22} className="text-white animate-spin" />
+                                ) : (
+                                  <Play size={20} className="text-white fill-white ml-0.5" />
+                                )}
+                              </div>
                             </div>
+                            {pl.trackCount > 0 && (
+                              <span className="absolute bottom-2 right-2 px-2 py-0.5 rounded bg-black/80 text-white text-[10px] font-mono">
+                                {pl.trackCount} vídeos
+                              </span>
+                            )}
                           </div>
-                          {pl.trackCount > 0 && (
-                            <span className="absolute bottom-2 right-2 px-2 py-0.5 rounded bg-black/80 text-white text-[10px] font-mono">
-                              {pl.trackCount} vídeos
-                            </span>
-                          )}
+                          <div>
+                            <span className="text-[9px] uppercase font-extrabold text-youtube-red tracking-wider">YouTube Playlist</span>
+                            <p className="text-white text-sm font-bold truncate leading-snug">{pl.title}</p>
+                            <p className="text-white/40 text-xs truncate">{pl.subtitle}</p>
+                          </div>
                         </div>
-                        <div>
-                          <span className="text-[9px] uppercase font-extrabold text-youtube-red tracking-wider">YouTube Playlist</span>
-                          <p className="text-white text-sm font-bold truncate leading-snug">{pl.title}</p>
-                          <p className="text-white/40 text-xs truncate">{pl.subtitle}</p>
-                        </div>
-                      </div>
-                    ))}
+                      )
+                    })}
                   </div>
                 </section>
               )}
