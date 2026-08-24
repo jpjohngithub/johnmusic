@@ -81,7 +81,7 @@ export interface PlayerActions {
 const initialState: ExtendedPlayerState = {
   source: null,
   isPlaying: false,
-  volume: 80,
+  volume: 50,
   isMuted: false,
   progress: 0,
   duration: 0,

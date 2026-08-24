@@ -232,3 +232,74 @@ export function matchToSearchResult(m: YouTubeMatch): YouTubeSearchResult {
     url: `https://www.youtube.com/watch?v=${m.videoId}`,
   }
 }
+
+// ─── Busca de Playlists no YouTube ────────────────────────────
+
+export interface YouTubePlaylistMatch {
+  playlistId: string
+  title: string
+  channelTitle: string
+  videoCount: number
+  thumbnailUrl: string
+  url: string
+}
+
+async function searchPlaylistsViaPiped(instance: string, query: string): Promise<YouTubePlaylistMatch[]> {
+  const res = await fetchWithTimeout(`${instance}/search?q=${encodeURIComponent(query)}&filter=playlists`)
+  if (!res.ok) throw new Error(`Piped ${res.status}`)
+  const json = await res.json()
+  return ((json.items || []) as any[])
+    .filter((i) => i.type === 'playlist' || i.url?.includes('list='))
+    .map((i) => {
+      const listId = i.url?.includes('list=') ? i.url.split('list=')[1]?.split('&')[0] : ''
+      return {
+        playlistId: listId,
+        title: i.name || i.title || 'Playlist do YouTube',
+        channelTitle: i.uploaderName || i.author || 'YouTube',
+        videoCount: i.videos || 0,
+        thumbnailUrl: i.thumbnail || (listId ? `https://i.ytimg.com/vi/${listId}/hqdefault.jpg` : ''),
+        url: `https://www.youtube.com/playlist?list=${listId}`,
+      }
+    })
+    .filter((p) => Boolean(p.playlistId))
+}
+
+async function searchPlaylistsViaInvidious(instance: string, query: string): Promise<YouTubePlaylistMatch[]> {
+  const res = await fetchWithTimeout(`${instance}/api/v1/search?q=${encodeURIComponent(query)}&type=playlist`)
+  if (!res.ok) throw new Error(`Invidious ${res.status}`)
+  const items = await res.json()
+  return ((items || []) as any[])
+    .filter((i) => i.playlistId)
+    .map((i) => ({
+      playlistId: i.playlistId,
+      title: i.title || 'Playlist do YouTube',
+      channelTitle: i.author || 'YouTube',
+      videoCount: i.videoCount || 0,
+      thumbnailUrl: i.playlistThumbnail || `https://i.ytimg.com/vi/${i.playlistId}/hqdefault.jpg`,
+      url: `https://www.youtube.com/playlist?list=${i.playlistId}`,
+    }))
+}
+
+export async function searchYouTubePlaylistsKeyless(query: string, limit = 25): Promise<YouTubePlaylistMatch[]> {
+  const trimmed = query.trim()
+  if (!trimmed) return []
+
+  const cached = cacheGet<YouTubePlaylistMatch[]>(`pl-q:${trimmed}:${limit}`)
+  if (cached) return cached.slice(0, limit)
+
+  let results: YouTubePlaylistMatch[] = []
+
+  // 1. Piped
+  results = await tryInstances(PIPED_INSTANCES, (i) => searchPlaylistsViaPiped(i, trimmed))
+
+  // 2. Invidious
+  if (results.length === 0) {
+    results = await tryInstances(INVIDIOUS_INSTANCES, (i) => searchPlaylistsViaInvidious(i, trimmed))
+  }
+
+  if (results.length > 0) {
+    cacheSet(`pl-q:${trimmed}:${limit}`, results)
+  }
+
+  return results.slice(0, limit)
+}

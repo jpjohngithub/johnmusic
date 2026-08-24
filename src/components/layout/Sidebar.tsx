@@ -55,14 +55,9 @@ export function Sidebar({ collapsed = false }: SidebarProps) {
             className="w-12 h-12 rounded-2xl object-contain flex-shrink-0 shadow-xl shadow-purple-500/10 border border-white/10"
           />
           {!collapsed && (
-            <div className="flex flex-col">
-              <span className="font-black text-white text-lg tracking-tight leading-tight">
-                JohnMusic
-              </span>
-              <span className="text-[10px] text-spotify-green font-bold tracking-widest uppercase">
-                2.0 Universal
-              </span>
-            </div>
+            <span className="font-black text-white text-lg tracking-tight leading-tight">
+              JohnMusic
+            </span>
           )}
         </div>
 

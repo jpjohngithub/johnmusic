@@ -1,12 +1,12 @@
 // ============================================================
 // UNIVERSAL SEARCH SERVICE — Busca Unificada Multi-Plataforma
-// Pesquisa em larga escala no Spotify, YouTube e TikTok (40+ resultados)
+// Pesquisa de Músicas e Playlists no Spotify, YouTube e TikTok
 // ============================================================
 
 import { searchSpotify } from './spotifyService'
 import { getValidAccessToken } from './spotifyAuth'
 import { parseSpotifyUrl, createSpotifyItemFromUrl } from './spotifyUrlService'
-import { searchYouTubeKeyless } from './youtubeSearchService'
+import { searchYouTubeKeyless, searchYouTubePlaylistsKeyless } from './youtubeSearchService'
 import type { SpotifyTrack, SpotifySavedItem } from '@/types'
 
 export interface SearchTrackItem {
@@ -25,12 +25,28 @@ export interface SearchTrackItem {
   audioUrl?: string
 }
 
+export interface SearchPlaylistItem {
+  id: string
+  source: 'spotify' | 'youtube'
+  title: string
+  subtitle: string
+  artworkUrl: string
+  trackCount: number
+  spotifyUri?: string
+  spotifyUrl?: string
+  youtubePlaylistId?: string
+  youtubeUrl?: string
+}
+
 export interface UniversalSearchResults {
   directSpotifyItem?: SpotifySavedItem | null
   spotifyTracks: SearchTrackItem[]
   youtubeVideos: SearchTrackItem[]
   tiktokTracks: SearchTrackItem[]
   allCombined: SearchTrackItem[]
+  spotifyPlaylists: SearchPlaylistItem[]
+  youtubePlaylists: SearchPlaylistItem[]
+  allPlaylistsCombined: SearchPlaylistItem[]
   playlists: SpotifySavedItem[]
   isSpotifyAuthenticated: boolean
 }
@@ -174,6 +190,75 @@ async function searchTikTokCatalog(query: string): Promise<SearchTrackItem[]> {
   return results
 }
 
+// ─── 4. Busca de Playlists no Spotify / Apple Music ───────────
+
+async function searchSpotifyPlaylistsCatalog(query: string): Promise<SearchPlaylistItem[]> {
+  const token = await getValidAccessToken()
+
+  if (token) {
+    try {
+      const res = await searchSpotify(query, ['playlist'], 30)
+      if (res.playlists?.items?.length) {
+        return res.playlists.items
+          .filter(Boolean)
+          .map((p) => ({
+            id: `sp-pl-${p.id}`,
+            source: 'spotify' as const,
+            title: p.name,
+            subtitle: p.owner?.display_name ? `Criado por ${p.owner.display_name}` : 'Spotify Playlist',
+            artworkUrl: p.images?.[0]?.url || '',
+            trackCount: p.tracks?.total || 0,
+            spotifyUri: p.uri,
+            spotifyUrl: `https://open.spotify.com/playlist/${p.id}`,
+          }))
+      }
+    } catch {}
+  }
+
+  // Fallback: busca coleções / playlists públicas no iTunes/Apple (capa 600x600 HD)
+  try {
+    const encoded = encodeURIComponent(query)
+    const url = `https://itunes.apple.com/search?term=${encoded}&media=music&entity=album&limit=25&country=BR`
+    const res = await fetch(url, { signal: AbortSignal.timeout(4000) })
+    if (res.ok) {
+      const data = await res.json()
+      if (Array.isArray(data.results)) {
+        return data.results.map((item: any) => ({
+          id: `sp-album-${item.collectionId}`,
+          source: 'spotify' as const,
+          title: item.collectionName || 'Álbum',
+          subtitle: item.artistName ? `Álbum • ${item.artistName}` : 'Spotify / Apple',
+          artworkUrl: (item.artworkUrl100 || '').replace('100x100bb', '600x600bb'),
+          trackCount: item.trackCount || 10,
+          spotifyUrl: `https://open.spotify.com/search/${encodeURIComponent(item.collectionName)}`,
+        }))
+      }
+    }
+  } catch {}
+
+  return []
+}
+
+// ─── 5. Busca de Playlists no YouTube ─────────────────────────
+
+async function searchYouTubePlaylistsCatalog(query: string): Promise<SearchPlaylistItem[]> {
+  try {
+    const matches = await searchYouTubePlaylistsKeyless(query, 25)
+    return matches.map((m) => ({
+      id: `yt-pl-${m.playlistId}`,
+      source: 'youtube' as const,
+      title: m.title,
+      subtitle: m.channelTitle || 'YouTube',
+      artworkUrl: m.thumbnailUrl || `https://i.ytimg.com/vi/${m.playlistId}/hqdefault.jpg`,
+      trackCount: m.videoCount || 0,
+      youtubePlaylistId: m.playlistId,
+      youtubeUrl: m.url,
+    }))
+  } catch {
+    return []
+  }
+}
+
 // ─── Função Principal de Busca Universal Multi-Plataforma ────
 
 export async function executeUniversalSearch(
@@ -187,6 +272,9 @@ export async function executeUniversalSearch(
       youtubeVideos: [],
       tiktokTracks: [],
       allCombined: [],
+      spotifyPlaylists: [],
+      youtubePlaylists: [],
+      allPlaylistsCombined: [],
       playlists: [],
       isSpotifyAuthenticated: isAuthenticated,
     }
@@ -201,18 +289,28 @@ export async function executeUniversalSearch(
     } catch {}
   }
 
-  // 2. Dispara busca simultânea em larga escala nas 3 plataformas em paralelo
-  const [spotifyRes, youtubeRes, tiktokRes] = await Promise.allSettled([
+  // 2. Dispara busca simultânea em larga escala nas 3 plataformas em paralelo (Músicas e Playlists)
+  const [
+    spotifyRes,
+    youtubeRes,
+    tiktokRes,
+    spotifyPlaylistsRes,
+    youtubePlaylistsRes,
+  ] = await Promise.allSettled([
     searchSpotifyCatalog(trimmed),
     searchYouTubeCatalog(trimmed),
     searchTikTokCatalog(trimmed),
+    searchSpotifyPlaylistsCatalog(trimmed),
+    searchYouTubePlaylistsCatalog(trimmed),
   ])
 
   const spotifyTracks = spotifyRes.status === 'fulfilled' ? spotifyRes.value : []
   const youtubeVideos = youtubeRes.status === 'fulfilled' ? youtubeRes.value : []
   const tiktokTracks = tiktokRes.status === 'fulfilled' ? tiktokRes.value : []
+  const spotifyPlaylists = spotifyPlaylistsRes.status === 'fulfilled' ? spotifyPlaylistsRes.value : []
+  const youtubePlaylists = youtubePlaylistsRes.status === 'fulfilled' ? youtubePlaylistsRes.value : []
 
-  // Intercala os melhores resultados no feed combinado "Tudo"
+  // Intercala faixas no feed combinado "Tudo"
   const allCombined: SearchTrackItem[] = []
   const maxLen = Math.max(spotifyTracks.length, youtubeVideos.length, tiktokTracks.length)
 
@@ -222,12 +320,23 @@ export async function executeUniversalSearch(
     if (tiktokTracks[i]) allCombined.push(tiktokTracks[i])
   }
 
+  // Intercala playlists no feed combinado de playlists
+  const allPlaylistsCombined: SearchPlaylistItem[] = []
+  const maxPlLen = Math.max(spotifyPlaylists.length, youtubePlaylists.length)
+  for (let i = 0; i < maxPlLen; i++) {
+    if (spotifyPlaylists[i]) allPlaylistsCombined.push(spotifyPlaylists[i])
+    if (youtubePlaylists[i]) allPlaylistsCombined.push(youtubePlaylists[i])
+  }
+
   return {
     directSpotifyItem,
     spotifyTracks,
     youtubeVideos,
     tiktokTracks,
     allCombined,
+    spotifyPlaylists,
+    youtubePlaylists,
+    allPlaylistsCombined,
     playlists: [],
     isSpotifyAuthenticated: isAuthenticated,
   }
