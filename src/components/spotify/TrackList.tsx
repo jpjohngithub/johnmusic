@@ -1,7 +1,8 @@
-import { Play, Clock } from 'lucide-react'
-import { formatMs } from '@/lib/utils'
-import { cn } from '@/lib/utils'
-import type { SpotifyTrack } from '@/types'
+import { useState } from 'react'
+import { Play, Clock, FolderPlus } from 'lucide-react'
+import { formatMs, cn } from '@/lib/utils'
+import { AddToPlaylistModal } from '@/components/playlist/AddToPlaylistModal'
+import type { SpotifyTrack, PlaylistItem } from '@/types'
 
 interface TrackListProps {
   tracks: SpotifyTrack[]
@@ -22,12 +23,14 @@ export function TrackList({
   showArtwork = false,
   numbered = true,
 }: TrackListProps) {
+  const [selectedTrack, setSelectedTrack] = useState<PlaylistItem | null>(null)
+
   return (
     <div className="w-full select-none">
       {/* Header */}
       <div
         className="grid items-center px-4 pb-2 border-b border-white/10 text-white/40 text-xs font-semibold uppercase tracking-wider"
-        style={{ gridTemplateColumns: numbered ? '40px 1fr auto' : '1fr auto' }}
+        style={{ gridTemplateColumns: numbered ? '40px 1fr 100px' : '1fr 100px' }}
       >
         {numbered && <span className="text-center">#</span>}
         <span>Título</span>
@@ -42,15 +45,26 @@ export function TrackList({
           if (!track) return null
           const isCurrentTrack = track.id === currentTrackId
 
+          const playlistItem: PlaylistItem = {
+            id: crypto.randomUUID(),
+            source: 'spotify',
+            title: track.name,
+            subtitle: track.artists?.map((a) => a.name).join(', ') || 'Artista',
+            imageUrl: track.album?.images?.[0]?.url || '',
+            uri: track.uri,
+            durationMs: track.duration_ms,
+            addedAt: new Date().toISOString(),
+          }
+
           return (
             <div
               key={`${track.id}-${index}`}
               className={cn(
-                'group grid items-center px-4 py-2.5 rounded-lg cursor-pointer transition-all duration-150',
+                'group grid items-center px-4 py-2.5 rounded-xl cursor-pointer transition-all duration-150',
                 'hover:bg-white/10',
                 isCurrentTrack ? 'bg-white/10 text-spotify-green' : 'text-white'
               )}
-              style={{ gridTemplateColumns: numbered ? '40px 1fr auto' : '1fr auto' }}
+              style={{ gridTemplateColumns: numbered ? '40px 1fr 100px' : '1fr 100px' }}
               onClick={() => onPlayTrack(track, index)}
             >
               {/* Number / Play icon */}
@@ -106,8 +120,18 @@ export function TrackList({
                 </div>
               </div>
 
-              {/* Duration */}
-              <div className="flex items-center justify-end pr-2">
+              {/* Duration & Add to Playlist */}
+              <div className="flex items-center justify-end gap-2 pr-2">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setSelectedTrack(playlistItem)
+                  }}
+                  className="p-1.5 rounded-lg text-white/30 hover:text-spotify-green hover:bg-white/10 opacity-0 group-hover:opacity-100 transition-all"
+                  title="Salvar em uma Playlist"
+                >
+                  <FolderPlus size={15} />
+                </button>
                 <span className="text-white/40 text-xs font-mono">
                   {formatMs(track.duration_ms || 0)}
                 </span>
@@ -116,6 +140,13 @@ export function TrackList({
           )
         })}
       </div>
+
+      {/* Modal para Adicionar à Playlist */}
+      <AddToPlaylistModal
+        isOpen={Boolean(selectedTrack)}
+        onClose={() => setSelectedTrack(null)}
+        item={selectedTrack}
+      />
     </div>
   )
 }

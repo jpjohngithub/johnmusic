@@ -33,11 +33,11 @@ export function parseSpotifyUrl(urlOrUri: string): SpotifyUrlInfo | null {
     }
   }
 
-  // 2. Format: https://open.spotify.com/track/4cOdK2wGLETKBW3PvgPWqT?si=...
-  const webPattern = /open\.spotify\.com\/(track|playlist|album|artist|episode)\/([a-zA-Z0-9]+)/
+  // 2. Format: https://open.spotify.com/intl-pt/track/4cOdK2wGLETKBW3PvgPWqT?si=... or https://open.spotify.com/track/...
+  const webPattern = /(?:open\.spotify\.com|spotify\.com)\/(?:(?:intl-[a-z]{2,5}|embed)\/)?(track|playlist|album|artist|episode)\/([a-zA-Z0-9]+)/i
   const match = trimmed.match(webPattern)
   if (match) {
-    const type = match[1] as SpotifyUrlInfo['type']
+    const type = match[1].toLowerCase() as SpotifyUrlInfo['type']
     const id = match[2]
     return {
       type,

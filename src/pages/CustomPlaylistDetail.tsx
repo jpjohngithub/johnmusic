@@ -29,9 +29,11 @@ import {
   SortAsc,
   User,
   Clock,
+  FolderPlus,
 } from 'lucide-react'
 import { useLibraryStore } from '@/store/libraryStore'
 import { usePlayerStore } from '@/store/playerStore'
+import { AddToPlaylistModal } from '@/components/playlist/AddToPlaylistModal'
 import { createSpotifyItemFromUrl, isValidSpotifyUrl } from '@/api/spotifyUrlService'
 import { createYouTubeVideoFromUrl, isValidYouTubeUrl } from '@/api/youtubeService'
 import { createTikTokVideoFromUrl, isValidTikTokUrl } from '@/api/tiktokService'
@@ -81,6 +83,9 @@ export function CustomPlaylistDetail() {
   const [isAddingTrack, setIsAddingTrack] = useState(false)
   const [addError, setAddError] = useState<string | null>(null)
   const [showQuickAdd, setShowQuickAdd] = useState(false)
+
+  // Estado para Salvar Música em Outra Playlist
+  const [selectedTrackForSave, setSelectedTrackForSave] = useState<PlaylistItem | null>(null)
 
   const playlist = customPlaylists.find((p) => p.id === id)
 
@@ -626,13 +631,23 @@ export function CustomPlaylistDetail() {
                     </div>
                   </div>
 
-                  {/* Duration & Delete */}
-                  <div className="flex items-center gap-3 justify-end pr-2">
+                  {/* Duration, Save to Another Playlist & Delete */}
+                  <div className="flex items-center gap-2 justify-end pr-2">
                     {item.durationMs ? (
                       <span className="text-white/40 text-xs font-mono">
                         {formatMs(item.durationMs)}
                       </span>
                     ) : null}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setSelectedTrackForSave(item)
+                      }}
+                      className="p-2 rounded-xl text-white/30 hover:text-spotify-green hover:bg-white/10 transition-all opacity-0 group-hover:opacity-100"
+                      title="Copiar / Salvar em outra Playlist"
+                    >
+                      <FolderPlus size={15} />
+                    </button>
                     <button
                       onClick={(e) => {
                         e.stopPropagation()
@@ -750,6 +765,13 @@ export function CustomPlaylistDetail() {
           </div>
         </div>
       )}
+
+      {/* Modal para Salvar Música em Outra Playlist */}
+      <AddToPlaylistModal
+        isOpen={Boolean(selectedTrackForSave)}
+        onClose={() => setSelectedTrackForSave(null)}
+        item={selectedTrackForSave}
+      />
     </div>
   )
 }
