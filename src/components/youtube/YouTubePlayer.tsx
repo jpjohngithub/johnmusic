@@ -112,6 +112,10 @@ export function YouTubePlayer() {
           } catch {}
         },
         onStateChange: onPlayerStateChange,
+        onError: (e: any) => {
+          console.warn('YouTube error code:', e.data, '- Skipping unavailable video')
+          usePlayerStore.getState().playNext()
+        },
       },
     })
 

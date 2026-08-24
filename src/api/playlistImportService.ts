@@ -155,30 +155,53 @@ export async function fetchYouTubePlaylistTracks(playlistId: string): Promise<{
       const name = (isPiped ? data.name : data.title) || `Playlist YouTube`
       const coverUrl = (isPiped ? data.thumbnailUrl : data.playlistThumbnail) || ''
 
-      const tracks: PlaylistItem[] = rawItems.map((item: any) => {
-        const videoId = isPiped
-          ? item.url?.split('watch?v=')[1]?.split('&')[0]
-          : item.videoId
+      const tracks: PlaylistItem[] = rawItems
+        .map((item: any): PlaylistItem | null => {
+          let videoId = ''
+          if (isPiped) {
+            if (item.url?.includes('watch?v=')) {
+              videoId = item.url.split('watch?v=')[1]?.split('&')[0]
+            } else if (item.url?.startsWith('/')) {
+              videoId = item.url.replace('/watch?v=', '').split('&')[0]
+            }
+          } else {
+            videoId = item.videoId
+          }
 
+          // Valida se o videoId é válido
+          if (!videoId || typeof videoId !== 'string' || videoId.length < 5) {
+            return null
+          }
+
+          const rawTitle = (item.title || '').trim()
+          if (!rawTitle || rawTitle === 'Vídeo' || rawTitle.includes('[Deleted video]') || rawTitle.includes('[Private video]')) {
+            return null
+          }
+
+          const channel = (isPiped ? item.uploaderName : item.author) || 'YouTube'
+          // Capa oficial direta da CDN do YouTube para garantir 100% de exibição
+          const imageUrl = `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`
+
+          return {
+            id: crypto.randomUUID(),
+            source: 'youtube' as const,
+            title: rawTitle,
+            subtitle: channel,
+            imageUrl,
+            videoId,
+            url: `https://www.youtube.com/watch?v=${videoId}`,
+            durationMs: ((isPiped ? item.duration : item.lengthSeconds) || 180) * 1000,
+            addedAt: new Date().toISOString(),
+          }
+        })
+        .filter((t): t is PlaylistItem => t !== null)
+
+      if (tracks.length > 0) {
         return {
-          id: crypto.randomUUID(),
-          source: 'youtube' as const,
-          title: item.title || 'Vídeo',
-          subtitle: (isPiped ? item.uploaderName : item.author) || 'YouTube',
-          imageUrl:
-            (isPiped ? item.thumbnail : item.videoThumbnails?.[0]?.url) ||
-            `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`,
-          videoId,
-          url: `https://www.youtube.com/watch?v=${videoId}`,
-          durationMs: ((isPiped ? item.duration : item.lengthSeconds) || 180) * 1000,
-          addedAt: new Date().toISOString(),
+          name: name && name !== 'Playlist YouTube' ? name : tracks[0]?.title ? `Playlist: ${tracks[0].title}` : 'Playlist YouTube',
+          coverUrl: coverUrl || tracks[0]?.imageUrl || '',
+          tracks,
         }
-      })
-
-      return {
-        name,
-        coverUrl: coverUrl || tracks[0]?.imageUrl || '',
-        tracks,
       }
     } catch {
       // tenta próxima instância

@@ -343,20 +343,35 @@ export function CustomPlaylistDetail() {
 
                   {/* Artwork & Info */}
                   <div className="flex items-center gap-3 min-w-0 pr-4">
-                    {item.imageUrl ? (
+                    {item.imageUrl || item.videoId ? (
                       <img
-                        src={item.imageUrl}
+                        src={
+                          item.imageUrl ||
+                          (item.videoId ? `https://i.ytimg.com/vi/${item.videoId}/hqdefault.jpg` : '')
+                        }
                         alt={item.title}
+                        onError={(e) => {
+                          const target = e.currentTarget
+                          if (item.videoId && !target.src.includes('mqdefault.jpg')) {
+                            target.src = `https://i.ytimg.com/vi/${item.videoId}/mqdefault.jpg`
+                          } else {
+                            target.style.display = 'none'
+                            const fallback = target.nextElementSibling as HTMLElement
+                            if (fallback) fallback.style.display = 'flex'
+                          }
+                        }}
                         className={cn(
                           'w-11 h-11 rounded-xl object-cover flex-shrink-0 shadow-md transition-transform',
                           isCurrent && 'ring-2 ring-spotify-green scale-105'
                         )}
                       />
-                    ) : (
-                      <div className="w-11 h-11 rounded-xl bg-white/10 flex items-center justify-center flex-shrink-0">
-                        <Music2 size={18} />
-                      </div>
-                    )}
+                    ) : null}
+                    <div
+                      className="w-11 h-11 rounded-xl bg-white/10 flex items-center justify-center flex-shrink-0"
+                      style={{ display: item.imageUrl || item.videoId ? 'none' : 'flex' }}
+                    >
+                      <Music2 size={18} className="text-white/40" />
+                    </div>
                     <div className="min-w-0 space-y-0.5">
                       <div className="flex items-center gap-2">
                         <p
