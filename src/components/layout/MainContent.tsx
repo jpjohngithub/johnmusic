@@ -36,7 +36,7 @@ export function MainContent({ children }: MainContentProps) {
 
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/[0.04] border border-white/5 text-white/60 text-xs font-medium">
-            <span className="w-2 h-2 rounded-full bg-spotify-green animate-pulse" />
+            <img src="/logo.png" alt="Logo" className="w-4 h-4 rounded-md object-contain" />
             <span className="text-white/80 font-semibold">JohnMusic 2.0</span>
           </div>
         </div>

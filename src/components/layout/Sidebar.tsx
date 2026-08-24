@@ -49,9 +49,11 @@ export function Sidebar({ collapsed = false }: SidebarProps) {
       >
         {/* Logo */}
         <div className="flex items-center gap-3 px-4 py-5 border-b border-white/5">
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-spotify-green via-emerald-400 to-cyan-400 flex items-center justify-center flex-shrink-0 shadow-lg shadow-spotify-green/20">
-            <Music2 size={18} className="text-black font-bold" />
-          </div>
+          <img
+            src="/logo.png"
+            alt="JohnMusic"
+            className="w-9 h-9 rounded-xl object-contain flex-shrink-0 shadow-lg shadow-black/40"
+          />
           {!collapsed && (
             <div className="flex flex-col">
               <span className="font-extrabold text-white text-base tracking-tight leading-tight">
