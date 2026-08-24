@@ -68,4 +68,52 @@ npm run build
 
 ---
 
+## 🔎 Arquitetura da Reprodução Multiplataforma
+
+O **YouTube é o motor de reprodução universal** do JohnMusic 2.0:
+
+- **Faixas do Spotify sem login Premium** → convertidas automaticamente para o vídeo equivalente no YouTube (busca por título + artista, com score de duração) e tocadas na íntegra.
+- **Sons do TikTok** → o título/música detectado via oEmbed é convertido para o vídeo correspondente no YouTube; o player oficial embutido do TikTok também fica disponível num drawer flutuante.
+- **Busca keyless do YouTube** → feita via instâncias públicas Piped/Invidious (com fallback em cadeia e cache de 24h). Opcionalmente usa a `VITE_YOUTUBE_API_KEY` se definida.
+- **Login Spotify Premium (opcional)** → desbloqueia o Web Playback SDK com faixas oficiais completas via `Entrar com Spotify` na sidebar.
+
+### Fluxo de reprodução
+
+```
+Clique em qualquer faixa (Spotify/YouTube/TikTok)
+        │
+        ▼
+playUniversal() no playerStore
+        │
+        ▼
+crossPlatformService.resolvePlayable()
+  ├─ youtube → toca direto
+  ├─ spotify → encontra equivalente no YouTube
+  └─ tiktok  → converte via music_info do oEmbed
+        │
+        ▼
+Fila unificada (QueueItem[]) → YouTubePlayer (IFrame API)
+```
+
+### Serviços principais
+
+| Arquivo | Função |
+|---|---|
+| `src/api/youtubeSearchService.ts` | Busca keyless (Piped/Invidious/DataAPI) + cache |
+| `src/api/crossPlatformService.ts` | Conversão cruzada de qualquer fonte → YouTube |
+| `src/components/youtube/YouTubePlayer.tsx` | Player IFrame API sincronizado ao store |
+| `src/store/playerStore.ts` | Estado global + fila + `playUniversal` |
+| `src/api/spotifyAuth.ts` / `spotifyService.ts` | OAuth PKCE + Web API do Spotify |
+| `src/api/tiktokService.ts` | oEmbed do TikTok com fallback CORS |
+
+---
+
+## ⚠️ Limitações & Avisos
+
+- A conversão automática busca vídeos públicos oficiais no YouTube — não baixa nem re-encode áudio. Se um vídeo não for encontrado, a faixa cai para preview de 30s (Spotify).
+- Instâncias Piped/Invidious são comunitárias e podem oscilar; o app tenta várias em sequência e faz cache local dos resultados.
+- Uso pessoal/educacional: respeite os Termos de Uso das plataformas.
+
+---
+
 Desenvolvido especialmente para o **johnmusic**! 🎧🚀
