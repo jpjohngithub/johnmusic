@@ -1,6 +1,7 @@
 // ============================================================
 // YOUTUBE PLAYER — Wrapper do IFrame API sincronizado ao store
 // Motor de áudio em segundo plano com suporte contínuo a filas
+// e transição sem interrupção de reprodução contínua
 // ============================================================
 
 import { useEffect, useRef } from 'react'
@@ -12,6 +13,7 @@ export function YouTubePlayer() {
   const containerRef = useRef<HTMLDivElement | null>(null)
   const playerRef = useRef<any>(null)
   const progressTimerRef = useRef<number | null>(null)
+  const isTransitioningRef = useRef<boolean>(false)
 
   // ID do vídeo a tocar: faixa atual quando source=youtube
   const queueVideoId = usePlayerStore((s) =>
@@ -63,14 +65,18 @@ export function YouTubePlayer() {
     const YTState = window.YT?.PlayerState || {}
 
     if (e.data === YTState.PLAYING) {
+      isTransitioningRef.current = false
       try {
         store.setDuration(e.target.getDuration())
       } catch {}
       store.setIsPlaying(true)
       startProgressLoop(e.target)
     } else if (e.data === YTState.PAUSED) {
-      store.setIsPlaying(false)
-      stopProgressLoop()
+      // Ignora evento transitório de pause disparado durante carregamento de nova faixa
+      if (!isTransitioningRef.current) {
+        store.setIsPlaying(false)
+        stopProgressLoop()
+      }
     } else if (e.data === YTState.ENDED) {
       stopProgressLoop()
       handleEnded()
@@ -86,7 +92,7 @@ export function YouTubePlayer() {
       width: '320',
       videoId: '',
       playerVars: {
-        autoplay: 0,
+        autoplay: 1,
         controls: 0,
         disablekb: 1,
         modestbranding: 1,
@@ -104,7 +110,9 @@ export function YouTubePlayer() {
                 : null
             if (currentVid) {
               if (store.isPlaying) {
+                isTransitioningRef.current = true
                 e.target.loadVideoById(currentVid)
+                try { e.target.playVideo() } catch {}
               } else {
                 e.target.cueVideoById(currentVid)
               }
@@ -138,11 +146,16 @@ export function YouTubePlayer() {
     try {
       const currentId = player.getVideoData?.()?.video_id
       if (currentId !== queueVideoId) {
+        isTransitioningRef.current = true
         if (isPlaying) {
           player.loadVideoById(queueVideoId)
+          try { player.playVideo() } catch {}
         } else {
           player.cueVideoById(queueVideoId)
         }
+        setTimeout(() => {
+          isTransitioningRef.current = false
+        }, 2000)
       }
     } catch {}
   }, [queueVideoId, isPlaying])

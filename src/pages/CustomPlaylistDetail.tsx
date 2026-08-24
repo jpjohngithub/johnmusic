@@ -1,6 +1,6 @@
 // ============================================================
 // CUSTOM PLAYLIST DETAIL — Gerenciamento Completo de Playlist
-// Edição de Nome/Capa/Descrição, Reordenação de Faixas (Subir/Descer),
+// Edição de Nome/Capa/Descrição, Drag-and-Drop (Arrastar para Reordenar),
 // Ordenação Automática (A-Z/Artista), Duplicação e Adição Rápida
 // ============================================================
 
@@ -30,6 +30,7 @@ import {
   User,
   Clock,
   FolderPlus,
+  GripVertical,
 } from 'lucide-react'
 import { useLibraryStore } from '@/store/libraryStore'
 import { usePlayerStore } from '@/store/playerStore'
@@ -56,6 +57,7 @@ export function CustomPlaylistDetail() {
     removeItemFromCustomPlaylist,
     updateCustomPlaylist,
     movePlaylistItem,
+    reorderPlaylistItems,
     reversePlaylistOrder,
     sortPlaylist,
     duplicateCustomPlaylist,
@@ -86,6 +88,10 @@ export function CustomPlaylistDetail() {
 
   // Estado para Salvar Música em Outra Playlist
   const [selectedTrackForSave, setSelectedTrackForSave] = useState<PlaylistItem | null>(null)
+
+  // Estados para Drag and Drop (Arrastar Músicas)
+  const [draggedIndex, setDraggedIndex] = useState<number | null>(null)
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null)
 
   const playlist = customPlaylists.find((p) => p.id === id)
 
@@ -465,14 +471,19 @@ export function CustomPlaylistDetail() {
         </form>
       )}
 
-      {/* ─── TRACKLIST & REORDERING TOOLS ────────── */}
+      {/* ─── TRACKLIST & DRAG-AND-DROP REORDERING TOOLS ────────── */}
       {playlist.items.length > 0 ? (
         <div className="space-y-4">
           {/* Reordering and Sorting Bar */}
           <div className="flex flex-wrap items-center justify-between gap-3 px-2">
-            <h3 className="text-white font-extrabold text-sm uppercase tracking-wider flex items-center gap-2">
-              <span>Faixas na Playlist ({playlist.items.length})</span>
-            </h3>
+            <div className="flex items-center gap-2">
+              <h3 className="text-white font-extrabold text-sm uppercase tracking-wider flex items-center gap-2">
+                <span>Faixas ({playlist.items.length})</span>
+              </h3>
+              <span className="text-[11px] text-white/40 hidden sm:inline-block">
+                • Arraste ou use as setas para reordenar
+              </span>
+            </div>
 
             <div className="flex items-center gap-2 flex-wrap">
               <button
@@ -504,24 +515,65 @@ export function CustomPlaylistDetail() {
             </div>
           </div>
 
-          {/* Tracks List with Up/Down buttons */}
+          {/* Tracks List with Native Drag & Drop */}
           <div className="space-y-1.5">
             {playlist.items.map((item, index) => {
               const isCurrent = isCurrentPlayingInPlaylist(item)
+              const isBeingDragged = draggedIndex === index
+              const isDragOver = dragOverIndex === index
 
               return (
                 <div
                   key={item.id}
+                  draggable
+                  onDragStart={(e) => {
+                    setDraggedIndex(index)
+                    e.dataTransfer.effectAllowed = 'move'
+                    e.dataTransfer.setData('text/plain', String(index))
+                  }}
+                  onDragOver={(e) => {
+                    e.preventDefault()
+                    e.dataTransfer.dropEffect = 'move'
+                    if (dragOverIndex !== index) {
+                      setDragOverIndex(index)
+                    }
+                  }}
+                  onDragLeave={() => {
+                    if (dragOverIndex === index) {
+                      setDragOverIndex(null)
+                    }
+                  }}
+                  onDrop={(e) => {
+                    e.preventDefault()
+                    if (draggedIndex !== null && draggedIndex !== index) {
+                      reorderPlaylistItems(playlist.id, draggedIndex, index)
+                    }
+                    setDraggedIndex(null)
+                    setDragOverIndex(null)
+                  }}
+                  onDragEnd={() => {
+                    setDraggedIndex(null)
+                    setDragOverIndex(null)
+                  }}
                   className={cn(
-                    'group grid items-center px-4 py-2.5 rounded-2xl transition-all duration-200 border',
-                    isCurrent
+                    'group grid items-center px-4 py-2.5 rounded-2xl transition-all duration-200 border cursor-grab active:cursor-grabbing select-none',
+                    isBeingDragged && 'opacity-30 scale-[0.98] border-dashed border-spotify-green bg-white/5',
+                    isDragOver && 'border-spotify-green ring-2 ring-spotify-green/40 bg-spotify-green/10 scale-[1.01]',
+                    !isBeingDragged && !isDragOver && isCurrent
                       ? 'bg-gradient-to-r from-spotify-green/20 via-purple-950/30 to-black border-spotify-green/50 shadow-lg text-white'
                       : 'bg-white/[0.02] hover:bg-white/[0.07] border-white/5 text-white/80 hover:text-white'
                   )}
-                  style={{ gridTemplateColumns: '70px 1fr auto' }}
+                  style={{ gridTemplateColumns: '80px 1fr auto' }}
                 >
-                  {/* Position + Reordering Up/Down Arrows */}
+                  {/* Drag Handle + Position + Quick Move Up/Down */}
                   <div className="flex items-center gap-1">
+                    <span title="Clique e arraste para mudar a posição" className="flex items-center">
+                      <GripVertical
+                        size={14}
+                        className="text-white/20 group-hover:text-white/60 transition-colors flex-shrink-0 cursor-grab"
+                      />
+                    </span>
+
                     <span
                       className={cn(
                         'text-xs font-semibold w-5 text-center',
@@ -532,7 +584,7 @@ export function CustomPlaylistDetail() {
                     </span>
 
                     {/* Move Up / Down Buttons */}
-                    <div className="flex flex-col opacity-20 group-hover:opacity-100 transition-opacity">
+                    <div className="flex flex-col opacity-0 group-hover:opacity-100 transition-opacity">
                       <button
                         onClick={(e) => {
                           e.stopPropagation()
@@ -542,7 +594,7 @@ export function CustomPlaylistDetail() {
                         className="p-0.5 text-white/60 hover:text-spotify-green disabled:opacity-20 disabled:hover:text-white/60 transition-colors"
                         title="Mover para cima"
                       >
-                        <ChevronUp size={14} />
+                        <ChevronUp size={13} />
                       </button>
                       <button
                         onClick={(e) => {
@@ -553,7 +605,7 @@ export function CustomPlaylistDetail() {
                         className="p-0.5 text-white/60 hover:text-spotify-green disabled:opacity-20 disabled:hover:text-white/60 transition-colors"
                         title="Mover para baixo"
                       >
-                        <ChevronDown size={14} />
+                        <ChevronDown size={13} />
                       </button>
                     </div>
                   </div>
