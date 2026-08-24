@@ -48,6 +48,41 @@ function parseMicrolinkTrackHtml(html: string, coverUrl: string): PlaylistItem |
   }
 }
 
+export async function enrichTrackCovers(tracks: PlaylistItem[]): Promise<PlaylistItem[]> {
+  const batchSize = 12
+  const enriched: PlaylistItem[] = [...tracks]
+
+  for (let i = 0; i < enriched.length; i += batchSize) {
+    const chunk = enriched.slice(i, i + batchSize)
+    await Promise.allSettled(
+      chunk.map(async (track, chunkIdx) => {
+        const globalIdx = i + chunkIdx
+        try {
+          const q = `${track.title} ${track.subtitle}`.replace(/[^\w\s\u00C0-\u00FF]/gi, ' ').trim()
+          const res = await fetch(
+            `https://itunes.apple.com/search?term=${encodeURIComponent(q)}&entity=song&limit=1`,
+            { signal: AbortSignal.timeout(3500) }
+          )
+          if (res.ok) {
+            const data = await res.json()
+            const cover = data.results?.[0]?.artworkUrl100?.replace('100x100bb', '600x600bb')
+            if (cover) {
+              enriched[globalIdx] = {
+                ...enriched[globalIdx],
+                imageUrl: cover,
+              }
+            }
+          }
+        } catch {
+          // Mantém capa padrão
+        }
+      })
+    )
+  }
+
+  return enriched
+}
+
 export async function fetchSpotifyEmbedRealTracks(playlistId: string): Promise<SpotifyEmbedResult | null> {
   const targetUrl = `https://open.spotify.com/embed/playlist/${playlistId}`
 
@@ -62,11 +97,13 @@ export async function fetchSpotifyEmbedRealTracks(playlistId: string): Promise<S
       const name = json.data?.title || 'Playlist Spotify'
       const description = json.data?.description || ''
 
-      const tracks: PlaylistItem[] = rawTracksHtml
+      const rawTracks: PlaylistItem[] = rawTracksHtml
         .map((h) => parseMicrolinkTrackHtml(h, coverUrl))
         .filter((t): t is PlaylistItem => t !== null)
 
-      if (tracks.length > 0) {
+      if (rawTracks.length > 0) {
+        // Enriquece cada música com a sua capa oficial individual de alta resolução
+        const tracks = await enrichTrackCovers(rawTracks)
         return {
           name,
           description,
@@ -93,7 +130,7 @@ export async function fetchSpotifyEmbedRealTracks(playlistId: string): Promise<S
         const entity = data.props?.pageProps?.state?.data?.entity
         if (entity && Array.isArray(entity.trackList)) {
           const coverUrl = entity.coverArt?.sources?.[0]?.url || ''
-          const tracks: PlaylistItem[] = entity.trackList.map((t: any) => ({
+          const rawTracks: PlaylistItem[] = entity.trackList.map((t: any) => ({
             id: crypto.randomUUID(),
             source: 'spotify' as const,
             title: t.title || 'Música',
@@ -105,7 +142,9 @@ export async function fetchSpotifyEmbedRealTracks(playlistId: string): Promise<S
             addedAt: new Date().toISOString(),
           }))
 
-          if (tracks.length > 0) {
+          if (rawTracks.length > 0) {
+            // Enriquece cada música com a sua capa oficial individual de alta resolução
+            const tracks = await enrichTrackCovers(rawTracks)
             return {
               name: entity.name || 'Playlist Spotify',
               description: entity.subtitle || '',
