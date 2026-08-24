@@ -12,22 +12,80 @@ const RESOLVE_PREFIX = 'yt-resolve:'
 
 // ─── Score de um candidato ────────────────────────────────────
 
-function scoreCandidate(m: YouTubeMatch, targetDurationSec: number | null): number {
-  let score = 0
+function scoreCandidate(
+  m: YouTubeMatch,
+  targetDurationSec: number | null,
+  songTitle?: string,
+  artistName?: string
+): number {
+  let score = 10
 
   const titleLower = m.title.toLowerCase()
-  if (titleLower.includes('audio') || titleLower.includes('topic')) score += 3
-  if (titleLower.includes('live') || titleLower.includes('ao vivo')) score -= 2
-  if (m.durationSeconds > 3600) return -1 // lives longas: descarta
+  const channelLower = (m.channelTitle || '').toLowerCase()
+  const songLower = (songTitle || '').toLowerCase()
+  const artistLower = (artistName || '').toLowerCase()
+
+  // 1. Correspondência do nome da música
+  if (songLower && titleLower.includes(songLower)) score += 40
+
+  // 2. Correspondência do nome do artista
+  if (artistLower && (channelLower.includes(artistLower) || titleLower.includes(artistLower))) {
+    score += 30
+  }
+
+  // 3. Canais oficiais de áudio do artista (- Topic, VEVO, Oficial, Official)
+  if (
+    channelLower.includes('topic') ||
+    channelLower.includes('vevo') ||
+    channelLower.includes('oficial') ||
+    channelLower.includes('official')
+  ) {
+    score += 25
+  }
+
+  // 4. Termos de áudio de estúdio oficial
+  if (
+    titleLower.includes('official audio') ||
+    titleLower.includes('audio oficial') ||
+    titleLower.includes('official music video') ||
+    titleLower.includes('clipe oficial') ||
+    titleLower.includes('visualizer')
+  ) {
+    score += 15
+  }
+
+  // 5. Penalidade severa para termos indesejados (covers, remixes, reacts, tutoriais)
+  const badKeywords = [
+    'cover',
+    'karaoke',
+    'remix',
+    'react',
+    'tutorial',
+    'parodia',
+    'slowed',
+    'reverb',
+    'bass boosted',
+    '1 hour',
+    '1 hora',
+    'edit',
+    'status',
+    'instrumental',
+  ]
+  for (const bad of badKeywords) {
+    if (titleLower.includes(bad) && !songLower.includes(bad)) {
+      score -= 60
+    }
+  }
+
+  if (m.durationSeconds > 3600) return -1 // lives muito longas
 
   const target = targetDurationSec || 0
-  if (target > 0) {
+  if (target > 0 && m.durationSeconds > 0) {
     const diff = Math.abs(m.durationSeconds - target)
     const ratio = diff / target
-    if (ratio <= 0.05) score += 5
-    else if (ratio <= 0.1) score += 3
-    else if (ratio <= 0.25) score += 1
-    else if (ratio > 1) score -= 2
+    if (ratio <= 0.05) score += 10
+    else if (ratio <= 0.15) score += 5
+    else if (ratio > 1) score -= 15
   }
 
   return score
@@ -37,14 +95,16 @@ function scoreCandidate(m: YouTubeMatch, targetDurationSec: number | null): numb
 
 export async function findYouTubeMatch(
   query: string,
-  targetDurationSec?: number
+  targetDurationSec?: number,
+  songTitle?: string,
+  artistName?: string
 ): Promise<YouTubeMatch | null> {
   const results = await searchYouTubeKeyless(query, 15)
   if (results.length === 0) return null
 
   const target = targetDurationSec && targetDurationSec > 0 ? targetDurationSec : null
   const scored = results
-    .map((m) => ({ m, score: scoreCandidate(m, target) }))
+    .map((m) => ({ m, score: scoreCandidate(m, target, songTitle, artistName) }))
     .filter((s) => s.score >= 0)
     .sort((a, b) => b.score - a.score)
 
@@ -74,6 +134,7 @@ export async function resolvePlayable(
     }
   }
 
+  // Verifica cache em memória/localStorage
   const key = RESOLVE_PREFIX + resolveKey(item)
   const cached = cacheGet<{ videoId: string; title: string; channelTitle: string; thumbnailUrl: string }>(key)
   if (cached) return cached
@@ -93,7 +154,12 @@ export async function resolvePlayable(
         ? item.subtitle
         : ''
     const query = `${item.title} ${cleanSubtitle}`.trim()
-    const match = await findYouTubeMatch(query, anyItem.durationMs ? anyItem.durationMs / 1000 : undefined)
+    const match = await findYouTubeMatch(
+      query,
+      anyItem.durationMs ? anyItem.durationMs / 1000 : undefined,
+      item.title,
+      cleanSubtitle
+    )
     if (match) {
       videoId = match.videoId
       title = item.title

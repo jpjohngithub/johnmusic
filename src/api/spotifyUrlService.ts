@@ -87,6 +87,37 @@ export async function createSpotifyItemFromUrl(urlOrUri: string): Promise<Spotif
     throw new Error('URL do Spotify inválida. Use links como: open.spotify.com/track/... ou open.spotify.com/playlist/...')
   }
 
+  // 1. Tenta extrair dados precisos via Microlink (pega título e autor/artista exatos)
+  try {
+    const microRes = await fetch(
+      `https://api.microlink.io/?url=${encodeURIComponent(parsed.canonicalUrl)}`,
+      { signal: AbortSignal.timeout(5000) }
+    )
+    if (microRes.ok) {
+      const json = await microRes.json()
+      const title = json.data?.title
+      const author = json.data?.author
+      const imageUrl = json.data?.image?.url
+
+      if (title && title !== 'Spotify Web' && title !== parsed.id) {
+        return {
+          id: crypto.randomUUID(),
+          type: parsed.type,
+          spotifyId: parsed.id,
+          title,
+          subtitle: author || (parsed.type === 'track' ? 'Música' : `Playlist`),
+          thumbnailUrl: imageUrl || '',
+          url: parsed.canonicalUrl,
+          embedUrl: parsed.embedUrl,
+          addedAt: new Date().toISOString(),
+        }
+      }
+    }
+  } catch {
+    // segue para próximo método
+  }
+
+  // 2. Fallback via oEmbed + iTunes
   try {
     const oembed = await fetchSpotifyOEmbed(parsed.canonicalUrl)
     let title = oembed.title || `Faixa #${parsed.id.slice(0, 6)}`
