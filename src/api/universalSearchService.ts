@@ -1,13 +1,13 @@
 // ============================================================
 // UNIVERSAL SEARCH SERVICE — Busca Unificada Multi-Plataforma
-// Pesquisa concorrente no Spotify, YouTube e TikTok em tempo real
+// Pesquisa em larga escala no Spotify, YouTube e TikTok (40+ resultados)
 // ============================================================
 
 import { searchSpotify } from './spotifyService'
 import { getValidAccessToken } from './spotifyAuth'
 import { parseSpotifyUrl, createSpotifyItemFromUrl } from './spotifyUrlService'
 import { searchYouTubeKeyless } from './youtubeSearchService'
-import type { SpotifyTrack, SpotifySavedItem, YouTubeVideo, TikTokVideo } from '@/types'
+import type { SpotifyTrack, SpotifySavedItem } from '@/types'
 
 export interface SearchTrackItem {
   id: string
@@ -35,14 +35,14 @@ export interface UniversalSearchResults {
   isSpotifyAuthenticated: boolean
 }
 
-// ─── 1. Busca no Catálogo do Spotify / Apple Music ────────────
+// ─── 1. Busca no Catálogo do Spotify / Apple Music (40+ Músicas) ────────
 
 async function searchSpotifyCatalog(query: string): Promise<SearchTrackItem[]> {
   const token = await getValidAccessToken()
 
   if (token) {
     try {
-      const res = await searchSpotify(query, ['track'], 15)
+      const res = await searchSpotify(query, ['track'], 40)
       if (res.tracks?.items?.length) {
         return res.tracks.items.map((t) => ({
           id: t.id,
@@ -62,11 +62,11 @@ async function searchSpotifyCatalog(query: string): Promise<SearchTrackItem[]> {
     }
   }
 
-  // Fallback aberto de alta fidelidade (Capa 600x600 HD)
+  // Fallback aberto de alta fidelidade (Capa 600x600 HD — até 40 músicas)
   try {
     const encoded = encodeURIComponent(query)
-    const url = `https://itunes.apple.com/search?term=${encoded}&media=music&entity=song&limit=15&country=BR`
-    const response = await fetch(url, { signal: AbortSignal.timeout(4000) })
+    const url = `https://itunes.apple.com/search?term=${encoded}&media=music&entity=song&limit=40&country=BR`
+    const response = await fetch(url, { signal: AbortSignal.timeout(4500) })
     if (response.ok) {
       const data = await response.json()
       if (Array.isArray(data.results)) {
@@ -88,11 +88,11 @@ async function searchSpotifyCatalog(query: string): Promise<SearchTrackItem[]> {
   return []
 }
 
-// ─── 2. Busca no YouTube (Vídeos e Áudios Oficiais) ───────────
+// ─── 2. Busca no YouTube (25+ Vídeos e Áudios Oficiais) ────────
 
 async function searchYouTubeCatalog(query: string): Promise<SearchTrackItem[]> {
   try {
-    const matches = await searchYouTubeKeyless(query, 12)
+    const matches = await searchYouTubeKeyless(query, 25)
     return matches.map((m) => ({
       id: `yt-${m.videoId}`,
       source: 'youtube' as const,
@@ -108,48 +108,63 @@ async function searchYouTubeCatalog(query: string): Promise<SearchTrackItem[]> {
   }
 }
 
-// ─── 3. Busca no TikTok (Sons Virais e Tendências) ─────────────
+// ─── 3. Busca no TikTok (25+ Sons Virais, Remixes e Tendências) ───
 
 async function searchTikTokCatalog(query: string): Promise<SearchTrackItem[]> {
   const results: SearchTrackItem[] = []
+  const seenIds = new Set<string>()
 
-  // 1. Busca vídeos, remixes e áudios virais do TikTok com play imediato
+  // 1. Busca vídeos, remixes e áudios virais do TikTok no YouTube (play imediato)
   try {
-    const ytMatches = await searchYouTubeKeyless(`${query} tiktok`, 12)
-    ytMatches.forEach((m) => {
-      results.push({
-        id: `tt-yt-${m.videoId}`,
-        source: 'tiktok' as const,
-        title: m.title.replace(/\s*\(?(?:tiktok|tik tok|tiktok song|tiktok viral|tiktok remix)\)?/gi, '').trim() || m.title,
-        subtitle: m.channelTitle ? `TikTok • ${m.channelTitle}` : 'TikTok Viral',
-        artworkUrl: m.thumbnailUrl || `https://i.ytimg.com/vi/${m.videoId}/hqdefault.jpg`,
-        videoId: m.videoId,
-        durationMs: (m.durationSeconds || 60) * 1000,
-        previewUrl: null,
-      })
-    })
+    const [yt1, yt2] = await Promise.allSettled([
+      searchYouTubeKeyless(`${query} tiktok`, 18),
+      searchYouTubeKeyless(`${query} remix tiktok`, 12),
+    ])
+
+    const matches1 = yt1.status === 'fulfilled' ? yt1.value : []
+    const matches2 = yt2.status === 'fulfilled' ? yt2.value : []
+
+    for (const m of [...matches1, ...matches2]) {
+      if (!seenIds.has(m.videoId)) {
+        seenIds.add(m.videoId)
+        results.push({
+          id: `tt-yt-${m.videoId}`,
+          source: 'tiktok' as const,
+          title: m.title.replace(/\s*\(?(?:tiktok|tik tok|tiktok song|tiktok viral|tiktok remix)\)?/gi, '').trim() || m.title,
+          subtitle: m.channelTitle ? `TikTok • ${m.channelTitle}` : 'TikTok Viral',
+          artworkUrl: m.thumbnailUrl || `https://i.ytimg.com/vi/${m.videoId}/hqdefault.jpg`,
+          videoId: m.videoId,
+          durationMs: (m.durationSeconds || 60) * 1000,
+          previewUrl: null,
+        })
+      }
+    }
   } catch {}
 
-  // 2. Se houver poucos resultados, busca catálogo viral do Apple Music / TikTok
-  if (results.length < 5) {
+  // 2. Complementa com catálogo viral do Apple Music / TikTok (capas em alta definição)
+  if (results.length < 20) {
     try {
       const encoded = encodeURIComponent(`${query} tiktok`)
-      const url = `https://itunes.apple.com/search?term=${encoded}&media=music&entity=song&limit=10&country=BR`
+      const url = `https://itunes.apple.com/search?term=${encoded}&media=music&entity=song&limit=25&country=BR`
       const response = await fetch(url, { signal: AbortSignal.timeout(3500) })
       if (response.ok) {
         const data = await response.json()
         if (Array.isArray(data.results)) {
           data.results.forEach((item: any) => {
-            results.push({
-              id: `tt-${item.trackId}`,
-              source: 'tiktok' as const,
-              title: item.trackName || 'Som do TikTok',
-              subtitle: item.artistName ? `TikTok Viral • ${item.artistName}` : 'TikTok Sound',
-              albumName: 'TikTok Trending',
-              artworkUrl: (item.artworkUrl100 || '').replace('100x100bb', '600x600bb'),
-              durationMs: Math.min(item.trackTimeMillis || 60000, 90000),
-              previewUrl: item.previewUrl || null,
-            })
+            const trackKey = `${item.trackName}-${item.artistName}`.toLowerCase()
+            if (!seenIds.has(trackKey)) {
+              seenIds.add(trackKey)
+              results.push({
+                id: `tt-${item.trackId}`,
+                source: 'tiktok' as const,
+                title: item.trackName || 'Som do TikTok',
+                subtitle: item.artistName ? `TikTok Viral • ${item.artistName}` : 'TikTok Sound',
+                albumName: 'TikTok Trending',
+                artworkUrl: (item.artworkUrl100 || '').replace('100x100bb', '600x600bb'),
+                durationMs: Math.min(item.trackTimeMillis || 60000, 90000),
+                previewUrl: item.previewUrl || null,
+              })
+            }
           })
         }
       }
@@ -186,7 +201,7 @@ export async function executeUniversalSearch(
     } catch {}
   }
 
-  // 2. Dispara busca simultânea nas 3 plataformas em paralelo
+  // 2. Dispara busca simultânea em larga escala nas 3 plataformas em paralelo
   const [spotifyRes, youtubeRes, tiktokRes] = await Promise.allSettled([
     searchSpotifyCatalog(trimmed),
     searchYouTubeCatalog(trimmed),
