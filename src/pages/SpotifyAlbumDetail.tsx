@@ -9,16 +9,16 @@ import { getImageUrl } from '@/lib/utils'
 import type { SpotifyTrack } from '@/types'
 
 interface SpotifyAlbumDetailProps {
-  isAuthenticated: boolean
-  onPlayTrack: (track: SpotifyTrack, index: number, contextUri?: string) => void
+  isAuthenticated?: boolean
+  onPlayTrack?: (track: SpotifyTrack, index: number, contextUri?: string) => void
 }
 
 export function SpotifyAlbumDetail({
-  isAuthenticated,
+  isAuthenticated = false,
   onPlayTrack,
 }: SpotifyAlbumDetailProps) {
   const { id } = useParams<{ id: string }>()
-  const { spotifyTrack, isPlaying } = usePlayerStore()
+  const { spotifyTrack, isPlaying, playUniversal } = usePlayerStore()
 
   const { data: album, isLoading } = useQuery({
     queryKey: ['spotify', 'album', id],
@@ -104,7 +104,24 @@ export function SpotifyAlbumDetail({
           tracks={tracks}
           currentTrackId={spotifyTrack?.id}
           isPlaying={isPlaying}
-          onPlayTrack={(track, index) => onPlayTrack(track, index, album.uri)}
+          onPlayTrack={(track, index) => {
+            if (onPlayTrack) {
+              onPlayTrack(track, index, album.uri)
+            } else {
+              playUniversal(
+                tracks.map((t) => ({
+                  id: t.id,
+                  source: 'spotify',
+                  title: t.name,
+                  subtitle: t.artists.map((a) => a.name).join(', '),
+                  imageUrl: t.album.images?.[0]?.url || coverUrl,
+                  uri: t.uri,
+                  durationMs: t.duration_ms,
+                })),
+                index
+              )
+            }
+          }}
           showAlbum={false}
         />
       </div>

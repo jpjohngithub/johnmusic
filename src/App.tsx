@@ -1,71 +1,48 @@
+import { lazy, Suspense } from 'react'
 import { Routes, Route } from 'react-router-dom'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { MainContent } from '@/components/layout/MainContent'
 import { PlayerBar } from '@/components/layout/PlayerBar'
 import { Home } from '@/pages/Home'
-import { SpotifyLibrary } from '@/pages/SpotifyLibrary'
-import { SpotifyPlaylistDetail } from '@/pages/SpotifyPlaylistDetail'
-import { SpotifyLiked } from '@/pages/SpotifyLiked'
-import { SpotifyAlbumDetail } from '@/pages/SpotifyAlbumDetail'
-import { CustomPlaylistDetail } from '@/pages/CustomPlaylistDetail'
-import { YouTubeLibrary } from '@/pages/YouTubeLibrary'
-import { TikTokLibrary } from '@/pages/TikTokLibrary'
-import { Search } from '@/pages/Search'
 import { YouTubePlayer } from '@/components/youtube/YouTubePlayer'
-import { usePlayerStore } from '@/store/playerStore'
-import type { SpotifyTrack } from '@/types'
+import { Loader2 } from 'lucide-react'
+
+// Lazy loaded routes for ultra-fast initial page load
+const SpotifyLibrary = lazy(() => import('@/pages/SpotifyLibrary').then((m) => ({ default: m.SpotifyLibrary })))
+const SpotifyPlaylistDetail = lazy(() => import('@/pages/SpotifyPlaylistDetail').then((m) => ({ default: m.SpotifyPlaylistDetail })))
+const SpotifyLiked = lazy(() => import('@/pages/SpotifyLiked').then((m) => ({ default: m.SpotifyLiked })))
+const SpotifyAlbumDetail = lazy(() => import('@/pages/SpotifyAlbumDetail').then((m) => ({ default: m.SpotifyAlbumDetail })))
+const CustomPlaylistDetail = lazy(() => import('@/pages/CustomPlaylistDetail').then((m) => ({ default: m.CustomPlaylistDetail })))
+const YouTubeLibrary = lazy(() => import('@/pages/YouTubeLibrary').then((m) => ({ default: m.YouTubeLibrary })))
+const TikTokLibrary = lazy(() => import('@/pages/TikTokLibrary').then((m) => ({ default: m.TikTokLibrary })))
+const Search = lazy(() => import('@/pages/Search').then((m) => ({ default: m.Search })))
+
+function PageFallback() {
+  return (
+    <div className="flex items-center justify-center min-h-[50vh] text-spotify-green">
+      <Loader2 size={32} className="animate-spin" />
+    </div>
+  )
+}
 
 export function App() {
-  const { setSource, setSpotifyTrack, setIsPlaying } = usePlayerStore()
-
-  const handlePlaySpotifyTrack = async (track: SpotifyTrack) => {
-    setSource('spotify')
-    setSpotifyTrack({
-      id: track.id,
-      uri: track.uri,
-      name: track.name,
-      duration_ms: track.duration_ms,
-      artists: track.artists,
-      album: {
-        name: track.album?.name || '',
-        uri: track.album?.uri || '',
-        images: track.album?.images || [],
-      },
-    })
-    setIsPlaying(true)
-  }
-
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-black select-none">
       <Sidebar />
       <MainContent>
-        <Routes>
-          <Route path="/" element={<Home />} />
-          <Route path="/spotify" element={<SpotifyLibrary />} />
-          <Route path="/spotify/playlist/:id" element={<SpotifyPlaylistDetail />} />
-          <Route
-            path="/spotify/liked"
-            element={
-              <SpotifyLiked
-                isAuthenticated={false}
-                onPlayTrack={handlePlaySpotifyTrack}
-              />
-            }
-          />
-          <Route
-            path="/spotify/album/:id"
-            element={
-              <SpotifyAlbumDetail
-                isAuthenticated={false}
-                onPlayTrack={handlePlaySpotifyTrack}
-              />
-            }
-          />
-          <Route path="/playlist/:id" element={<CustomPlaylistDetail />} />
-          <Route path="/youtube" element={<YouTubeLibrary />} />
-          <Route path="/tiktok" element={<TikTokLibrary />} />
-          <Route path="/search" element={<Search isAuthenticated={false} onPlayTrack={handlePlaySpotifyTrack} />} />
-        </Routes>
+        <Suspense fallback={<PageFallback />}>
+          <Routes>
+            <Route path="/" element={<Home />} />
+            <Route path="/spotify" element={<SpotifyLibrary />} />
+            <Route path="/spotify/playlist/:id" element={<SpotifyPlaylistDetail />} />
+            <Route path="/spotify/liked" element={<SpotifyLiked />} />
+            <Route path="/spotify/album/:id" element={<SpotifyAlbumDetail />} />
+            <Route path="/playlist/:id" element={<CustomPlaylistDetail />} />
+            <Route path="/youtube" element={<YouTubeLibrary />} />
+            <Route path="/tiktok" element={<TikTokLibrary />} />
+            <Route path="/search" element={<Search />} />
+          </Routes>
+        </Suspense>
       </MainContent>
 
       {/* Global Persistent YouTube Engine */}

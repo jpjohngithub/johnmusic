@@ -7,12 +7,12 @@ import { usePlayerStore } from '@/store/playerStore'
 import type { SpotifyTrack } from '@/types'
 
 interface SpotifyLikedProps {
-  isAuthenticated: boolean
-  onPlayTrack: (track: SpotifyTrack, index: number) => void
+  isAuthenticated?: boolean
+  onPlayTrack?: (track: SpotifyTrack, index: number) => void
 }
 
-export function SpotifyLiked({ isAuthenticated, onPlayTrack }: SpotifyLikedProps) {
-  const { spotifyTrack, isPlaying } = usePlayerStore()
+export function SpotifyLiked({ isAuthenticated = false, onPlayTrack }: SpotifyLikedProps) {
+  const { spotifyTrack, isPlaying, playUniversal } = usePlayerStore()
 
   const { data: likedItems = [], isLoading } = useQuery({
     queryKey: ['spotify', 'liked-songs'],
@@ -24,9 +24,28 @@ export function SpotifyLiked({ isAuthenticated, onPlayTrack }: SpotifyLikedProps
     .map((item) => item.track)
     .filter((track): track is SpotifyTrack => track !== null)
 
+  const handlePlayTrackInternal = (track: SpotifyTrack, index: number) => {
+    if (onPlayTrack) {
+      onPlayTrack(track, index)
+    } else {
+      playUniversal(
+        tracks.map((t) => ({
+          id: t.id,
+          source: 'spotify',
+          title: t.name,
+          subtitle: t.artists.map((a) => a.name).join(', '),
+          imageUrl: t.album.images?.[0]?.url || '',
+          uri: t.uri,
+          durationMs: t.duration_ms,
+        })),
+        index
+      )
+    }
+  }
+
   const handlePlayAll = () => {
     if (tracks.length > 0) {
-      onPlayTrack(tracks[0], 0)
+      handlePlayTrackInternal(tracks[0], 0)
     }
   }
 
@@ -84,7 +103,7 @@ export function SpotifyLiked({ isAuthenticated, onPlayTrack }: SpotifyLikedProps
             tracks={tracks}
             currentTrackId={spotifyTrack?.id}
             isPlaying={isPlaying}
-            onPlayTrack={onPlayTrack}
+            onPlayTrack={handlePlayTrackInternal}
             showArtwork
           />
         )}
