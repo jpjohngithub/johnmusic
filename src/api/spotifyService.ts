@@ -64,11 +64,12 @@ export async function getAllUserPlaylists(): Promise<SpotifyPlaylist[]> {
   const all: SpotifyPlaylist[] = []
   let offset = 0
   const limit = 50
+  let hasMore = true
 
-  while (true) {
+  while (hasMore) {
     const result = await getUserPlaylists(limit, offset)
     all.push(...result.items)
-    if (!result.next) break
+    hasMore = Boolean(result.next)
     offset += limit
   }
 
@@ -99,11 +100,12 @@ export async function getAllPlaylistTracks(
   const all: SpotifyPlaylistTrack[] = []
   let offset = 0
   const limit = 50
+  let hasMore = true
 
-  while (true) {
+  while (hasMore) {
     const result = await getPlaylistTracks(playlistId, limit, offset)
     all.push(...result.items.filter((i) => i.track !== null))
-    if (!result.next) break
+    hasMore = Boolean(result.next)
     offset += limit
   }
 
@@ -124,11 +126,12 @@ export async function getAllLikedSongs(): Promise<SpotifyPlaylistTrack[]> {
   const all: SpotifyPlaylistTrack[] = []
   let offset = 0
   const limit = 50
+  let hasMore = true
 
-  while (true) {
+  while (hasMore) {
     const result = await getLikedSongs(limit, offset)
     all.push(...result.items.filter((i) => i.track !== null))
-    if (!result.next) break
+    hasMore = Boolean(result.next)
     offset += limit
   }
 

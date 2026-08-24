@@ -1,6 +1,6 @@
 import { useParams, Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { Music2, Play, Heart, Clock, ArrowLeft, Share2 } from 'lucide-react'
+import { Music2, Play, ArrowLeft } from 'lucide-react'
 import { getPlaylist, getAllPlaylistTracks } from '@/api/spotifyService'
 import { TrackList } from '@/components/spotify/TrackList'
 import { SpotifyEmbedPlayer } from '@/components/spotify/SpotifyEmbedPlayer'
@@ -16,7 +16,6 @@ interface SpotifyPlaylistDetailProps {
 
 export function SpotifyPlaylistDetail({
   isAuthenticated,
-  isPremium,
   onPlayTrack,
 }: SpotifyPlaylistDetailProps) {
   const { id } = useParams<{ id: string }>()

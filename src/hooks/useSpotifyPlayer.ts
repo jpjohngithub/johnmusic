@@ -194,6 +194,8 @@ export function useSpotifyPlayer(isPremium: boolean): UseSpotifyPlayerReturn {
     return () => {
       playerRef.current?.disconnect()
     }
+    // Ações do store são estáveis (zustand) — intencional omitir das deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isPremium])
 
   const play = useCallback(

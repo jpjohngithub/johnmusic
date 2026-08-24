@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { Link } from 'react-router-dom'
+import { useState, useEffect } from 'react'
+import { Link, useSearchParams } from 'react-router-dom'
 import {
   Search as SearchIcon,
   Music2,
@@ -12,46 +12,57 @@ import {
   ListMusic,
   Disc3,
   Layers,
+  ListPlus,
+  Radio,
 } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import { executeUniversalSearch, type UniversalTrackResult } from '@/api/universalSearchService'
-import { SpotifyIFramePlayer } from '@/components/spotify/SpotifyIFramePlayer'
 import { usePlayerStore } from '@/store/playerStore'
 import { useLibraryStore } from '@/store/libraryStore'
+import { AddToPlaylistModal } from '@/components/playlist/AddToPlaylistModal'
 import { formatMs, cn } from '@/lib/utils'
-import type { SpotifyTrack, AudioTrack } from '@/types'
+import type { PlaylistItem, QueueItem, SpotifySavedItem } from '@/types'
 
 const TikTokIcon = () => (
   <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
-    <path d="M19.59 6.69a4.83 4.83 0 01-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 01-2.88 2.5 2.89 2.89 0 01-2.89-2.89 2.89 2.89 0 012.89-2.89c.28 0 .54.04.79.1V9.01a6.33 6.33 0 00-.79-.05 6.34 6.34 0 00-6.34 6.34 6.34 6.34 0 006.34 6.34 6.34 6.34 0 006.33-6.34V8.69a8.17 8.17 0 004.79 1.53V6.78a4.85 4.85 0 01-1.02-.09z" />
+    <path d="M19.59 6.69a4.83 4.83 0 01-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 01-2.88 2.5 2.89 2.89 0 01-2.89-2.89 2.89 2.89 0 012.89-2.89c.28 0 .54.04.79.1V9.01a6.33 6.33 0 00-.79-.05 6.34 6.34 0 00-6.34 6.34 6.34 6.34 0 006.33-6.34V8.69a8.17 8.17 0 004.79 1.53V6.78a4.85 4.85 0 01-1.02-.09z" />
   </svg>
 )
 
 type SearchFilterType = 'all' | 'tracks' | 'playlists' | 'youtube' | 'tiktok'
 
 interface SearchProps {
-  isAuthenticated: boolean
-  onPlayTrack: (track: SpotifyTrack, index: number, contextUri?: string) => void
+  isAuthenticated?: boolean
+  onPlayTrack?: (track: any, index: number, contextUri?: string) => void
 }
 
-export function Search({ isAuthenticated, onPlayTrack }: SearchProps) {
-  const [query, setQuery] = useState('')
-  const [debouncedQuery, setDebouncedQuery] = useState('')
+export function Search({ isAuthenticated = false }: SearchProps) {
+  const [searchParams] = useSearchParams()
+  const initialQuery = searchParams.get('q') || ''
+
+  const [query, setQuery] = useState(initialQuery)
+  const [debouncedQuery, setDebouncedQuery] = useState(initialQuery)
   const [filterType, setFilterType] = useState<SearchFilterType>('all')
+  const [modalItem, setModalItem] = useState<PlaylistItem | null>(null)
 
   const {
-    audioTrack,
-    spotifyTrack,
-    spotifySavedItem,
+    currentQueueItem,
     isPlaying,
-    playAudioTrack,
-    playSpotifySavedItem,
-    playYouTubeVideo,
-    playTikTokVideo,
+    isResolving,
+    playUniversal,
   } = usePlayerStore()
 
-  const { spotifyItems, youtubeVideos, tiktokVideos, customPlaylists, addSpotifyItem } =
+  const { youtubeVideos, tiktokVideos, customPlaylists, addSpotifyItem } =
     useLibraryStore()
+
+  // Preenche query da URL se existir
+  useEffect(() => {
+    const q = searchParams.get('q')
+    if (q) {
+      setQuery(q)
+      setDebouncedQuery(q)
+    }
+  }, [searchParams])
 
   // Debounce query
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -97,36 +108,65 @@ export function Search({ isAuthenticated, onPlayTrack }: SearchProps) {
       )
     : []
 
-  // Handle Track Click -> Play direct audio stream!
-  const handleTrackClick = (track: UniversalTrackResult, index: number) => {
-    if (track.rawTrack && isAuthenticated) {
-      onPlayTrack(track.rawTrack, index)
-    } else if (track.previewUrl) {
-      const directAudio: AudioTrack = {
+  // Handle Track Click -> Toca pelo motor universal unificado
+  const handleTrackClick = async (track: UniversalTrackResult, index: number) => {
+    const queueItems: QueueItem[] = (searchData?.tracks || []).map((t) => ({
+      id: t.id,
+      source: 'spotify',
+      title: t.name,
+      subtitle: t.artistName,
+      imageUrl: t.artworkUrl,
+      audioUrl: t.previewUrl || undefined,
+      uri: t.spotifyUri,
+      durationMs: t.durationMs,
+    }))
+
+    if (queueItems.length > 0) {
+      await playUniversal(queueItems, index)
+    } else {
+      const singleItem: QueueItem = {
         id: track.id,
-        title: track.name,
-        artist: track.artistName,
-        album: track.albumName,
-        artworkUrl: track.artworkUrl,
-        audioUrl: track.previewUrl,
-        durationMs: track.durationMs,
-        externalUrl: track.spotifyUrl,
-      }
-      playAudioTrack(directAudio)
-    } else if (track.spotifyUri) {
-      const spotifyId = track.spotifyUri.split(':')?.[2] || track.id
-      playSpotifySavedItem({
-        id: track.id,
-        type: 'track',
-        spotifyId,
+        source: 'spotify',
         title: track.name,
         subtitle: track.artistName,
-        thumbnailUrl: track.artworkUrl,
-        url: track.spotifyUrl || `https://open.spotify.com/track/${spotifyId}`,
-        embedUrl: `https://open.spotify.com/embed/track/${spotifyId}?utm_source=generator&theme=0`,
-        addedAt: new Date().toISOString(),
-      })
+        imageUrl: track.artworkUrl,
+        audioUrl: track.previewUrl || undefined,
+        uri: track.spotifyUri,
+        durationMs: track.durationMs,
+      }
+      await playUniversal([singleItem], 0)
     }
+  }
+
+  const handlePlaySavedPlaylist = async (pl: typeof customPlaylists[0]) => {
+    const queueItems: QueueItem[] = pl.items.map((i) => ({
+      id: i.id,
+      source: i.source,
+      title: i.title,
+      subtitle: i.subtitle,
+      imageUrl: i.imageUrl,
+      audioUrl: i.url,
+      uri: i.uri,
+      videoId: i.videoId,
+      tiktokPostId: i.tiktokPostId,
+      tiktokUrl: i.url,
+      durationMs: i.durationMs,
+    }))
+    if (queueItems.length > 0) {
+      await playUniversal(queueItems, 0)
+    }
+  }
+
+  const handlePlaySpotifyCatalogPlaylist = async (playlist: SpotifySavedItem) => {
+    const queueItem: QueueItem = {
+      id: playlist.id,
+      source: 'spotify',
+      title: playlist.title,
+      subtitle: playlist.subtitle,
+      imageUrl: playlist.thumbnailUrl,
+      uri: `spotify:${playlist.type}:${playlist.spotifyId}`,
+    }
+    await playUniversal([queueItem], 0)
   }
 
   const showTracks = filterType === 'all' || filterType === 'tracks'
@@ -135,7 +175,14 @@ export function Search({ isAuthenticated, onPlayTrack }: SearchProps) {
   const showTikTok = filterType === 'all' || filterType === 'tiktok'
 
   return (
-    <div className="space-y-8 max-w-7xl mx-auto select-none">
+    <div className="space-y-8 max-w-7xl mx-auto select-none pb-16">
+      {/* Modal Adicionar à Playlist */}
+      <AddToPlaylistModal
+        isOpen={modalItem !== null}
+        onClose={() => setModalItem(null)}
+        item={modalItem}
+      />
+
       {/* Search Header */}
       <div className="max-w-2xl mx-auto space-y-4">
         <h1 className="text-3xl font-extrabold text-white text-center tracking-tight">
@@ -194,21 +241,24 @@ export function Search({ isAuthenticated, onPlayTrack }: SearchProps) {
                   <Music2 size={18} />
                   <span>Link do Spotify Detectado: {searchData.directSpotifyItem.title}</span>
                 </div>
-                <button
-                  onClick={() => addSpotifyItem(searchData.directSpotifyItem!)}
-                  className="flex items-center gap-1.5 px-4 py-1.5 bg-spotify-green text-black font-bold text-xs rounded-full hover:bg-green-400 transition-all shadow-md"
-                >
-                  <Plus size={14} />
-                  <span>Salvar na Biblioteca</span>
-                </button>
-              </div>
-
-              <div className="max-w-3xl mx-auto">
-                <SpotifyIFramePlayer
-                  key={searchData.directSpotifyItem.spotifyId}
-                  spotifyUri={`spotify:${searchData.directSpotifyItem.type}:${searchData.directSpotifyItem.spotifyId}`}
-                  height={searchData.directSpotifyItem.type === 'track' ? 152 : 352}
-                />
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() =>
+                      handlePlaySpotifyCatalogPlaylist(searchData.directSpotifyItem!)
+                    }
+                    className="flex items-center gap-1.5 px-4 py-1.5 bg-spotify-green text-black font-bold text-xs rounded-full hover:bg-green-400 transition-all shadow-md"
+                  >
+                    <Play size={14} className="fill-black" />
+                    <span>Tocar Agora</span>
+                  </button>
+                  <button
+                    onClick={() => addSpotifyItem(searchData.directSpotifyItem!)}
+                    className="flex items-center gap-1.5 px-4 py-1.5 bg-white/10 text-white font-bold text-xs rounded-full hover:bg-white/20 transition-all shadow-md"
+                  >
+                    <Plus size={14} />
+                    <span>Salvar</span>
+                  </button>
+                </div>
               </div>
             </section>
           )}
@@ -226,9 +276,9 @@ export function Search({ isAuthenticated, onPlayTrack }: SearchProps) {
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
                   {/* Custom / Imported Playlists */}
                   {matchedCustomPlaylists.map((pl) => (
-                    <Link
+                    <div
                       key={pl.id}
-                      to={`/playlist/${pl.id}`}
+                      onClick={() => handlePlaySavedPlaylist(pl)}
                       className="group p-3 rounded-2xl bg-white/[0.03] hover:bg-white/[0.08] transition-all cursor-pointer border border-spotify-green/20 space-y-2 flex flex-col justify-between"
                     >
                       <div className="relative aspect-square rounded-xl overflow-hidden bg-black shadow-md flex items-center justify-center">
@@ -248,14 +298,14 @@ export function Search({ isAuthenticated, onPlayTrack }: SearchProps) {
                         <p className="text-white text-xs font-bold truncate leading-snug">{pl.name}</p>
                         <p className="text-white/40 text-[10px] truncate">{pl.items.length} faixas</p>
                       </div>
-                    </Link>
+                    </div>
                   ))}
 
                   {/* Spotify Catalog Playlists */}
                   {searchData?.playlists?.map((playlist) => (
                     <div
                       key={playlist.id}
-                      onClick={() => playSpotifySavedItem(playlist)}
+                      onClick={() => handlePlaySpotifyCatalogPlaylist(playlist)}
                       className="group p-3 rounded-2xl bg-white/[0.03] hover:bg-white/[0.08] transition-all cursor-pointer border border-white/5 space-y-2 flex flex-col justify-between"
                     >
                       <div className="relative aspect-square rounded-xl overflow-hidden bg-black shadow-md">
@@ -286,86 +336,109 @@ export function Search({ isAuthenticated, onPlayTrack }: SearchProps) {
               </section>
             )}
 
-          {/* Tracks List Result */}
+          {/* Tracks Section (Músicas) */}
           {showTracks && searchData?.tracks && searchData.tracks.length > 0 && (
             <section className="space-y-4">
-              <h2 className="text-xl font-bold text-white tracking-tight flex items-center gap-2">
-                <Music2 size={20} className="text-spotify-green" />
-                <span>Músicas ({searchData.tracks.length})</span>
-              </h2>
+              <div className="flex items-center justify-between">
+                <h2 className="text-xl font-bold text-white tracking-tight flex items-center gap-2">
+                  <Music2 size={22} className="text-spotify-green" />
+                  <span>Músicas Encontradas</span>
+                </h2>
+                <span className="text-white/40 text-xs">{searchData.tracks.length} resultados</span>
+              </div>
 
+              {/* Table / List */}
               <div className="w-full select-none">
-                <div className="grid items-center px-4 pb-2 border-b border-white/10 text-white/40 text-xs font-semibold uppercase tracking-wider grid-cols-[40px_1fr_auto]">
+                <div className="grid items-center px-4 pb-2 text-white/40 text-[11px] uppercase tracking-wider border-b border-white/5"
+                     style={{ gridTemplateColumns: '40px 1fr auto' }}>
                   <span className="text-center">#</span>
                   <span>Título / Artista</span>
-                  <div className="flex items-center gap-1 justify-end pr-2">
+                  <div className="flex items-center gap-2 pr-2">
                     <Clock size={14} />
                   </div>
                 </div>
 
                 <div className="mt-2 space-y-1">
                   {searchData.tracks.map((track, index) => {
-                    const isCurrentPlaying =
-                      (audioTrack?.title.toLowerCase() === track.name.toLowerCase() && isPlaying) ||
-                      (spotifyTrack?.name.toLowerCase() === track.name.toLowerCase() && isPlaying)
+                    const isCurrent =
+                      currentQueueItem?.title?.toLowerCase() === track.name.toLowerCase() &&
+                      (isPlaying || isResolving)
 
                     return (
                       <div
-                        key={track.id}
+                        key={`${track.id}-${index}`}
                         onClick={() => handleTrackClick(track, index)}
                         className={cn(
-                          'group grid items-center px-4 py-2.5 rounded-xl cursor-pointer transition-all duration-150',
-                          'hover:bg-white/10',
-                          isCurrentPlaying ? 'bg-white/10 text-spotify-green' : 'text-white'
+                          'group grid items-center px-4 py-3 rounded-2xl cursor-pointer transition-all duration-150 border',
+                          isCurrent
+                            ? 'bg-spotify-green/10 border-spotify-green/30 text-spotify-green'
+                            : 'bg-white/[0.02] hover:bg-white/[0.07] border-white/5 text-white/80 hover:text-white'
                         )}
                         style={{ gridTemplateColumns: '40px 1fr auto' }}
                       >
+                        {/* Number / Play / Equalizer */}
                         <div className="flex items-center justify-center">
-                          {isCurrentPlaying ? (
-                            <div className="flex gap-0.5 items-end h-3.5">
-                              <span className="w-0.5 bg-spotify-green animate-pulse" style={{ height: '60%' }} />
-                              <span className="w-0.5 bg-spotify-green animate-pulse" style={{ height: '100%' }} />
-                              <span className="w-0.5 bg-spotify-green animate-pulse" style={{ height: '40%' }} />
-                            </div>
+                          {isCurrent ? (
+                            isResolving ? (
+                              <Loader2 size={14} className="animate-spin text-spotify-green" />
+                            ) : (
+                              <div className="flex gap-0.5 items-end h-4">
+                                <span className="w-0.5 bg-spotify-green animate-pulse" style={{ height: '70%' }} />
+                                <span className="w-0.5 bg-spotify-green animate-pulse" style={{ height: '100%' }} />
+                                <span className="w-0.5 bg-spotify-green animate-pulse" style={{ height: '40%' }} />
+                              </div>
+                            )
                           ) : (
                             <>
-                              <span className="text-xs font-medium text-white/40 group-hover:hidden">
+                              <span className="text-xs font-semibold group-hover:hidden text-white/40">
                                 {index + 1}
                               </span>
-                              <Play
-                                size={14}
-                                className="hidden group-hover:block text-white fill-white transition-transform transform active:scale-90"
-                              />
+                              <Play size={14} className="hidden group-hover:block text-white fill-white" />
                             </>
                           )}
                         </div>
 
+                        {/* Track Info */}
                         <div className="flex items-center gap-3 min-w-0 pr-4">
-                          {track.artworkUrl && (
-                            <img
-                              src={track.artworkUrl}
-                              alt={track.name}
-                              className="w-10 h-10 rounded-lg object-cover flex-shrink-0 shadow-sm"
-                            />
-                          )}
-                          <div className="min-w-0">
-                            <p
-                              className={cn(
-                                'text-sm font-semibold truncate',
-                                isCurrentPlaying ? 'text-spotify-green' : 'text-white'
-                              )}
-                            >
+                          <img
+                            src={track.artworkUrl}
+                            alt={track.name}
+                            className="w-10 h-10 rounded-xl object-cover flex-shrink-0 shadow-md"
+                          />
+                          <div className="min-w-0 space-y-0.5">
+                            <p className={cn('text-sm font-semibold truncate', isCurrent ? 'text-spotify-green' : 'text-white')}>
                               {track.name}
                             </p>
-                            <p className="text-white/50 text-xs truncate">
-                              {track.artistName}
-                              {track.albumName && ` • ${track.albumName}`}
+                            <p className="text-white/40 text-xs truncate">
+                              {track.artistName} {track.albumName && `• ${track.albumName}`}
                             </p>
                           </div>
                         </div>
 
-                        <div className="flex items-center justify-end pr-2">
-                          <span className="text-white/40 text-xs font-mono">
+                        {/* Actions & Duration */}
+                        <div className="flex items-center gap-2 justify-end">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setModalItem({
+                                id: track.id,
+                                source: 'spotify',
+                                title: track.name,
+                                subtitle: track.artistName,
+                                imageUrl: track.artworkUrl,
+                                uri: track.spotifyUri,
+                                durationMs: track.durationMs,
+                                url: track.spotifyUrl,
+                                addedAt: new Date().toISOString(),
+                              })
+                            }}
+                            className="p-2 rounded-xl text-white/40 hover:text-spotify-green hover:bg-white/10 transition-colors"
+                            title="Adicionar à Playlist"
+                          >
+                            <ListPlus size={16} />
+                          </button>
+
+                          <span className="text-white/40 text-xs font-mono w-12 text-right">
                             {formatMs(track.durationMs)}
                           </span>
                         </div>
@@ -377,29 +450,42 @@ export function Search({ isAuthenticated, onPlayTrack }: SearchProps) {
             </section>
           )}
 
-          {/* YouTube Matches */}
+          {/* YouTube Results in Search */}
           {showYouTube && matchedYouTube.length > 0 && (
-            <section className="space-y-4 p-6 rounded-3xl bg-white/[0.02] border border-white/5 shadow-xl">
-              <h2 className="text-lg font-bold text-white tracking-tight flex items-center gap-2 text-youtube-red">
-                <Youtube size={18} />
-                <span>Vídeos do YouTube ({matchedYouTube.length})</span>
+            <section className="space-y-4">
+              <h2 className="text-xl font-bold text-white tracking-tight flex items-center gap-2">
+                <Youtube size={22} className="text-youtube-red" />
+                <span>Vídeos do YouTube Salvos</span>
               </h2>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                 {matchedYouTube.map((video) => (
                   <div
                     key={video.id}
-                    onClick={() => playYouTubeVideo(video)}
-                    className="flex items-center gap-3 p-2.5 rounded-xl bg-white/5 hover:bg-white/10 cursor-pointer transition-all border border-white/5"
+                    onClick={async () => {
+                      const qItem: QueueItem = {
+                        id: video.id,
+                        source: 'youtube',
+                        title: video.title,
+                        subtitle: video.channelTitle,
+                        imageUrl: video.thumbnailUrl,
+                        videoId: video.videoId,
+                      }
+                      await playUniversal([qItem], 0)
+                    }}
+                    className="group p-3 rounded-2xl bg-white/[0.03] hover:bg-white/[0.08] transition-all cursor-pointer border border-white/5 space-y-2 flex flex-col justify-between"
                   >
-                    <img
-                      src={video.thumbnailUrl}
-                      alt={video.title}
-                      className="w-14 h-10 object-cover rounded-lg flex-shrink-0"
-                    />
-                    <div className="min-w-0">
-                      <p className="text-white text-xs font-semibold truncate">{video.title}</p>
-                      <p className="text-white/40 text-[10px] truncate">{video.channelTitle}</p>
+                    <div className="relative aspect-video rounded-xl overflow-hidden bg-black shadow-md">
+                      <img src={video.thumbnailUrl} alt={video.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                        <div className="w-10 h-10 rounded-full bg-youtube-red flex items-center justify-center shadow-lg">
+                          <Play size={18} className="text-white fill-white ml-0.5" />
+                        </div>
+                      </div>
+                    </div>
+                    <div>
+                      <p className="text-white text-xs font-semibold truncate leading-snug">{video.title}</p>
+                      <p className="text-white/40 text-[11px] truncate">{video.channelTitle}</p>
                     </div>
                   </div>
                 ))}
@@ -407,26 +493,46 @@ export function Search({ isAuthenticated, onPlayTrack }: SearchProps) {
             </section>
           )}
 
-          {/* TikTok Matches */}
+          {/* TikTok Results in Search */}
           {showTikTok && matchedTikTok.length > 0 && (
-            <section className="space-y-4 p-6 rounded-3xl bg-white/[0.02] border border-white/5 shadow-xl">
-              <h2 className="text-lg font-bold text-white tracking-tight flex items-center gap-2 text-tiktok-pink">
-                <TikTokIcon />
-                <span>Vídeos do TikTok ({matchedTikTok.length})</span>
+            <section className="space-y-4">
+              <h2 className="text-xl font-bold text-white tracking-tight flex items-center gap-2">
+                <span className="text-tiktok-pink"><TikTokIcon /></span>
+                <span>Sons do TikTok Salvos</span>
               </h2>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
                 {matchedTikTok.map((video) => (
                   <div
                     key={video.id}
-                    onClick={() => playTikTokVideo(video)}
-                    className="flex items-center gap-3 p-2.5 rounded-xl bg-white/5 hover:bg-white/10 cursor-pointer transition-all border border-white/5"
+                    onClick={async () => {
+                      const qItem: QueueItem = {
+                        id: video.id,
+                        source: 'tiktok',
+                        title: video.title || 'TikTok Music',
+                        subtitle: `@${video.authorName}`,
+                        imageUrl: video.thumbnailUrl,
+                        tiktokPostId: video.postId,
+                        tiktokUrl: video.url,
+                      }
+                      await playUniversal([qItem], 0)
+                    }}
+                    className="group p-3 rounded-2xl bg-white/[0.03] hover:bg-white/[0.08] transition-all cursor-pointer border border-white/5 space-y-2 flex flex-col justify-between"
                   >
-                    <div className="w-10 h-10 rounded-lg bg-tiktok-pink/20 text-tiktok-pink flex items-center justify-center flex-shrink-0">
-                      <TikTokIcon />
+                    <div className="relative w-full aspect-[9/16] rounded-xl overflow-hidden bg-black/60 flex items-center justify-center border border-white/10 shadow-md">
+                      {video.thumbnailUrl ? (
+                        <img src={video.thumbnailUrl} alt={video.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                      ) : (
+                        <div className="text-tiktok-pink/40"><TikTokIcon /></div>
+                      )}
+                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                        <div className="w-10 h-10 rounded-full bg-tiktok-pink flex items-center justify-center shadow-lg">
+                          <Play size={18} className="text-white fill-white ml-0.5" />
+                        </div>
+                      </div>
                     </div>
-                    <div className="min-w-0">
-                      <p className="text-white text-xs font-semibold truncate">{video.title || 'TikTok'}</p>
+                    <div>
+                      <p className="text-white text-xs font-semibold truncate leading-snug">{video.title || 'TikTok'}</p>
                       <p className="text-white/40 text-[10px] truncate">@{video.authorName}</p>
                     </div>
                   </div>
@@ -434,36 +540,6 @@ export function Search({ isAuthenticated, onPlayTrack }: SearchProps) {
               </div>
             </section>
           )}
-        </div>
-      )}
-
-      {/* Empty State / Suggestions */}
-      {!debouncedQuery && (
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 pt-8">
-          {[
-            { label: 'Pop & Hits', color: 'from-pink-600 to-purple-800' },
-            { label: 'Hip-Hop & Trap', color: 'from-orange-600 to-amber-800' },
-            { label: 'Rock & Metal', color: 'from-red-700 to-zinc-900' },
-            { label: 'Eletrônica & Dance', color: 'from-cyan-600 to-blue-900' },
-            { label: 'Sertanejo & Piseiro', color: 'from-emerald-600 to-teal-900' },
-            { label: 'Funk & Brega Funk', color: 'from-yellow-600 to-red-800' },
-            { label: 'Acústico & Lo-Fi', color: 'from-indigo-600 to-slate-900' },
-            { label: 'Viral no TikTok', color: 'from-rose-600 to-pink-900' },
-          ].map((cat) => (
-            <div
-              key={cat.label}
-              onClick={() => {
-                setQuery(cat.label)
-                setDebouncedQuery(cat.label)
-              }}
-              className={`h-32 rounded-2xl bg-gradient-to-br ${cat.color} p-4 flex flex-col justify-between cursor-pointer hover:scale-105 active:scale-95 transition-all shadow-xl`}
-            >
-              <span className="text-white font-extrabold text-base tracking-tight leading-tight">
-                {cat.label}
-              </span>
-              <Sparkles size={18} className="text-white/40 self-end" />
-            </div>
-          ))}
         </div>
       )}
     </div>

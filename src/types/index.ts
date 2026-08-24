@@ -215,6 +215,17 @@ export interface YouTubePlaylist {
   createdAt: string
 }
 
+// Resultado da busca keyless no YouTube (Piped/Invidious/DataAPI)
+export interface YouTubeSearchResult {
+  id: string
+  videoId: string
+  title: string
+  channelTitle: string
+  durationSeconds: number
+  thumbnailUrl: string
+  url: string
+}
+
 // ─── TikTok Types ─────────────────────────────────────────────
 
 export interface TikTokVideo {
@@ -276,6 +287,7 @@ export interface QueueItem {
   videoId?: string      // YouTube video ID
   tiktokPostId?: string // TikTok post ID
   tiktokUrl?: string    // TikTok URL
+  durationMs?: number   // Duração conhecida (Spotify/iTunes)
 }
 
 // ─── Auth Types ───────────────────────────────────────────────

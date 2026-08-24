@@ -1,20 +1,36 @@
 import { useState } from 'react'
-import { Trash2, Play, Plus, Search, ExternalLink } from 'lucide-react'
+import { Trash2, Play, Plus, Search, ListPlus } from 'lucide-react'
 import { TikTokInput } from '@/components/tiktok/TikTokInput'
-import { TikTokEmbed } from '@/components/tiktok/TikTokEmbed'
 import { useLibraryStore } from '@/store/libraryStore'
 import { usePlayerStore } from '@/store/playerStore'
+import { AddToPlaylistModal } from '@/components/playlist/AddToPlaylistModal'
+import { cn } from '@/lib/utils'
+import type { PlaylistItem, QueueItem, TikTokVideo } from '@/types'
 
 const TikTokIcon = () => (
   <svg viewBox="0 0 24 24" width="28" height="28" fill="currentColor">
-    <path d="M19.59 6.69a4.83 4.83 0 01-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 01-2.88 2.5 2.89 2.89 0 01-2.89-2.89 2.89 2.89 0 012.89-2.89c.28 0 .54.04.79.1V9.01a6.33 6.33 0 00-.79-.05 6.34 6.34 0 00-6.34 6.34 6.34 6.34 0 006.34 6.34 6.34 6.34 0 006.33-6.34V8.69a8.17 8.17 0 004.79 1.53V6.78a4.85 4.85 0 01-1.02-.09z" />
+    <path d="M19.59 6.69a4.83 4.83 0 01-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 01-2.88 2.5 2.89 2.89 0 01-2.89-2.89 2.89 2.89 0 012.89-2.89c.28 0 .54.04.79.1V9.01a6.33 6.33 0 00-.79-.05 6.34 6.34 0 00-6.34 6.34 6.34 6.34 0 006.33-6.34V8.69a8.17 8.17 0 004.79 1.53V6.78a4.85 4.85 0 01-1.02-.09z" />
   </svg>
 )
 
 export function TikTokLibrary() {
   const [filter, setFilter] = useState('')
+  const [modalItem, setModalItem] = useState<PlaylistItem | null>(null)
   const { tiktokVideos, removeTikTokVideo } = useLibraryStore()
-  const { source, tiktokVideo, playTikTokVideo } = usePlayerStore()
+  const { currentQueueItem, isPlaying, isResolving, playUniversal } = usePlayerStore()
+
+  const handlePlayTikTok = async (video: TikTokVideo) => {
+    const queueItem: QueueItem = {
+      id: video.id,
+      source: 'tiktok',
+      title: video.title || 'TikTok Music',
+      subtitle: `@${video.authorName}`,
+      imageUrl: video.thumbnailUrl,
+      tiktokPostId: video.postId,
+      tiktokUrl: video.url,
+    }
+    await playUniversal([queueItem], 0)
+  }
 
   const filteredVideos = tiktokVideos.filter((v) =>
     v.title.toLowerCase().includes(filter.toLowerCase()) ||
@@ -22,7 +38,14 @@ export function TikTokLibrary() {
   )
 
   return (
-    <div className="space-y-8 max-w-7xl mx-auto select-none">
+    <div className="space-y-8 max-w-7xl mx-auto select-none pb-16">
+      {/* Modal Adicionar à Playlist */}
+      <AddToPlaylistModal
+        isOpen={modalItem !== null}
+        onClose={() => setModalItem(null)}
+        item={modalItem}
+      />
+
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/5 pb-6">
         <div>
@@ -31,7 +54,7 @@ export function TikTokLibrary() {
             <span>Biblioteca TikTok</span>
           </h1>
           <p className="text-white/40 text-sm mt-1">
-            {tiktokVideos.length} vídeo(s) e música(s) adicionados por link
+            {tiktokVideos.length} som(ns) e vídeo(s) adicionados por link • reprodução unificada
           </p>
         </div>
       </div>
@@ -44,28 +67,6 @@ export function TikTokLibrary() {
         </h2>
         <TikTokInput />
       </div>
-
-      {/* Active TikTok Player */}
-      {source === 'tiktok' && tiktokVideo && (
-        <section className="p-6 rounded-3xl bg-black/80 border border-white/10 space-y-4 shadow-2xl">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 text-tiktok-pink font-bold text-sm">
-              <TikTokIcon />
-              <span>Tocando Agora: {tiktokVideo.title || 'TikTok'}</span>
-            </div>
-            <a
-              href={tiktokVideo.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-white/40 hover:text-white text-xs flex items-center gap-1 transition-colors"
-            >
-              <span>Abrir no TikTok</span>
-              <ExternalLink size={12} />
-            </a>
-          </div>
-          <TikTokEmbed video={tiktokVideo} />
-        </section>
-      )}
 
       {/* Search and Filters */}
       {tiktokVideos.length > 0 && (
@@ -88,18 +89,21 @@ export function TikTokLibrary() {
       {filteredVideos.length > 0 ? (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
           {filteredVideos.map((video) => {
-            const isCurrentPlaying = source === 'tiktok' && tiktokVideo?.id === video.id
+            const isCurrentPlaying =
+              currentQueueItem?.tiktokPostId === video.postId &&
+              (isPlaying || isResolving)
 
             return (
               <div
                 key={video.id}
-                className={`group p-3 rounded-2xl bg-white/[0.03] hover:bg-white/[0.08] transition-all border flex flex-col justify-between ${
+                className={cn(
+                  'group p-3 rounded-2xl bg-white/[0.03] hover:bg-white/[0.08] transition-all border flex flex-col justify-between space-y-2',
                   isCurrentPlaying ? 'border-tiktok-pink/50 bg-tiktok-pink/5' : 'border-white/5'
-                }`}
+                )}
               >
                 {/* Vertical Thumbnail */}
                 <div
-                  onClick={() => playTikTokVideo(video)}
+                  onClick={() => handlePlayTikTok(video)}
                   className="relative aspect-[9/16] rounded-xl overflow-hidden bg-black/60 cursor-pointer shadow-md flex items-center justify-center"
                 >
                   {video.thumbnailUrl ? (
@@ -122,21 +126,36 @@ export function TikTokLibrary() {
                 </div>
 
                 {/* Info */}
-                <div className="mt-3 space-y-0.5">
+                <div>
                   <p
-                    onClick={() => playTikTokVideo(video)}
+                    onClick={() => handlePlayTikTok(video)}
                     className="text-white text-xs font-semibold truncate hover:underline cursor-pointer"
                   >
                     {video.title || 'TikTok'}
                   </p>
-                  <p className="text-white/40 text-[10px] truncate">@{video.authorName}</p>
+                  <p className="text-white/40 text-[10px] truncate mt-0.5">@{video.authorName}</p>
                 </div>
 
                 {/* Action buttons */}
-                <div className="flex items-center justify-between pt-2 border-t border-white/5 mt-2">
-                  <span className="text-[9px] text-white/30">
-                    {new Date(video.addedAt).toLocaleDateString()}
-                  </span>
+                <div className="flex items-center justify-between pt-1 border-t border-white/5">
+                  <button
+                    onClick={() =>
+                      setModalItem({
+                        id: video.id,
+                        source: 'tiktok',
+                        title: video.title || 'TikTok Music',
+                        subtitle: `@${video.authorName}`,
+                        imageUrl: video.thumbnailUrl,
+                        tiktokPostId: video.postId,
+                        url: video.url,
+                        addedAt: video.addedAt,
+                      })
+                    }
+                    className="p-1 text-white/40 hover:text-tiktok-pink transition-colors"
+                    title="Adicionar à Playlist"
+                  >
+                    <ListPlus size={13} />
+                  </button>
                   <button
                     onClick={() => removeTikTokVideo(video.id)}
                     className="p-1 rounded-lg text-white/30 hover:text-red-400 hover:bg-red-500/10 transition-colors"

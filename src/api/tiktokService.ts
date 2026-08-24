@@ -36,19 +36,24 @@ export interface TikTokOEmbed {
 }
 
 export async function getTikTokOEmbed(url: string): Promise<TikTokOEmbed> {
-  // TikTok oEmbed requer CORS — usando um proxy para evitar bloqueio
-  // Em produção, use um backend ou proxy reverso
   const oembedUrl = `https://www.tiktok.com/oembed?url=${encodeURIComponent(url)}`
 
-  const response = await fetch(oembedUrl, {
-    headers: { Accept: 'application/json' },
-  })
-
-  if (!response.ok) {
-    throw new Error('Não foi possível obter informações do TikTok')
+  // 1. Tentativa direta (alguns navegadores/ambientes liberam)
+  try {
+    const response = await fetch(oembedUrl, {
+      headers: { Accept: 'application/json' },
+    })
+    if (response.ok) return response.json()
+  } catch {
+    // CORS bloqueou — segue para o proxy
   }
 
-  return response.json()
+  // 2. Fallback via proxy público
+  const proxied = await fetch(`https://corsproxy.io/?${encodeURIComponent(oembedUrl)}`)
+  if (!proxied.ok) {
+    throw new Error('Não foi possível obter informações do TikTok')
+  }
+  return proxied.json()
 }
 
 // ─── Resolve shortened URLs ───────────────────────────────────

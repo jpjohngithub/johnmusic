@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Settings, Key, X, Check, ExternalLink, ShieldCheck, Sparkles } from 'lucide-react'
+import { Key, X, Check, ExternalLink, ShieldCheck, Sparkles } from 'lucide-react'
 
 interface SettingsModalProps {
   isOpen: boolean

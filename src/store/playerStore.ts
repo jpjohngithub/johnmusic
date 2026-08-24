@@ -1,5 +1,6 @@
 // ============================================================
-// PLAYER STORE — Estado global do player (Zustand)
+// PLAYER STORE — Estado global do player unificado (Zustand)
+// Suporte contínuo para Spotify, YouTube, TikTok e Áudio Direto
 // ============================================================
 
 import { create } from 'zustand'
@@ -15,7 +16,12 @@ import type {
   TikTokVideo,
 } from '@/types'
 
-interface PlayerActions {
+export interface ExtendedPlayerState extends PlayerState {
+  currentQueueItem: QueueItem | null
+  isResolving: boolean
+}
+
+export interface PlayerActions {
   // Source
   setSource: (source: PlayerSource) => void
 
@@ -54,20 +60,25 @@ interface PlayerActions {
   setTikTokVideo: (video: TikTokVideo | null) => void
   playTikTokVideo: (video: TikTokVideo) => void
 
-  // Queue
+  // Queue & Universal Playback
   setQueue: (items: QueueItem[], startIndex?: number) => void
   addToQueue: (item: QueueItem) => void
   removeFromQueue: (id: string) => void
   clearQueue: () => void
+  playQueueIndex: (index: number) => Promise<void>
+  playNext: () => Promise<void>
+  playPrev: () => Promise<void>
   nextInQueue: () => QueueItem | null
   prevInQueue: () => QueueItem | null
-  playQueueItem: (index: number) => void
+
+  // Universal playback across all platforms
+  playUniversal: (items: QueueItem[], startIndex?: number) => Promise<void>
 
   // Reset
   reset: () => void
 }
 
-const initialState: PlayerState = {
+const initialState: ExtendedPlayerState = {
   source: null,
   isPlaying: false,
   volume: 80,
@@ -85,9 +96,11 @@ const initialState: PlayerState = {
   tiktokVideo: null,
   queue: [],
   queueIndex: 0,
+  currentQueueItem: null,
+  isResolving: false,
 }
 
-export const usePlayerStore = create<PlayerState & PlayerActions>()(
+export const usePlayerStore = create<ExtendedPlayerState & PlayerActions>()(
   devtools(
     (set, get) => ({
       ...initialState,
@@ -120,6 +133,15 @@ export const usePlayerStore = create<PlayerState & PlayerActions>()(
         set({
           source: 'audio',
           audioTrack: track,
+          currentQueueItem: {
+            id: track.id,
+            source: 'audio',
+            title: track.title,
+            subtitle: track.artist,
+            imageUrl: track.artworkUrl,
+            audioUrl: track.audioUrl,
+            durationMs: track.durationMs,
+          },
           spotifyTrack: null,
           spotifySavedItem: null,
           youtubeVideo: null,
@@ -133,23 +155,32 @@ export const usePlayerStore = create<PlayerState & PlayerActions>()(
       setSpotifyTrack: (spotifyTrack) => set({ spotifyTrack }),
       setSpotifyDeviceId: (spotifyDeviceId) => set({ spotifyDeviceId }),
       setSpotifySavedItem: (spotifySavedItem) => set({ spotifySavedItem }),
-      playSpotifySavedItem: (item) =>
-        set({
+      playSpotifySavedItem: (item) => {
+        const queueItem: QueueItem = {
+          id: item.id,
           source: 'spotify',
-          spotifySavedItem: item,
-          audioTrack: null,
-          youtubeVideo: null,
-          tiktokVideo: null,
-          isPlaying: true,
-          progress: 0,
-          currentTime: 0,
-        }),
+          title: item.title,
+          subtitle: item.subtitle,
+          imageUrl: item.thumbnailUrl,
+          uri: `spotify:${item.type}:${item.spotifyId}`,
+          durationMs: 0,
+        }
+        get().playUniversal([queueItem], 0)
+      },
 
       setYouTubeVideo: (youtubeVideo) => set({ youtubeVideo }),
       playYouTubeVideo: (video) =>
         set({
           source: 'youtube',
           youtubeVideo: video,
+          currentQueueItem: {
+            id: video.id,
+            source: 'youtube',
+            title: video.title,
+            subtitle: video.channelTitle,
+            imageUrl: video.thumbnailUrl,
+            videoId: video.videoId,
+          },
           audioTrack: null,
           spotifyTrack: null,
           spotifySavedItem: null,
@@ -160,32 +191,159 @@ export const usePlayerStore = create<PlayerState & PlayerActions>()(
         }),
 
       setTikTokVideo: (tiktokVideo) => set({ tiktokVideo }),
-      playTikTokVideo: (video) =>
-        set({
+      playTikTokVideo: (video) => {
+        const queueItem: QueueItem = {
+          id: video.id,
           source: 'tiktok',
-          tiktokVideo: video,
-          audioTrack: null,
-          spotifyTrack: null,
-          spotifySavedItem: null,
-          youtubeVideo: null,
-          isPlaying: true,
-          progress: 0,
-          currentTime: 0,
-        }),
+          title: video.title || 'TikTok Music',
+          subtitle: `@${video.authorName}`,
+          imageUrl: video.thumbnailUrl,
+          tiktokPostId: video.postId,
+          tiktokUrl: video.url,
+        }
+        get().playUniversal([queueItem], 0)
+      },
 
       setQueue: (queue, startIndex = 0) => set({ queue, queueIndex: startIndex }),
       addToQueue: (item) => set((s) => ({ queue: [...s.queue, item] })),
       removeFromQueue: (id) =>
         set((s) => ({ queue: s.queue.filter((i) => i.id !== id) })),
-      clearQueue: () => set({ queue: [], queueIndex: 0 }),
+      clearQueue: () => set({ queue: [], queueIndex: 0, currentQueueItem: null }),
+
+      // ─── Play Queue Index ───────────────────────────────────
+      playQueueIndex: async (index: number) => {
+        const { queue } = get()
+        if (index < 0 || index >= queue.length) return
+
+        const targetItem = queue[index]
+        if (!targetItem) return
+
+        set({ queueIndex: index, isResolving: true })
+
+        // Se já possui áudio direto
+        if (targetItem.source === 'audio' && targetItem.audioUrl) {
+          set({
+            source: 'audio',
+            currentQueueItem: targetItem,
+            audioTrack: {
+              id: targetItem.id,
+              title: targetItem.title,
+              artist: targetItem.subtitle,
+              artworkUrl: targetItem.imageUrl,
+              audioUrl: targetItem.audioUrl,
+              durationMs: targetItem.durationMs,
+            },
+            youtubeVideo: null,
+            spotifySavedItem: null,
+            tiktokVideo: null,
+            isPlaying: true,
+            isResolving: false,
+          })
+          return
+        }
+
+        // Se já possui videoId do YouTube
+        if (targetItem.videoId) {
+          set({
+            source: 'youtube',
+            currentQueueItem: targetItem,
+            youtubeVideo: {
+              id: targetItem.id,
+              videoId: targetItem.videoId,
+              title: targetItem.title,
+              channelTitle: targetItem.subtitle,
+              thumbnailUrl: targetItem.imageUrl,
+              url: `https://www.youtube.com/watch?v=${targetItem.videoId}`,
+              addedAt: new Date().toISOString(),
+            },
+            audioTrack: null,
+            spotifySavedItem: null,
+            tiktokVideo: null,
+            isPlaying: true,
+            isResolving: false,
+          })
+          return
+        }
+
+        // Resolver via motor de conversão cruzada
+        try {
+          const { resolvePlayable } = await import('@/api/crossPlatformService')
+          const resolved = await resolvePlayable(targetItem)
+
+          if (resolved?.videoId) {
+            const updatedQueue = [...queue]
+            updatedQueue[index] = {
+              ...targetItem,
+              videoId: resolved.videoId,
+            }
+
+            set({
+              queue: updatedQueue,
+              source: 'youtube',
+              currentQueueItem: targetItem,
+              youtubeVideo: {
+                id: targetItem.id,
+                videoId: resolved.videoId,
+                title: targetItem.title,
+                channelTitle: targetItem.subtitle,
+                thumbnailUrl: targetItem.imageUrl || resolved.thumbnailUrl,
+                url: `https://www.youtube.com/watch?v=${resolved.videoId}`,
+                addedAt: new Date().toISOString(),
+              },
+              audioTrack: null,
+              isPlaying: true,
+              isResolving: false,
+            })
+          } else {
+            // Fallback
+            set({ isPlaying: false, isResolving: false })
+          }
+        } catch {
+          set({ isPlaying: false, isResolving: false })
+        }
+      },
+
+      // ─── Next / Prev com Reprodução Automática Unificada ─────
+      playNext: async () => {
+        const { queue, queueIndex, isShuffled, repeatMode, playQueueIndex } = get()
+        if (queue.length === 0) return
+
+        if (repeatMode === 'one') {
+          await playQueueIndex(queueIndex)
+          return
+        }
+
+        let nextIndex: number
+        if (isShuffled) {
+          nextIndex = Math.floor(Math.random() * queue.length)
+        } else {
+          nextIndex = queueIndex + 1
+          if (nextIndex >= queue.length) {
+            if (repeatMode === 'all') {
+              nextIndex = 0
+            } else {
+              set({ isPlaying: false })
+              return
+            }
+          }
+        }
+
+        await playQueueIndex(nextIndex)
+      },
+
+      playPrev: async () => {
+        const { queue, queueIndex, playQueueIndex } = get()
+        if (queue.length === 0) return
+
+        const prevIndex = queueIndex > 0 ? queueIndex - 1 : queue.length - 1
+        await playQueueIndex(prevIndex)
+      },
 
       nextInQueue: () => {
         const { queue, queueIndex, isShuffled, repeatMode } = get()
         if (queue.length === 0) return null
 
-        if (repeatMode === 'one') {
-          return queue[queueIndex]
-        }
+        if (repeatMode === 'one') return queue[queueIndex]
 
         let nextIndex: number
         if (isShuffled) {
@@ -205,16 +363,16 @@ export const usePlayerStore = create<PlayerState & PlayerActions>()(
       prevInQueue: () => {
         const { queue, queueIndex } = get()
         if (queue.length === 0) return null
-
         const prevIndex = Math.max(0, queueIndex - 1)
         set({ queueIndex: prevIndex })
         return queue[prevIndex]
       },
 
-      playQueueItem: (index) => {
-        const { queue } = get()
-        if (index < 0 || index >= queue.length) return
-        set({ queueIndex: index })
+      // ─── Universal Playback ─────────────────────────────────
+      playUniversal: async (items: QueueItem[], startIndex = 0) => {
+        const queue = [...items]
+        set({ queue, queueIndex: startIndex })
+        await get().playQueueIndex(startIndex)
       },
 
       reset: () => set(initialState),

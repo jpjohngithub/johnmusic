@@ -9,17 +9,15 @@ import {
   Trash2,
   ArrowLeft,
   Youtube,
-  ExternalLink,
   Plus,
-  Clock,
   Sparkles,
-  Volume2,
   Radio,
+  Loader2,
 } from 'lucide-react'
 import { useLibraryStore } from '@/store/libraryStore'
 import { usePlayerStore } from '@/store/playerStore'
-import { formatMs, formatSeconds, cn } from '@/lib/utils'
-import type { PlaylistItem, SpotifySavedItem, YouTubeVideo, TikTokVideo, AudioTrack } from '@/types'
+import { formatMs, cn } from '@/lib/utils'
+import type { PlaylistItem, QueueItem } from '@/types'
 
 const TikTokIcon = () => (
   <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
@@ -32,23 +30,15 @@ export function CustomPlaylistDetail() {
   const navigate = useNavigate()
   const { customPlaylists, deleteCustomPlaylist, removeItemFromCustomPlaylist } = useLibraryStore()
   const {
-    source,
-    audioTrack,
-    spotifySavedItem,
-    youtubeVideo,
-    tiktokVideo,
+    currentQueueItem,
     isPlaying,
-    currentTime,
-    duration,
+    isResolving,
+    queueIndex,
     togglePlay,
-    playAudioTrack,
-    playSpotifySavedItem,
-    playYouTubeVideo,
-    playTikTokVideo,
-    setQueue,
+    playUniversal,
+    playNext,
+    playPrev,
   } = usePlayerStore()
-
-  const [currentPlayingIndex, setCurrentPlayingIndex] = useState<number>(0)
 
   const playlist = customPlaylists.find((p) => p.id === id)
 
@@ -73,108 +63,39 @@ export function CustomPlaylistDetail() {
     }
   }
 
-  // Play a specific item in the playlist
-  const handlePlayItem = (item: PlaylistItem, index: number) => {
-    setCurrentPlayingIndex(index)
-
-    // Set full playlist as active queue
-    const queueItems = playlist.items.map((i) => ({
+  // Converte a playlist inteira em QueueItems unificados e toca a partir do índice
+  const handlePlayItem = async (index: number) => {
+    const queueItems: QueueItem[] = playlist.items.map((i) => ({
       id: i.id,
       source: i.source,
       title: i.title,
       subtitle: i.subtitle,
       imageUrl: i.imageUrl,
+      audioUrl: i.url,
       uri: i.uri,
       videoId: i.videoId,
       tiktokPostId: i.tiktokPostId,
       tiktokUrl: i.url,
+      durationMs: i.durationMs,
     }))
-    setQueue(queueItems, index)
 
-    if (item.source === 'spotify') {
-      const spotifyId = item.uri?.split(':')?.[2] || item.id
-      const savedItem: SpotifySavedItem = {
-        id: item.id,
-        type: item.uri?.includes('playlist') ? 'playlist' : 'track',
-        spotifyId,
-        title: item.title,
-        subtitle: item.subtitle,
-        thumbnailUrl: item.imageUrl,
-        url: item.url || `https://open.spotify.com/track/${spotifyId}`,
-        embedUrl: `https://open.spotify.com/embed/track/${spotifyId}?utm_source=generator&theme=0`,
-        addedAt: item.addedAt,
-      }
-      playSpotifySavedItem(savedItem)
-    } else if (item.source === 'audio') {
-      const audio: AudioTrack = {
-        id: item.id,
-        title: item.title,
-        artist: item.subtitle,
-        artworkUrl: item.imageUrl,
-        audioUrl: item.url || '',
-        durationMs: item.durationMs,
-      }
-      playAudioTrack(audio)
-    } else if (item.source === 'youtube') {
-      const video: YouTubeVideo = {
-        id: item.id,
-        videoId: item.videoId || item.id,
-        title: item.title,
-        channelTitle: item.subtitle,
-        thumbnailUrl: item.imageUrl,
-        url: item.url || '',
-        addedAt: item.addedAt,
-      }
-      playYouTubeVideo(video)
-    } else if (item.source === 'tiktok') {
-      const video: TikTokVideo = {
-        id: item.id,
-        postId: item.tiktokPostId || item.id,
-        title: item.title,
-        authorName: item.subtitle,
-        thumbnailUrl: item.imageUrl,
-        url: item.url || '',
-        embedHtml: '',
-        addedAt: item.addedAt,
-      }
-      playTikTokVideo(video)
-    }
+    await playUniversal(queueItems, index)
   }
 
-  // Play first track or toggle
-  const handlePlayAll = () => {
-    if (playlist.items.length > 0) {
-      handlePlayItem(playlist.items[0], 0)
-    }
-  }
-
-  // Play Next / Previous in this playlist
-  const handleNextTrack = () => {
-    if (playlist.items.length === 0) return
-    const nextIdx = (currentPlayingIndex + 1) % playlist.items.length
-    handlePlayItem(playlist.items[nextIdx], nextIdx)
-  }
-
-  const handlePrevTrack = () => {
-    if (playlist.items.length === 0) return
-    const prevIdx = (currentPlayingIndex - 1 + playlist.items.length) % playlist.items.length
-    handlePlayItem(playlist.items[prevIdx], prevIdx)
-  }
-
-  // Determine current active item from player state
+  // Verifica se uma faixa específica da playlist é a que está tocando agora
   const isCurrentPlayingInPlaylist = (item: PlaylistItem) => {
-    if (!isPlaying) return false
-    if (source === 'audio' && audioTrack?.title.toLowerCase() === item.title.toLowerCase()) return true
-    if (source === 'spotify' && spotifySavedItem?.title.toLowerCase() === item.title.toLowerCase()) return true
-    if (source === 'youtube' && youtubeVideo?.videoId === (item.videoId || item.id)) return true
-    if (source === 'tiktok' && tiktokVideo?.postId === (item.tiktokPostId || item.id)) return true
+    if (!isPlaying && !isResolving) return false
+    if (currentQueueItem?.title.toLowerCase() === item.title.toLowerCase()) return true
+    if (item.videoId && currentQueueItem?.videoId === item.videoId) return true
+    if (item.uri && currentQueueItem?.uri === item.uri) return true
     return false
   }
 
-  const activePlaylistItem = playlist.items.find(isCurrentPlayingInPlaylist) || playlist.items[currentPlayingIndex]
+  const activeIndex = playlist.items.findIndex(isCurrentPlayingInPlaylist)
+  const currentActiveItem = activeIndex >= 0 ? playlist.items[activeIndex] : playlist.items[0]
 
   return (
-    <div className="space-y-8 max-w-7xl mx-auto select-none pb-12">
+    <div className="space-y-8 max-w-7xl mx-auto select-none pb-16">
       {/* Back link */}
       <Link
         to="/"
@@ -185,7 +106,7 @@ export function CustomPlaylistDetail() {
       </Link>
 
       {/* ─── SPECIAL NOW PLAYING PLAYLIST PLAYER HERO ────────── */}
-      {playlist.items.length > 0 && activePlaylistItem && (
+      {playlist.items.length > 0 && currentActiveItem && (
         <section className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-emerald-950/80 via-black to-zinc-950 p-6 md:p-8 border border-spotify-green/40 shadow-2xl space-y-6">
           {/* Background Ambient Glow */}
           <div className="absolute top-0 right-0 w-96 h-96 bg-spotify-green/20 rounded-full blur-3xl pointer-events-none" />
@@ -197,11 +118,17 @@ export function CustomPlaylistDetail() {
                 {isPlaying && <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-spotify-green opacity-75" />}
                 <span className="relative inline-flex rounded-full h-3 w-3 bg-spotify-green" />
               </span>
-              <span>{isPlaying ? 'Tocando Agora na Playlist' : 'Playlist em Pausa'}</span>
+              <span>
+                {isResolving
+                  ? 'Carregando Faixa...'
+                  : isPlaying
+                  ? 'Tocando Agora na Playlist'
+                  : 'Playlist em Pausa'}
+              </span>
             </div>
 
             <span className="text-white/40 text-xs font-medium">
-              Faixa {currentPlayingIndex + 1} de {playlist.items.length}
+              Faixa {Math.max(1, activeIndex + 1)} de {playlist.items.length}
             </span>
           </div>
 
@@ -209,10 +136,10 @@ export function CustomPlaylistDetail() {
           <div className="flex flex-col md:flex-row items-center gap-6 relative z-10">
             {/* Artwork with glow */}
             <div className="relative w-36 h-36 md:w-44 md:h-44 rounded-2xl overflow-hidden shadow-2xl bg-black border border-white/10 flex-shrink-0 flex items-center justify-center">
-              {activePlaylistItem.imageUrl ? (
+              {currentActiveItem.imageUrl ? (
                 <img
-                  src={activePlaylistItem.imageUrl}
-                  alt={activePlaylistItem.title}
+                  src={currentActiveItem.imageUrl}
+                  alt={currentActiveItem.title}
                   className={cn(
                     'w-full h-full object-cover transition-transform duration-700',
                     isPlaying && 'scale-105'
@@ -239,21 +166,24 @@ export function CustomPlaylistDetail() {
             {/* Track Info & Interactive Player Controls */}
             <div className="flex-1 space-y-4 text-center md:text-left min-w-0">
               <div>
-                <span className="text-xs font-semibold text-spotify-green flex items-center justify-center md:justify-start gap-1">
-                  <Radio size={14} /> {activePlaylistItem.source.toUpperCase()}
+                <span className="text-xs font-bold text-spotify-green flex items-center justify-center md:justify-start gap-1.5 uppercase">
+                  {currentActiveItem.source === 'spotify' && <Music2 size={14} />}
+                  {currentActiveItem.source === 'youtube' && <Youtube size={14} className="text-youtube-red" />}
+                  {currentActiveItem.source === 'tiktok' && <TikTokIcon />}
+                  <span>{currentActiveItem.source}</span>
                 </span>
                 <h2 className="text-2xl md:text-3xl font-black text-white tracking-tight truncate mt-1">
-                  {activePlaylistItem.title}
+                  {currentActiveItem.title}
                 </h2>
                 <p className="text-white/60 text-sm font-medium truncate mt-0.5">
-                  {activePlaylistItem.subtitle}
+                  {currentActiveItem.subtitle}
                 </p>
               </div>
 
               {/* Player Controls */}
               <div className="flex items-center justify-center md:justify-start gap-4 pt-1">
                 <button
-                  onClick={handlePrevTrack}
+                  onClick={() => playPrev()}
                   className="p-3 rounded-full bg-white/5 hover:bg-white/10 text-white/80 hover:text-white transition-all active:scale-95 border border-white/5"
                   title="Faixa Anterior"
                 >
@@ -262,15 +192,21 @@ export function CustomPlaylistDetail() {
 
                 <button
                   onClick={() => {
-                    if (isCurrentPlayingInPlaylist(activePlaylistItem)) {
+                    if (activeIndex >= 0) {
                       togglePlay()
                     } else {
-                      handlePlayItem(activePlaylistItem, currentPlayingIndex)
+                      handlePlayItem(0)
                     }
                   }}
+                  disabled={isResolving}
                   className="flex items-center gap-2 px-8 py-3.5 bg-spotify-green hover:bg-green-400 active:scale-95 text-black font-black rounded-full transition-all shadow-xl shadow-spotify-green/30 text-sm"
                 >
-                  {isPlaying && isCurrentPlayingInPlaylist(activePlaylistItem) ? (
+                  {isResolving ? (
+                    <>
+                      <Loader2 size={18} className="animate-spin text-black" />
+                      <span>Carregando...</span>
+                    </>
+                  ) : isPlaying && activeIndex >= 0 ? (
                     <>
                       <Pause size={18} className="fill-black" />
                       <span>Pausar</span>
@@ -278,13 +214,13 @@ export function CustomPlaylistDetail() {
                   ) : (
                     <>
                       <Play size={18} className="fill-black ml-0.5" />
-                      <span>Tocar Agora</span>
+                      <span>Tocar Playlist</span>
                     </>
                   )}
                 </button>
 
                 <button
-                  onClick={handleNextTrack}
+                  onClick={() => playNext()}
                   className="p-3 rounded-full bg-white/5 hover:bg-white/10 text-white/80 hover:text-white transition-all active:scale-95 border border-white/5"
                   title="Próxima Faixa"
                 >
@@ -296,7 +232,7 @@ export function CustomPlaylistDetail() {
               {playlist.items.length > 1 && (
                 <p className="text-[11px] text-white/40 truncate">
                   <strong className="text-white/60 font-semibold">A seguir:</strong>{' '}
-                  {playlist.items[(currentPlayingIndex + 1) % playlist.items.length]?.title}
+                  {playlist.items[(Math.max(0, activeIndex) + 1) % playlist.items.length]?.title}
                 </p>
               )}
             </div>
@@ -319,7 +255,7 @@ export function CustomPlaylistDetail() {
         <div className="flex-1 space-y-2 text-center sm:text-left">
           <span className="text-[11px] font-bold uppercase tracking-wider text-spotify-green flex items-center justify-center sm:justify-start gap-1">
             <Sparkles size={12} />
-            <span>Playlist</span>
+            <span>Playlist Multiplataforma</span>
           </span>
 
           <h1 className="text-2xl sm:text-4xl font-extrabold text-white tracking-tight">
@@ -331,19 +267,28 @@ export function CustomPlaylistDetail() {
           )}
 
           <div className="flex items-center justify-center sm:justify-start gap-2 text-white/40 text-xs">
-            <span className="text-white font-semibold">{playlist.items.length} itens</span>
+            <span className="text-white font-semibold">{playlist.items.length} faixas</span>
             <span>•</span>
             <span>Criada em {new Date(playlist.createdAt).toLocaleDateString()}</span>
           </div>
         </div>
 
-        <button
-          onClick={handleDeletePlaylist}
-          className="p-2.5 rounded-full text-white/30 hover:text-red-400 hover:bg-red-500/10 transition-colors self-center sm:self-end"
-          title="Excluir Playlist"
-        >
-          <Trash2 size={18} />
-        </button>
+        <div className="flex items-center gap-2 self-center sm:self-end">
+          <button
+            onClick={() => handlePlayItem(0)}
+            className="flex items-center gap-2 px-5 py-2.5 rounded-full bg-spotify-green hover:bg-green-400 text-black font-bold text-xs transition-all shadow-lg shadow-spotify-green/20 active:scale-95"
+          >
+            <Play size={14} className="fill-black" />
+            <span>Tocar Tudo</span>
+          </button>
+          <button
+            onClick={handleDeletePlaylist}
+            className="p-2.5 rounded-full text-white/30 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+            title="Excluir Playlist"
+          >
+            <Trash2 size={18} />
+          </button>
+        </div>
       </div>
 
       {/* Items list with Active Glow */}
@@ -358,7 +303,7 @@ export function CustomPlaylistDetail() {
               return (
                 <div
                   key={item.id}
-                  onClick={() => handlePlayItem(item, index)}
+                  onClick={() => handlePlayItem(index)}
                   className={cn(
                     'group grid items-center px-4 py-3 rounded-2xl cursor-pointer transition-all duration-200 border',
                     isCurrent
@@ -452,11 +397,11 @@ export function CustomPlaylistDetail() {
 
                   {/* Duration & Delete */}
                   <div className="flex items-center gap-3 justify-end pr-2">
-                    {item.durationMs && (
+                    {item.durationMs ? (
                       <span className="text-white/40 text-xs font-mono">
                         {formatMs(item.durationMs)}
                       </span>
-                    )}
+                    ) : null}
                     <button
                       onClick={(e) => {
                         e.stopPropagation()

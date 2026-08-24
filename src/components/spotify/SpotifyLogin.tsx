@@ -1,4 +1,4 @@
-import { Music2, LogIn, LogOut, User } from 'lucide-react'
+import { Music2, LogOut, User } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { SpotifyUser } from '@/types'
 
