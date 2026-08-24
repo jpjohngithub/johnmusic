@@ -107,7 +107,7 @@ export function CustomPlaylistDetail() {
 
       {/* ─── SPECIAL NOW PLAYING PLAYLIST PLAYER HERO ────────── */}
       {playlist.items.length > 0 && currentActiveItem && (
-        <section className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-emerald-950/80 via-black to-zinc-950 p-6 md:p-8 border border-spotify-green/40 shadow-2xl space-y-6">
+        <section className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-purple-950/90 via-black to-zinc-950 p-6 md:p-8 border border-spotify-green/40 shadow-2xl space-y-6">
           {/* Background Ambient Glow */}
           <div className="absolute top-0 right-0 w-96 h-96 bg-spotify-green/20 rounded-full blur-3xl pointer-events-none" />
 
@@ -199,7 +199,7 @@ export function CustomPlaylistDetail() {
                     }
                   }}
                   disabled={isResolving}
-                  className="flex items-center gap-2 px-8 py-3.5 bg-spotify-green hover:bg-green-400 active:scale-95 text-black font-black rounded-full transition-all shadow-xl shadow-spotify-green/30 text-sm"
+                  className="flex items-center gap-2 px-8 py-3.5 bg-spotify-green hover:bg-purple-400 active:scale-95 text-black font-black rounded-full transition-all shadow-xl shadow-spotify-green/30 text-sm"
                 >
                   {isResolving ? (
                     <>
@@ -276,7 +276,7 @@ export function CustomPlaylistDetail() {
         <div className="flex items-center gap-2 self-center sm:self-end">
           <button
             onClick={() => handlePlayItem(0)}
-            className="flex items-center gap-2 px-5 py-2.5 rounded-full bg-spotify-green hover:bg-green-400 text-black font-bold text-xs transition-all shadow-lg shadow-spotify-green/20 active:scale-95"
+            className="flex items-center gap-2 px-5 py-2.5 rounded-full bg-spotify-green hover:bg-purple-400 text-black font-bold text-xs transition-all shadow-lg shadow-spotify-green/20 active:scale-95"
           >
             <Play size={14} className="fill-black" />
             <span>Tocar Tudo</span>
@@ -307,7 +307,7 @@ export function CustomPlaylistDetail() {
                   className={cn(
                     'group grid items-center px-4 py-3 rounded-2xl cursor-pointer transition-all duration-200 border',
                     isCurrent
-                      ? 'bg-gradient-to-r from-spotify-green/20 via-emerald-900/20 to-black border-spotify-green/50 shadow-lg text-white'
+                      ? 'bg-gradient-to-r from-spotify-green/20 via-purple-950/30 to-black border-spotify-green/50 shadow-lg text-white'
                       : 'bg-white/[0.02] hover:bg-white/[0.07] border-white/5 text-white/80 hover:text-white'
                   )}
                   style={{ gridTemplateColumns: '40px 1fr auto' }}
@@ -439,7 +439,7 @@ export function CustomPlaylistDetail() {
           <p className="text-white/60 text-sm">Esta playlist ainda não tem músicas.</p>
           <Link
             to="/search"
-            className="inline-flex items-center gap-2 px-6 py-2.5 rounded-full bg-spotify-green text-black font-bold text-xs hover:bg-green-400 transition-all shadow-lg shadow-spotify-green/20"
+            className="inline-flex items-center gap-2 px-6 py-2.5 rounded-full bg-spotify-green text-black font-bold text-xs hover:bg-purple-400 transition-all shadow-lg shadow-spotify-green/20"
           >
             <Plus size={14} />
             <span>Buscar e Adicionar Músicas</span>

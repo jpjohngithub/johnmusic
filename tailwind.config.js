@@ -8,7 +8,8 @@ export default {
     extend: {
       colors: {
         spotify: {
-          green: '#1DB954',
+          green: '#A855F7', // Cor principal agora é Roxo Elétrico Vibrante (#A855F7)
+          purple: '#A855F7',
           black: '#121212',
           dark: '#181818',
           gray: '#282828',

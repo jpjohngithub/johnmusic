@@ -48,18 +48,18 @@ export function Sidebar({ collapsed = false }: SidebarProps) {
         )}
       >
         {/* Logo */}
-        <div className="flex items-center gap-3 px-4 py-5 border-b border-white/5">
+        <div className="flex items-center gap-3.5 px-4 py-5 border-b border-white/5">
           <img
             src="/logo.png"
             alt="JohnMusic"
-            className="w-9 h-9 rounded-xl object-contain flex-shrink-0 shadow-lg shadow-black/40"
+            className="w-12 h-12 rounded-2xl object-contain flex-shrink-0 shadow-xl shadow-purple-500/10 border border-white/10"
           />
           {!collapsed && (
             <div className="flex flex-col">
-              <span className="font-extrabold text-white text-base tracking-tight leading-tight">
+              <span className="font-black text-white text-lg tracking-tight leading-tight">
                 JohnMusic
               </span>
-              <span className="text-[10px] text-white/40 font-medium tracking-widest uppercase">
+              <span className="text-[10px] text-spotify-green font-bold tracking-widest uppercase">
                 2.0 Universal
               </span>
             </div>
@@ -93,7 +93,7 @@ export function Sidebar({ collapsed = false }: SidebarProps) {
           <div className="px-3 pb-3">
             <button
               onClick={() => setIsPlaylistModalOpen(true)}
-              className="w-full flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl bg-gradient-to-r from-spotify-green/20 to-emerald-500/20 hover:from-spotify-green/30 hover:to-emerald-500/30 border border-spotify-green/30 text-spotify-green font-bold text-xs transition-all shadow-sm active:scale-95"
+              className="w-full flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl bg-gradient-to-r from-spotify-green/20 to-purple-600/20 hover:from-spotify-green/30 hover:to-purple-600/30 border border-spotify-green/30 text-spotify-green font-bold text-xs transition-all shadow-sm active:scale-95"
             >
               <Plus size={15} />
               <span>Criar / Importar Playlist</span>

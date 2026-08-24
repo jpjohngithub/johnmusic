@@ -35,9 +35,9 @@ export function MainContent({ children }: MainContentProps) {
         </div>
 
         <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/[0.04] border border-white/5 text-white/60 text-xs font-medium">
-            <img src="/logo.png" alt="Logo" className="w-4 h-4 rounded-md object-contain" />
-            <span className="text-white/80 font-semibold">JohnMusic 2.0</span>
+          <div className="flex items-center gap-2.5 px-3.5 py-1.5 rounded-full bg-white/[0.04] border border-white/10 text-white/80 text-xs font-semibold shadow-sm">
+            <img src="/logo.png" alt="Logo" className="w-6 h-6 rounded-lg object-contain shadow-md" />
+            <span className="text-white font-bold tracking-tight">JohnMusic 2.0</span>
           </div>
         </div>
       </header>

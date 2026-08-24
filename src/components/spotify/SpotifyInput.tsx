@@ -95,7 +95,7 @@ export function SpotifyInput({ onItemAdded, autoPlay = true }: SpotifyInputProps
         <button
           type="submit"
           disabled={isLoading || !url.trim()}
-          className="flex items-center gap-2 px-5 py-3.5 bg-spotify-green hover:bg-green-400 active:scale-95 text-black rounded-xl font-bold text-sm tracking-wide disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-lg shadow-spotify-green/20 flex-shrink-0"
+          className="flex items-center gap-2 px-5 py-3.5 bg-spotify-green hover:bg-purple-400 active:scale-95 text-black rounded-xl font-bold text-sm tracking-wide disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-lg shadow-spotify-green/20 flex-shrink-0"
         >
           {isLoading ? <Loader2 size={18} className="animate-spin" /> : <Plus size={18} />}
           <span>{isLoading ? 'Carregando...' : 'Adicionar'}</span>

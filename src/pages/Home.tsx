@@ -205,7 +205,7 @@ export function Home() {
       />
 
       {/* Hero Banner Unificado */}
-      <div className="relative rounded-3xl overflow-hidden bg-gradient-to-r from-emerald-950/80 via-purple-950/60 to-black p-8 md:p-12 border border-white/10 shadow-2xl">
+      <div className="relative rounded-3xl overflow-hidden bg-gradient-to-r from-purple-950/90 via-violet-950/70 to-black p-8 md:p-12 border border-purple-500/20 shadow-2xl">
         <div className="relative z-10 max-w-3xl space-y-6">
           <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/10 border border-white/10 text-white text-xs font-semibold backdrop-blur-md">
             <Sparkles size={14} className="text-yellow-400" />
@@ -237,7 +237,7 @@ export function Home() {
               <button
                 type="submit"
                 disabled={isProcessing || !universalInput.trim()}
-                className="absolute right-2 px-5 py-2.5 bg-spotify-green hover:bg-green-400 active:scale-95 text-black font-bold text-xs rounded-xl disabled:opacity-40 transition-all shadow-lg flex items-center gap-1.5"
+                className="absolute right-2 px-5 py-2.5 bg-spotify-green hover:bg-purple-400 active:scale-95 text-black font-bold text-xs rounded-xl disabled:opacity-40 transition-all shadow-lg flex items-center gap-1.5"
               >
                 {isProcessing ? <Loader2 size={14} className="animate-spin" /> : <Play size={14} className="fill-black" />}
                 <span>{isProcessing ? 'Carregando...' : 'Tocar'}</span>
