@@ -89,13 +89,39 @@ export async function createSpotifyItemFromUrl(urlOrUri: string): Promise<Spotif
 
   try {
     const oembed = await fetchSpotifyOEmbed(parsed.canonicalUrl)
+    let title = oembed.title || `Faixa #${parsed.id.slice(0, 6)}`
+    let subtitle = ''
+    let thumbnailUrl = oembed.thumbnail_url || ''
+
+    // Se for música, busca o artista real no catálogo público para enriquecer os dados
+    if (parsed.type === 'track' && oembed.title) {
+      try {
+        const res = await fetch(
+          `https://itunes.apple.com/search?term=${encodeURIComponent(oembed.title)}&entity=song&limit=1&country=BR`,
+          { signal: AbortSignal.timeout(3000) }
+        )
+        if (res.ok) {
+          const data = await res.json()
+          if (data.results && data.results.length > 0) {
+            const hit = data.results[0]
+            if (hit.artistName) subtitle = hit.artistName
+            if (hit.artworkUrl100 && !thumbnailUrl) {
+              thumbnailUrl = hit.artworkUrl100.replace('100x100bb', '600x600bb')
+            }
+          }
+        }
+      } catch {
+        // fallback
+      }
+    }
+
     return {
       id: crypto.randomUUID(),
       type: parsed.type,
       spotifyId: parsed.id,
-      title: oembed.title || `Spotify ${parsed.type.toUpperCase()}`,
-      subtitle: parsed.type === 'track' ? 'Música no Spotify' : `Playlist / ${parsed.type}`,
-      thumbnailUrl: oembed.thumbnail_url || '',
+      title,
+      subtitle: subtitle || (parsed.type === 'track' ? 'Spotify Track' : `Playlist / ${parsed.type}`),
+      thumbnailUrl,
       url: parsed.canonicalUrl,
       embedUrl: parsed.embedUrl,
       addedAt: new Date().toISOString(),

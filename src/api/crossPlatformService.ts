@@ -85,12 +85,19 @@ export async function resolvePlayable(
 
   if (item.source === 'spotify') {
     const anyItem = item as PlaylistItem
-    const query = `${item.title} ${item.subtitle}`
+    const cleanSubtitle =
+      item.subtitle &&
+      !item.subtitle.toLowerCase().includes('spotify') &&
+      !item.subtitle.toLowerCase().includes('playlist') &&
+      !item.subtitle.toLowerCase().includes('música')
+        ? item.subtitle
+        : ''
+    const query = `${item.title} ${cleanSubtitle}`.trim()
     const match = await findYouTubeMatch(query, anyItem.durationMs ? anyItem.durationMs / 1000 : undefined)
     if (match) {
       videoId = match.videoId
       title = item.title
-      channelTitle = item.subtitle
+      channelTitle = match.channelTitle || item.subtitle
     }
   } else if (item.source === 'tiktok') {
     let query = `${item.title} ${item.subtitle}`.trim()

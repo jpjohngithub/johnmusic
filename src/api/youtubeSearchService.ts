@@ -11,14 +11,19 @@ const API_KEY = (import.meta.env.VITE_YOUTUBE_API_KEY || '') as string
 
 // Instâncias públicas com CORS liberado
 const PIPED_INSTANCES = [
-  'https://pipedapi.kavin.rocks',
-  'https://pipedapi.adminforge.de',
   'https://api.piped.private.coffee',
+  'https://pa.il.ax',
+  'https://pipedapi.leptons.xyz',
+  'https://pipedapi.ducks.party',
+  'https://pipedapi.drgns.space',
 ]
 
 const INVIDIOUS_INSTANCES = [
+  'https://invidious.asir.dev',
+  'https://iv.melmac.space',
+  'https://vid.priv.au',
+  'https://invidious.io.lol',
   'https://inv.nadeko.net',
-  'https://invidious.f5.si',
 ]
 
 export interface YouTubeMatch {
@@ -29,7 +34,7 @@ export interface YouTubeMatch {
   thumbnailUrl: string
 }
 
-function fetchWithTimeout(url: string, ms = 6000): Promise<Response> {
+function fetchWithTimeout(url: string, ms = 3500): Promise<Response> {
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), ms)
   return fetch(url, { signal: controller.signal }).finally(() => clearTimeout(timer))
