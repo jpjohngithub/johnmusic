@@ -4,6 +4,7 @@
 // ============================================================
 
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { Link } from 'react-router-dom'
 import {
   Play,
   Pause,
@@ -256,7 +257,15 @@ export function PlayerBar({ onExpandPlayer }: PlayerBarProps) {
                   <Loader2 size={12} className="text-spotify-green animate-spin flex-shrink-0" />
                 )}
               </div>
-              <p className="text-white/50 text-xs truncate">{currentSubtitle || ''}</p>
+              {currentSubtitle ? (
+                <Link
+                  to={`/search?q=${encodeURIComponent(currentSubtitle)}`}
+                  className="text-white/50 hover:text-spotify-green hover:underline text-xs truncate transition-colors block"
+                  title={`Ver outras músicas de ${currentSubtitle}`}
+                >
+                  {currentSubtitle}
+                </Link>
+              ) : null}
             </div>
 
             {onExpandPlayer && (

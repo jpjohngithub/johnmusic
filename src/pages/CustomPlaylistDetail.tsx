@@ -313,7 +313,16 @@ export function CustomPlaylistDetail() {
                   {currentActiveItem.source === 'youtube' && <span className="text-youtube-red font-bold">YouTube</span>}
                   {currentActiveItem.source === 'tiktok' && <span className="text-tiktok-pink font-bold">TikTok</span>}
                   <span>•</span>
-                  <span>{currentActiveItem.subtitle}</span>
+                  <span
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      navigate(`/search?q=${encodeURIComponent(currentActiveItem.subtitle)}`)
+                    }}
+                    className="hover:text-spotify-green hover:underline cursor-pointer transition-colors"
+                    title={`Ver outras músicas de ${currentActiveItem.subtitle}`}
+                  >
+                    {currentActiveItem.subtitle}
+                  </span>
                 </p>
               </div>
 
@@ -716,7 +725,16 @@ export function CustomPlaylistDetail() {
                           </span>
                         )}
                         <span>•</span>
-                        <span className="truncate">{item.subtitle}</span>
+                        <span
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            navigate(`/search?q=${encodeURIComponent(item.subtitle)}`)
+                          }}
+                          className="truncate hover:text-spotify-green hover:underline cursor-pointer transition-colors"
+                          title={`Ver outras músicas de ${item.subtitle}`}
+                        >
+                          {item.subtitle}
+                        </span>
                       </div>
                     </div>
                   </div>

@@ -310,6 +310,11 @@ export function Search({ isAuthenticated = false }: SearchProps) {
                   <TrackListView
                     tracks={searchData.spotifyTracks}
                     onPlayTrack={(track, index) => handlePlayTrack(track, searchData.spotifyTracks, index)}
+                    onArtistClick={(artist) => {
+                      setQuery(artist)
+                      setDebouncedQuery(artist)
+                      setSearchParams({ q: artist })
+                    }}
                     onSaveTrack={(track) => setModalItem({
                       id: track.id,
                       source: track.source,
@@ -367,7 +372,18 @@ export function Search({ isAuthenticated = false }: SearchProps) {
                           <div className="flex items-center justify-between gap-2">
                             <div className="min-w-0 flex-1">
                               <p className={cn('text-xs font-semibold truncate', isCurrent ? 'text-youtube-red' : 'text-white')}>{video.title}</p>
-                              <p className="text-white/40 text-[11px] truncate">{video.subtitle}</p>
+                              <p
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  setQuery(video.subtitle)
+                                  setDebouncedQuery(video.subtitle)
+                                  setSearchParams({ q: video.subtitle })
+                                }}
+                                className="text-white/40 hover:text-spotify-green hover:underline cursor-pointer text-[11px] truncate transition-colors"
+                                title={`Ver mais de ${video.subtitle}`}
+                              >
+                                {video.subtitle}
+                              </p>
                             </div>
                             <button
                               onClick={(e) => {
@@ -435,7 +451,19 @@ export function Search({ isAuthenticated = false }: SearchProps) {
                           <div className="flex items-center justify-between gap-1">
                             <div className="min-w-0 flex-1">
                               <p className={cn('text-xs font-semibold truncate', isCurrent ? 'text-tiktok-pink' : 'text-white')}>{video.title}</p>
-                              <p className="text-white/40 text-[10px] truncate">{video.subtitle}</p>
+                              <p
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  const clean = video.subtitle.replace(/TikTok\s*•?\s*/gi, '').trim()
+                                  setQuery(clean)
+                                  setDebouncedQuery(clean)
+                                  setSearchParams({ q: clean })
+                                }}
+                                className="text-white/40 hover:text-spotify-green hover:underline cursor-pointer text-[10px] truncate transition-colors"
+                                title={`Ver mais de ${video.subtitle}`}
+                              >
+                                {video.subtitle}
+                              </p>
                             </div>
                             <button
                               onClick={(e) => {
@@ -472,6 +500,11 @@ export function Search({ isAuthenticated = false }: SearchProps) {
               <TrackListView
                 tracks={searchData.spotifyTracks}
                 onPlayTrack={(track, index) => handlePlayTrack(track, searchData.spotifyTracks, index)}
+                onArtistClick={(artist) => {
+                  setQuery(artist)
+                  setDebouncedQuery(artist)
+                  setSearchParams({ q: artist })
+                }}
                 onSaveTrack={(track) => setModalItem({
                   id: track.id,
                   source: track.source,
@@ -625,6 +658,7 @@ interface TrackListViewProps {
   tracks: SearchTrackItem[]
   onPlayTrack: (track: SearchTrackItem, index: number) => void
   onSaveTrack: (track: SearchTrackItem) => void
+  onArtistClick?: (artist: string) => void
   isCurrentPlaying: (track: SearchTrackItem) => boolean
   isResolving: boolean
 }
@@ -633,6 +667,7 @@ function TrackListView({
   tracks,
   onPlayTrack,
   onSaveTrack,
+  onArtistClick,
   isCurrentPlaying,
   isResolving,
 }: TrackListViewProps) {
@@ -699,7 +734,19 @@ function TrackListView({
                     {track.title}
                   </p>
                   <p className="text-white/40 text-xs truncate">
-                    {track.subtitle} {track.albumName && `• ${track.albumName}`}
+                    <span
+                      onClick={(e) => {
+                        if (onArtistClick) {
+                          e.stopPropagation()
+                          onArtistClick(track.subtitle)
+                        }
+                      }}
+                      className="hover:text-spotify-green hover:underline cursor-pointer transition-colors"
+                      title={`Ver outras músicas de ${track.subtitle}`}
+                    >
+                      {track.subtitle}
+                    </span>
+                    {track.albumName && ` • ${track.albumName}`}
                   </p>
                 </div>
               </div>

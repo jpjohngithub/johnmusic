@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Play, Clock, FolderPlus } from 'lucide-react'
 import { formatMs, cn } from '@/lib/utils'
 import { AddToPlaylistModal } from '@/components/playlist/AddToPlaylistModal'
@@ -23,6 +24,7 @@ export function TrackList({
   showArtwork = false,
   numbered = true,
 }: TrackListProps) {
+  const navigate = useNavigate()
   const [selectedTrack, setSelectedTrack] = useState<PlaylistItem | null>(null)
 
   return (
@@ -114,7 +116,21 @@ export function TrackList({
                     {track.name}
                   </p>
                   <p className="text-white/50 text-xs truncate">
-                    {track.artists?.map((a) => a.name).join(', ') || 'Artista desconhecido'}
+                    {track.artists?.map((a, aIdx) => (
+                      <span key={a.id || aIdx}>
+                        <span
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            navigate(`/search?q=${encodeURIComponent(a.name)}`)
+                          }}
+                          className="hover:text-spotify-green hover:underline cursor-pointer transition-colors"
+                          title={`Ver outras músicas de ${a.name}`}
+                        >
+                          {a.name}
+                        </span>
+                        {aIdx < (track.artists?.length || 0) - 1 && ', '}
+                      </span>
+                    )) || 'Artista desconhecido'}
                     {showAlbum && track.album?.name && ` • ${track.album.name}`}
                   </p>
                 </div>
