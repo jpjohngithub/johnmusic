@@ -12,5 +12,15 @@ export default defineConfig({
   server: {
     port: 5173,
     host: true,
+    proxy: {
+      '/api/spotify-embed': {
+        target: 'https://open.spotify.com',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/spotify-embed/, '/embed'),
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        },
+      },
+    },
   },
 })
