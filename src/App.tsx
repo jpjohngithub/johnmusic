@@ -1,5 +1,10 @@
-import { lazy, Suspense, useEffect } from 'react'
-import { Routes, Route, useNavigate } from 'react-router-dom'
+// ============================================================
+// APP ROOT — Layout principal com persistência total de rotas no F5
+// Suporte a carregamento preguiçoso (Lazy), SPA redirects e Player unificado
+// ============================================================
+
+import { lazy, Suspense, useEffect, useRef } from 'react'
+import { Routes, Route, useNavigate, useLocation } from 'react-router-dom'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { MainContent } from '@/components/layout/MainContent'
 import { PlayerBar } from '@/components/layout/PlayerBar'
@@ -29,21 +34,51 @@ function PageFallback() {
 
 export function App() {
   const navigate = useNavigate()
+  const location = useLocation()
   const { addCustomPlaylist } = useLibraryStore()
+  const isInitialMount = useRef(true)
 
-  // Listener para URLs compartilhadas na inicialização (ex: ?playlist=... ou ?share=...)
+  // 1. Restaura rota anterior ao recarregar a página (F5) ou trata redirecionamento de SPA
   useEffect(() => {
+    // Trata SPA redirect query do GitHub Pages (?/... )
+    if (window.location.search.startsWith('?/')) {
+      const decoded = window.location.search
+        .slice(2)
+        .split('&')
+        .map((s) => s.replace(/~and~/g, '&'))
+        .join('?')
+      window.history.replaceState({}, document.title, window.location.pathname)
+      navigate('/' + decoded, { replace: true })
+      return
+    }
+
+    // Listener para URLs compartilhadas na inicialização (ex: ?playlist=... ou ?share=...)
     const search = window.location.search
     if (search && isJohnMusicShareUrl(search)) {
       const pl = importPlaylistFromShareUrl(search)
       if (pl && pl.items.length > 0) {
         addCustomPlaylist(pl)
-        // Limpa a URL para manter limpo o histórico
         window.history.replaceState({}, document.title, window.location.pathname)
-        navigate(`/playlist/${pl.id}`)
+        navigate(`/playlist/${pl.id}`, { replace: true })
+        return
+      }
+    }
+
+    // Se estiver na raiz e houver rota salva no sessionStorage (F5 em qualquer aba/playlist/busca)
+    if (isInitialMount.current) {
+      isInitialMount.current = false
+      const savedRoute = sessionStorage.getItem('jm_active_route')
+      if (savedRoute && location.pathname === '/' && savedRoute !== '/') {
+        navigate(savedRoute, { replace: true })
       }
     }
   }, [addCustomPlaylist, navigate])
+
+  // 2. Salva a rota ativa sempre que o usuário navega
+  useEffect(() => {
+    const fullPath = location.pathname + location.search
+    sessionStorage.setItem('jm_active_route', fullPath)
+  }, [location])
 
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-black select-none">
