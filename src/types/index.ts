@@ -124,6 +124,7 @@ export interface PlaylistItem {
   subtitle: string
   imageUrl: string
   url?: string
+  audioUrl?: string
   uri?: string
   videoId?: string
   tiktokPostId?: string
@@ -213,6 +214,7 @@ export interface YouTubePlaylist {
   name: string
   videos: YouTubeVideo[]
   createdAt: string
+  updatedAt?: string
 }
 
 // Resultado da busca keyless no YouTube (Piped/Invidious/DataAPI)
@@ -249,6 +251,7 @@ export interface TikTokPlaylist {
   name: string
   videos: TikTokVideo[]
   createdAt: string
+  updatedAt?: string
 }
 
 // ─── Player Universal Types ───────────────────────────────────

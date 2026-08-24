@@ -1,5 +1,6 @@
 // ============================================================
 // LIBRARY STORE — Biblioteca de Playlists Personalizadas & Importadas
+// Suporta Reordenação, Edição Completa, Duplicação e Customização
 // ============================================================
 
 import { create } from 'zustand'
@@ -31,13 +32,19 @@ interface LibraryState {
 }
 
 interface LibraryActions {
-  // Custom Playlists (Criação & Importação)
+  // Custom Playlists (Criação, Edição & Reordenação)
   createCustomPlaylist: (name: string, description?: string, coverUrl?: string) => CustomPlaylist
   addCustomPlaylist: (playlist: CustomPlaylist) => void
   deleteCustomPlaylist: (id: string) => void
   renameCustomPlaylist: (id: string, name: string, description?: string) => void
+  updateCustomPlaylist: (id: string, updates: Partial<CustomPlaylist>) => void
+  duplicateCustomPlaylist: (id: string) => CustomPlaylist | null
   addItemToCustomPlaylist: (playlistId: string, item: PlaylistItem) => void
   removeItemFromCustomPlaylist: (playlistId: string, itemId: string) => void
+  movePlaylistItem: (playlistId: string, itemId: string, direction: 'up' | 'down') => void
+  reorderPlaylistItems: (playlistId: string, fromIndex: number, toIndex: number) => void
+  reversePlaylistOrder: (playlistId: string) => void
+  sortPlaylist: (playlistId: string, by: 'title' | 'artist' | 'date') => void
 
   // Spotify Items
   addSpotifyItem: (item: SpotifySavedItem) => void
@@ -80,7 +87,7 @@ export const useLibraryStore = create<LibraryState & LibraryActions>()(
       tiktokVideos: [],
       tiktokPlaylists: [],
 
-      // ─── Custom Playlists (Criação & Importação) ──────────
+      // ─── Custom Playlists (Criação, Edição & Reordenação) ──────────
       createCustomPlaylist: (name, description, coverUrl) => {
         const playlist: CustomPlaylist = {
           id: crypto.randomUUID(),
@@ -123,6 +130,34 @@ export const useLibraryStore = create<LibraryState & LibraryActions>()(
           ),
         })),
 
+      updateCustomPlaylist: (id, updates) =>
+        set((s) => ({
+          customPlaylists: s.customPlaylists.map((p) =>
+            p.id === id
+              ? {
+                  ...p,
+                  ...updates,
+                  updatedAt: new Date().toISOString(),
+                }
+              : p
+          ),
+        })),
+
+      duplicateCustomPlaylist: (id) => {
+        const target = get().customPlaylists.find((p) => p.id === id)
+        if (!target) return null
+        const clone: CustomPlaylist = {
+          ...target,
+          id: crypto.randomUUID(),
+          name: `${target.name} (Cópia)`,
+          items: target.items.map((i) => ({ ...i, id: crypto.randomUUID() })),
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        }
+        set((s) => ({ customPlaylists: [clone, ...s.customPlaylists] }))
+        return clone
+      },
+
       addItemToCustomPlaylist: (playlistId, item) =>
         set((s) => ({
           customPlaylists: s.customPlaylists.map((p) =>
@@ -148,6 +183,84 @@ export const useLibraryStore = create<LibraryState & LibraryActions>()(
                 }
               : p
           ),
+        })),
+
+      movePlaylistItem: (playlistId, itemId, direction) =>
+        set((s) => ({
+          customPlaylists: s.customPlaylists.map((p) => {
+            if (p.id !== playlistId) return p
+            const idx = p.items.findIndex((i) => i.id === itemId)
+            if (idx === -1) return p
+
+            const newIndex = direction === 'up' ? idx - 1 : idx + 1
+            if (newIndex < 0 || newIndex >= p.items.length) return p
+
+            const newItems = [...p.items]
+            const [moved] = newItems.splice(idx, 1)
+            newItems.splice(newIndex, 0, moved)
+
+            return {
+              ...p,
+              items: newItems,
+              updatedAt: new Date().toISOString(),
+            }
+          }),
+        })),
+
+      reorderPlaylistItems: (playlistId, fromIndex, toIndex) =>
+        set((s) => ({
+          customPlaylists: s.customPlaylists.map((p) => {
+            if (p.id !== playlistId) return p
+            if (
+              fromIndex < 0 ||
+              fromIndex >= p.items.length ||
+              toIndex < 0 ||
+              toIndex >= p.items.length
+            ) {
+              return p
+            }
+
+            const newItems = [...p.items]
+            const [moved] = newItems.splice(fromIndex, 1)
+            newItems.splice(toIndex, 0, moved)
+
+            return {
+              ...p,
+              items: newItems,
+              updatedAt: new Date().toISOString(),
+            }
+          }),
+        })),
+
+      reversePlaylistOrder: (playlistId) =>
+        set((s) => ({
+          customPlaylists: s.customPlaylists.map((p) =>
+            p.id === playlistId
+              ? {
+                  ...p,
+                  items: [...p.items].reverse(),
+                  updatedAt: new Date().toISOString(),
+                }
+              : p
+          ),
+        })),
+
+      sortPlaylist: (playlistId, by) =>
+        set((s) => ({
+          customPlaylists: s.customPlaylists.map((p) => {
+            if (p.id !== playlistId) return p
+            const sorted = [...p.items].sort((a, b) => {
+              if (by === 'title') return a.title.localeCompare(b.title)
+              if (by === 'artist') return a.subtitle.localeCompare(b.subtitle)
+              if (by === 'date') return new Date(b.addedAt).getTime() - new Date(a.addedAt).getTime()
+              return 0
+            })
+            return {
+              ...p,
+              items: sorted,
+              updatedAt: new Date().toISOString(),
+            }
+          }),
         })),
 
       // ─── Spotify Items ────────────────────────────────────
@@ -180,14 +293,15 @@ export const useLibraryStore = create<LibraryState & LibraryActions>()(
 
       // ─── YouTube Playlists ────────────────────────────────
       createYouTubePlaylist: (name) => {
-        const playlist: YouTubePlaylist = {
+        const pl: YouTubePlaylist = {
           id: crypto.randomUUID(),
           name,
           videos: [],
           createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
         }
-        set((s) => ({ youtubePlaylists: [playlist, ...s.youtubePlaylists] }))
-        return playlist
+        set((s) => ({ youtubePlaylists: [pl, ...s.youtubePlaylists] }))
+        return pl
       },
 
       deleteYouTubePlaylist: (id) =>
@@ -198,15 +312,19 @@ export const useLibraryStore = create<LibraryState & LibraryActions>()(
       renameYouTubePlaylist: (id, name) =>
         set((s) => ({
           youtubePlaylists: s.youtubePlaylists.map((p) =>
-            p.id === id ? { ...p, name } : p
+            p.id === id ? { ...p, name, updatedAt: new Date().toISOString() } : p
           ),
         })),
 
       addVideoToYouTubePlaylist: (playlistId, video) =>
         set((s) => ({
           youtubePlaylists: s.youtubePlaylists.map((p) =>
-            p.id === playlistId && !p.videos.some((v) => v.videoId === video.videoId)
-              ? { ...p, videos: [...p.videos, video] }
+            p.id === playlistId
+              ? {
+                  ...p,
+                  videos: [...p.videos.filter((v) => v.id !== video.id), video],
+                  updatedAt: new Date().toISOString(),
+                }
               : p
           ),
         })),
@@ -215,7 +333,11 @@ export const useLibraryStore = create<LibraryState & LibraryActions>()(
         set((s) => ({
           youtubePlaylists: s.youtubePlaylists.map((p) =>
             p.id === playlistId
-              ? { ...p, videos: p.videos.filter((v) => v.id !== videoId) }
+              ? {
+                  ...p,
+                  videos: p.videos.filter((v) => v.id !== videoId),
+                  updatedAt: new Date().toISOString(),
+                }
               : p
           ),
         })),
@@ -236,14 +358,15 @@ export const useLibraryStore = create<LibraryState & LibraryActions>()(
 
       // ─── TikTok Playlists ─────────────────────────────────
       createTikTokPlaylist: (name) => {
-        const playlist: TikTokPlaylist = {
+        const pl: TikTokPlaylist = {
           id: crypto.randomUUID(),
           name,
           videos: [],
           createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
         }
-        set((s) => ({ tiktokPlaylists: [playlist, ...s.tiktokPlaylists] }))
-        return playlist
+        set((s) => ({ tiktokPlaylists: [pl, ...s.tiktokPlaylists] }))
+        return pl
       },
 
       deleteTikTokPlaylist: (id) =>
@@ -254,15 +377,19 @@ export const useLibraryStore = create<LibraryState & LibraryActions>()(
       renameTikTokPlaylist: (id, name) =>
         set((s) => ({
           tiktokPlaylists: s.tiktokPlaylists.map((p) =>
-            p.id === id ? { ...p, name } : p
+            p.id === id ? { ...p, name, updatedAt: new Date().toISOString() } : p
           ),
         })),
 
       addVideoToTikTokPlaylist: (playlistId, video) =>
         set((s) => ({
           tiktokPlaylists: s.tiktokPlaylists.map((p) =>
-            p.id === playlistId && !p.videos.some((v) => v.postId === video.postId)
-              ? { ...p, videos: [...p.videos, video] }
+            p.id === playlistId
+              ? {
+                  ...p,
+                  videos: [...p.videos.filter((v) => v.id !== video.id), video],
+                  updatedAt: new Date().toISOString(),
+                }
               : p
           ),
         })),
@@ -271,14 +398,17 @@ export const useLibraryStore = create<LibraryState & LibraryActions>()(
         set((s) => ({
           tiktokPlaylists: s.tiktokPlaylists.map((p) =>
             p.id === playlistId
-              ? { ...p, videos: p.videos.filter((v) => v.id !== videoId) }
+              ? {
+                  ...p,
+                  videos: p.videos.filter((v) => v.id !== videoId),
+                  updatedAt: new Date().toISOString(),
+                }
               : p
           ),
         })),
     }),
     {
-      name: 'johnmusic-library-v3',
-      version: 3,
+      name: 'johnmusic-library-v4',
     }
   )
 )
