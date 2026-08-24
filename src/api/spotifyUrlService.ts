@@ -81,32 +81,78 @@ export async function fetchSpotifyOEmbed(spotifyUrl: string): Promise<SpotifyOEm
 
 // ─── Create SpotifySavedItem from URL (Zero Login Required) ──
 
+function cleanSpotifyMetadata(
+  rawTitle: string | undefined,
+  rawAuthor: string | undefined,
+  rawDesc: string | undefined,
+  trackId: string
+): { title: string; author: string } | null {
+  let title = (rawTitle || '').trim()
+  let author = (rawAuthor || '').trim()
+
+  if (
+    !title ||
+    title.toLowerCase() === trackId.toLowerCase() ||
+    title.toLowerCase().includes('spotify – web player') ||
+    title.toLowerCase().includes('spotify web') ||
+    title.toLowerCase() === 'page not found' ||
+    title.toLowerCase().includes('we can’t seem to find')
+  ) {
+    return null
+  }
+
+  // Se o título vier no formato "Nome da Música - song and lyrics by Artista | Spotify"
+  if (title.includes(' - song and lyrics by ')) {
+    const parts = title.split(' - song and lyrics by ')
+    title = parts[0].trim()
+    if (!author && parts[1]) {
+      author = parts[1].split('|')[0].trim()
+    }
+  }
+
+  if (title.includes(' | Spotify')) {
+    title = title.replace(' | Spotify', '').trim()
+  }
+
+  if (!author && rawDesc) {
+    const descParts = rawDesc.split('·')
+    if (descParts.length > 0 && descParts[0].trim().length > 1) {
+      author = descParts[0].trim()
+    }
+  }
+
+  return { title, author }
+}
+
 export async function createSpotifyItemFromUrl(urlOrUri: string): Promise<SpotifySavedItem> {
   const parsed = parseSpotifyUrl(urlOrUri)
   if (!parsed) {
     throw new Error('URL do Spotify inválida. Use links como: open.spotify.com/track/... ou open.spotify.com/playlist/...')
   }
 
-  // 1. Tenta extrair dados precisos via Microlink (pega título e autor/artista exatos)
+  // 1. Tenta extrair dados precisos via Microlink na URL canônica
   try {
     const microRes = await fetch(
       `https://api.microlink.io/?url=${encodeURIComponent(parsed.canonicalUrl)}`,
-      { signal: AbortSignal.timeout(5000) }
+      { signal: AbortSignal.timeout(4500) }
     )
     if (microRes.ok) {
       const json = await microRes.json()
-      const title = json.data?.title
-      const author = json.data?.author
-      const imageUrl = json.data?.image?.url
+      const cleaned = cleanSpotifyMetadata(
+        json.data?.title,
+        json.data?.author,
+        json.data?.description,
+        parsed.id
+      )
 
-      if (title && title !== 'Spotify Web' && title !== parsed.id) {
+      if (cleaned) {
         return {
           id: crypto.randomUUID(),
           type: parsed.type,
           spotifyId: parsed.id,
-          title,
-          subtitle: author || (parsed.type === 'track' ? 'Música' : `Playlist`),
-          thumbnailUrl: imageUrl || '',
+          title: cleaned.title,
+          subtitle: cleaned.author || (parsed.type === 'track' ? 'Música' : `Playlist`),
+          thumbnailUrl: json.data?.image?.url || '',
           url: parsed.canonicalUrl,
           embedUrl: parsed.embedUrl,
           addedAt: new Date().toISOString(),
@@ -117,14 +163,46 @@ export async function createSpotifyItemFromUrl(urlOrUri: string): Promise<Spotif
     // segue para próximo método
   }
 
-  // 2. Fallback via oEmbed + iTunes
+  // 2. Tenta extrair dados via Microlink na URL do Embed
+  try {
+    const embedRes = await fetch(
+      `https://api.microlink.io/?url=${encodeURIComponent(parsed.embedUrl)}`,
+      { signal: AbortSignal.timeout(4500) }
+    )
+    if (embedRes.ok) {
+      const json = await embedRes.json()
+      const cleaned = cleanSpotifyMetadata(
+        json.data?.title,
+        json.data?.author,
+        json.data?.description,
+        parsed.id
+      )
+
+      if (cleaned) {
+        return {
+          id: crypto.randomUUID(),
+          type: parsed.type,
+          spotifyId: parsed.id,
+          title: cleaned.title,
+          subtitle: cleaned.author || (parsed.type === 'track' ? 'Música' : `Playlist`),
+          thumbnailUrl: json.data?.image?.url || '',
+          url: parsed.canonicalUrl,
+          embedUrl: parsed.embedUrl,
+          addedAt: new Date().toISOString(),
+        }
+      }
+    }
+  } catch {
+    // segue
+  }
+
+  // 3. Fallback via oEmbed + iTunes Search
   try {
     const oembed = await fetchSpotifyOEmbed(parsed.canonicalUrl)
     let title = oembed.title || `Faixa #${parsed.id.slice(0, 6)}`
     let subtitle = ''
     let thumbnailUrl = oembed.thumbnail_url || ''
 
-    // Se for música, busca o artista real no catálogo público para enriquecer os dados
     if (parsed.type === 'track' && oembed.title) {
       try {
         const res = await fetch(
@@ -135,6 +213,7 @@ export async function createSpotifyItemFromUrl(urlOrUri: string): Promise<Spotif
           const data = await res.json()
           if (data.results && data.results.length > 0) {
             const hit = data.results[0]
+            if (hit.trackName) title = hit.trackName
             if (hit.artistName) subtitle = hit.artistName
             if (hit.artworkUrl100 && !thumbnailUrl) {
               thumbnailUrl = hit.artworkUrl100.replace('100x100bb', '600x600bb')
@@ -158,12 +237,11 @@ export async function createSpotifyItemFromUrl(urlOrUri: string): Promise<Spotif
       addedAt: new Date().toISOString(),
     }
   } catch {
-    // Fallback gracioso com dados da URL
     return {
       id: crypto.randomUUID(),
       type: parsed.type,
       spotifyId: parsed.id,
-      title: `Spotify ${parsed.type.toUpperCase()} #${parsed.id.slice(0, 6)}`,
+      title: `Música Spotify`,
       subtitle: `Spotify ${parsed.type}`,
       thumbnailUrl: '',
       url: parsed.canonicalUrl,
