@@ -95,6 +95,28 @@ export function SpotifyLibrary() {
   })
 
   const handlePlayItem = useCallback(async (item: SpotifySavedItem) => {
+    if (item.type === 'playlist') {
+      try {
+        const { importSpotifyPlaylist } = await import('@/api/playlistImportService')
+        const pl = await importSpotifyPlaylist(item.spotifyId)
+        if (pl.items.length > 0) {
+          const queueItems: QueueItem[] = pl.items.map((i) => ({
+            id: i.id,
+            source: 'spotify',
+            title: i.title,
+            subtitle: i.subtitle,
+            imageUrl: i.imageUrl,
+            uri: i.uri,
+            durationMs: i.durationMs,
+          }))
+          await playUniversal(queueItems, 0)
+          return
+        }
+      } catch {
+        // fallback
+      }
+    }
+
     const queueItem: QueueItem = {
       id: item.id,
       source: 'spotify',

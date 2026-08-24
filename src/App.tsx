@@ -45,16 +45,7 @@ export function App() {
           <Route path="/" element={<Home />} />
           <Route path="/callback" element={<Callback onHandleCallback={handleCallback} />} />
           <Route path="/spotify" element={<SpotifyLibrary />} />
-          <Route
-            path="/spotify/playlist/:id"
-            element={
-              <SpotifyPlaylistDetail
-                isAuthenticated={isAuthenticated}
-                isPremium={isPremium}
-                onPlayTrack={handlePlaySpotifyTrack}
-              />
-            }
-          />
+          <Route path="/spotify/playlist/:id" element={<SpotifyPlaylistDetail />} />
           <Route
             path="/spotify/liked"
             element={

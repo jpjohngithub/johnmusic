@@ -16,6 +16,7 @@ import {
 import { CURATED_PUBLIC_SPOTIFY, isValidSpotifyUrl, createSpotifyItemFromUrl } from '@/api/spotifyUrlService'
 import { isValidYouTubeUrl, createYouTubeVideoFromUrl } from '@/api/youtubeService'
 import { isValidTikTokUrl, createTikTokVideoFromUrl } from '@/api/tiktokService'
+import { importSpotifyPlaylist } from '@/api/playlistImportService'
 import { usePlayerStore } from '@/store/playerStore'
 import { useLibraryStore } from '@/store/libraryStore'
 import { AddToPlaylistModal } from '@/components/playlist/AddToPlaylistModal'
@@ -115,6 +116,27 @@ export function Home() {
 
   // Toca itens salvos pelo motor unificado
   const playSavedSpotify = async (item: SpotifySavedItem) => {
+    if (item.type === 'playlist') {
+      try {
+        const pl = await importSpotifyPlaylist(item.spotifyId)
+        if (pl.items.length > 0) {
+          const queueItems: QueueItem[] = pl.items.map((i) => ({
+            id: i.id,
+            source: 'spotify',
+            title: i.title,
+            subtitle: i.subtitle,
+            imageUrl: i.imageUrl,
+            uri: i.uri,
+            durationMs: i.durationMs,
+          }))
+          await playUniversal(queueItems, 0)
+          return
+        }
+      } catch {
+        // fallback
+      }
+    }
+
     const queueItem: QueueItem = {
       id: item.id,
       source: 'spotify',
