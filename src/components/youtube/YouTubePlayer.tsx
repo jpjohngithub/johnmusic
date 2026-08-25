@@ -74,6 +74,7 @@ export function YouTubePlayer() {
         const duration = active.getDuration() || 0
         store.setCurrentTime(current)
         if (duration > 0) {
+          store.setDuration(duration)
           store.setProgress((current / duration) * 100)
         }
 
@@ -261,6 +262,10 @@ export function YouTubePlayer() {
           onStateChange: (e: any) => {
             const YTState = window.YT?.PlayerState || {}
             if (activeDeckRef.current === 'A' && e.data === YTState.PLAYING) {
+              try {
+                const dur = e.target.getDuration()
+                if (dur > 0) usePlayerStore.getState().setDuration(dur)
+              } catch {}
               usePlayerStore.getState().setIsPlaying(true)
               startProgressLoop()
             } else if (activeDeckRef.current === 'A' && e.data === YTState.ENDED) {
@@ -300,6 +305,10 @@ export function YouTubePlayer() {
           onStateChange: (e: any) => {
             const YTState = window.YT?.PlayerState || {}
             if (activeDeckRef.current === 'B' && e.data === YTState.PLAYING) {
+              try {
+                const dur = e.target.getDuration()
+                if (dur > 0) usePlayerStore.getState().setDuration(dur)
+              } catch {}
               usePlayerStore.getState().setIsPlaying(true)
               startProgressLoop()
             } else if (activeDeckRef.current === 'B' && e.data === YTState.ENDED) {
