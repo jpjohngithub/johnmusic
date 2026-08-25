@@ -282,6 +282,10 @@ export async function transferPlayback(deviceId: string, play = true): Promise<v
   })
 }
 
+export async function getAvailableDevices(): Promise<{ devices: import('@/types').SpotifyDevice[] }> {
+  return spotifyFetch('/me/player/devices')
+}
+
 // ─── Featured / Recommendations ──────────────────────────────
 
 export async function getFeaturedPlaylists(limit = 20): Promise<{

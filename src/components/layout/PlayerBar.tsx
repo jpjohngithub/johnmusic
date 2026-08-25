@@ -23,11 +23,13 @@ import {
   Loader2,
   Sparkles,
   ListMusic,
+  Cast,
 } from 'lucide-react'
 import { usePlayerStore } from '@/store/playerStore'
 import { formatSeconds, cn } from '@/lib/utils'
 import { YouTubePlayer } from '@/components/youtube/YouTubePlayer'
 import { QueueDrawer } from '@/components/player/QueueDrawer'
+import { CastDeviceModal } from '@/components/player/CastDeviceModal'
 
 // TikTok mini icon
 const TikTokIcon = () => (
@@ -78,6 +80,7 @@ export function PlayerBar({ onExpandPlayer }: PlayerBarProps) {
 
   const [showEmbedDrawer, setShowEmbedDrawer] = useState(false)
   const [showQueueDrawer, setShowQueueDrawer] = useState(false)
+  const [showCastModal, setShowCastModal] = useState(false)
   const audioElementRef = useRef<HTMLAudioElement | null>(null)
 
   const nextTrack = getNextTrack()
@@ -436,8 +439,22 @@ export function PlayerBar({ onExpandPlayer }: PlayerBarProps) {
             </div>
           </div>
 
-          {/* Right: Volume & Queue */}
-          <div className="flex items-center gap-3 w-48 flex-shrink-0 justify-end">
+          {/* Right: Volume & Queue & Cast */}
+          <div className="flex items-center gap-2.5 w-56 flex-shrink-0 justify-end">
+            {/* Botão Transmitir / Cast para outro dispositivo */}
+            <button
+              onClick={() => setShowCastModal(true)}
+              className={cn(
+                'p-2 rounded-lg transition-all flex items-center justify-center',
+                showCastModal
+                  ? 'bg-purple-600/20 text-purple-400 border border-purple-500/40 shadow-sm shadow-purple-600/20'
+                  : 'text-white/50 hover:text-white hover:bg-white/5'
+              )}
+              title="Transmitir para outro dispositivo (Chromecast, Smart TV, Celular, Spotify Connect)"
+            >
+              <Cast size={18} />
+            </button>
+
             <button
               onClick={() => setShowQueueDrawer((v) => !v)}
               className={cn(
@@ -469,7 +486,7 @@ export function PlayerBar({ onExpandPlayer }: PlayerBarProps) {
                 max={100}
                 value={isMuted ? 0 : volume}
                 onChange={handleVolumeChange}
-                className="w-20 sm:w-24 h-1 accent-white cursor-pointer"
+                className="w-16 sm:w-20 h-1 accent-white cursor-pointer"
                 style={{
                   background: `linear-gradient(to right, white ${isMuted ? 0 : volume}%, rgba(255,255,255,0.2) ${isMuted ? 0 : volume}%)`,
                 }}
@@ -483,6 +500,12 @@ export function PlayerBar({ onExpandPlayer }: PlayerBarProps) {
       <QueueDrawer
         isOpen={showQueueDrawer}
         onClose={() => setShowQueueDrawer(false)}
+      />
+
+      {/* Modal de Transmissão para Outro Dispositivo */}
+      <CastDeviceModal
+        isOpen={showCastModal}
+        onClose={() => setShowCastModal(false)}
       />
     </>
   )
