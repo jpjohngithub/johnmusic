@@ -76,12 +76,26 @@ export interface PlayerActions {
   playPrev: () => Promise<void>
   nextInQueue: () => QueueItem | null
   prevInQueue: () => QueueItem | null
+  getNextTrackIndex: () => number | null
+  getNextTrack: () => QueueItem | null
+  getUpcomingQueue: () => QueueItem[]
 
   // Universal playback across all platforms
   playUniversal: (items: QueueItem[], startIndex?: number) => Promise<void>
 
   // Reset
   reset: () => void
+}
+
+function generateShuffleOrder(length: number, currentIndex: number): number[] {
+  if (length <= 1) return [0]
+  const indices = Array.from({ length }, (_, i) => i).filter((i) => i !== currentIndex)
+  // Algoritmo Fisher-Yates para embaralhamento perfeito e determinístico
+  for (let i = indices.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1))
+    ;[indices[i], indices[j]] = [indices[j], indices[i]]
+  }
+  return [currentIndex, ...indices]
 }
 
 const initialState: ExtendedPlayerState = {
@@ -103,6 +117,8 @@ const initialState: ExtendedPlayerState = {
   tiktokVideo: null,
   queue: [],
   queueIndex: 0,
+  shuffledOrder: [],
+  shuffledPosition: 0,
   currentQueueItem: null,
   isResolving: false,
   isCrossfading: false,
@@ -129,7 +145,18 @@ export const usePlayerStore = create<ExtendedPlayerState & PlayerActions>()(
       setDuration: (duration) => set({ duration }),
       setCurrentTime: (currentTime) => set({ currentTime }),
 
-      toggleShuffle: () => set((s) => ({ isShuffled: !s.isShuffled })),
+      toggleShuffle: () =>
+        set((s) => {
+          const isShuffled = !s.isShuffled
+          let shuffledOrder = s.shuffledOrder
+          let shuffledPosition = 0
+          if (isShuffled && s.queue.length > 0) {
+            shuffledOrder = generateShuffleOrder(s.queue.length, s.queueIndex)
+            shuffledPosition = 0
+          }
+          return { isShuffled, shuffledOrder, shuffledPosition }
+        }),
+
       cycleRepeat: () =>
         set((s) => ({
           repeatMode:
@@ -155,12 +182,11 @@ export const usePlayerStore = create<ExtendedPlayerState & PlayerActions>()(
       setIsCrossfading: (isCrossfading) => set({ isCrossfading }),
 
       preResolveNextTrack: async () => {
-        const { queue, queueIndex, isShuffled } = get()
+        const { queue, getNextTrackIndex } = get()
         if (queue.length <= 1) return
 
-        const nextIndex = isShuffled
-          ? Math.floor(Math.random() * queue.length)
-          : (queueIndex + 1) % queue.length
+        const nextIndex = getNextTrackIndex()
+        if (nextIndex === null) return
 
         const nextItem = queue[nextIndex]
         if (!nextItem || nextItem.videoId || nextItem.audioUrl) return
@@ -260,21 +286,58 @@ export const usePlayerStore = create<ExtendedPlayerState & PlayerActions>()(
         get().playUniversal([queueItem], 0)
       },
 
-      setQueue: (queue, startIndex = 0) => set({ queue, queueIndex: startIndex }),
-      addToQueue: (item) => set((s) => ({ queue: [...s.queue, item] })),
+      setQueue: (queue, startIndex = 0) => {
+        const isShuffled = get().isShuffled
+        const shuffledOrder = isShuffled && queue.length > 0
+          ? generateShuffleOrder(queue.length, startIndex)
+          : []
+        set({ queue, queueIndex: startIndex, shuffledOrder, shuffledPosition: 0 })
+      },
+      addToQueue: (item) =>
+        set((s) => {
+          const newQueue = [...s.queue, item]
+          let newShuffledOrder = s.shuffledOrder
+          if (s.isShuffled) {
+            newShuffledOrder = [...s.shuffledOrder, newQueue.length - 1]
+          }
+          return { queue: newQueue, shuffledOrder: newShuffledOrder }
+        }),
       removeFromQueue: (id) =>
-        set((s) => ({ queue: s.queue.filter((i) => i.id !== id) })),
-      clearQueue: () => set({ queue: [], queueIndex: 0, currentQueueItem: null }),
+        set((s) => {
+          const newQueue = s.queue.filter((i) => i.id !== id)
+          const newShuffledOrder = s.isShuffled && newQueue.length > 0
+            ? generateShuffleOrder(newQueue.length, Math.min(s.queueIndex, newQueue.length - 1))
+            : []
+          return { queue: newQueue, shuffledOrder: newShuffledOrder, shuffledPosition: 0 }
+        }),
+      clearQueue: () => set({ queue: [], queueIndex: 0, shuffledOrder: [], shuffledPosition: 0, currentQueueItem: null }),
 
       // ─── Play Queue Index ───────────────────────────────────
       playQueueIndex: async (index: number) => {
-        const { queue } = get()
+        const { queue, isShuffled, shuffledOrder } = get()
         if (index < 0 || index >= queue.length) return
 
         const targetItem = queue[index]
         if (!targetItem) return
 
-        set({ queueIndex: index, isResolving: true })
+        let newShuffledPos = 0
+        let newShuffledOrder = shuffledOrder
+        if (isShuffled) {
+          if (shuffledOrder.length === queue.length) {
+            const foundPos = shuffledOrder.indexOf(index)
+            newShuffledPos = foundPos >= 0 ? foundPos : 0
+          } else {
+            newShuffledOrder = generateShuffleOrder(queue.length, index)
+            newShuffledPos = 0
+          }
+        }
+
+        set({
+          queueIndex: index,
+          shuffledOrder: newShuffledOrder,
+          shuffledPosition: newShuffledPos,
+          isResolving: true,
+        })
 
         // 1. Se já possui áudio direto (ex: MP3 extraído do TikTok ou áudio preview)
         if (targetItem.audioUrl) {
@@ -389,7 +452,7 @@ export const usePlayerStore = create<ExtendedPlayerState & PlayerActions>()(
               isPlaying: true,
               isResolving: false,
             })
-            // Pré-resolve a próxima música em segundo plano se a transição perfeita estiver ativa
+            // Pré-resolve a próxima música em segundo plano se a transição mágica estiver ativa
             get().preResolveNextTrack()
           } else {
             set({ isPlaying: false, isResolving: false })
@@ -399,9 +462,9 @@ export const usePlayerStore = create<ExtendedPlayerState & PlayerActions>()(
         }
       },
 
-      // ─── Next / Prev com Reprodução Automática Unificada ─────
+      // ─── Next / Prev com Reprodução Determinística ───────────
       playNext: async () => {
-        const { queue, queueIndex, isShuffled, repeatMode, playQueueIndex } = get()
+        const { queue, queueIndex, isShuffled, shuffledOrder, shuffledPosition, repeatMode, playQueueIndex } = get()
         if (queue.length === 0) return
 
         if (repeatMode === 'one') {
@@ -409,51 +472,93 @@ export const usePlayerStore = create<ExtendedPlayerState & PlayerActions>()(
           return
         }
 
-        let nextIndex: number
-        if (isShuffled) {
-          nextIndex = Math.floor(Math.random() * queue.length)
-        } else {
-          nextIndex = queueIndex + 1
-          if (nextIndex >= queue.length) {
-            if (repeatMode === 'all') {
-              nextIndex = 0
-            } else {
-              set({ isPlaying: false })
-              return
-            }
+        if (isShuffled && shuffledOrder.length === queue.length) {
+          const nextPos = shuffledPosition + 1
+          if (nextPos < shuffledOrder.length) {
+            set({ shuffledPosition: nextPos })
+            await playQueueIndex(shuffledOrder[nextPos])
+            return
           }
+          if (repeatMode === 'all') {
+            const newOrder = generateShuffleOrder(queue.length, shuffledOrder[shuffledOrder.length - 1])
+            set({ shuffledOrder: newOrder, shuffledPosition: 0 })
+            await playQueueIndex(newOrder[0])
+            return
+          }
+          set({ isPlaying: false })
+          return
         }
 
-        await playQueueIndex(nextIndex)
+        const nextIndex = queueIndex + 1
+        if (nextIndex < queue.length) {
+          await playQueueIndex(nextIndex)
+        } else if (repeatMode === 'all') {
+          await playQueueIndex(0)
+        } else {
+          set({ isPlaying: false })
+        }
       },
 
       playPrev: async () => {
-        const { queue, queueIndex, playQueueIndex } = get()
+        const { queue, queueIndex, isShuffled, shuffledOrder, shuffledPosition, playQueueIndex } = get()
         if (queue.length === 0) return
+
+        if (isShuffled && shuffledOrder.length === queue.length) {
+          const prevPos = Math.max(0, shuffledPosition - 1)
+          set({ shuffledPosition: prevPos })
+          await playQueueIndex(shuffledOrder[prevPos])
+          return
+        }
 
         const prevIndex = queueIndex > 0 ? queueIndex - 1 : queue.length - 1
         await playQueueIndex(prevIndex)
       },
 
-      nextInQueue: () => {
-        const { queue, queueIndex, isShuffled, repeatMode } = get()
+      getNextTrackIndex: () => {
+        const { queue, queueIndex, isShuffled, shuffledOrder, shuffledPosition, repeatMode } = get()
         if (queue.length === 0) return null
+        if (repeatMode === 'one') return queueIndex
 
-        if (repeatMode === 'one') return queue[queueIndex]
-
-        let nextIndex: number
-        if (isShuffled) {
-          nextIndex = Math.floor(Math.random() * queue.length)
-        } else {
-          nextIndex = queueIndex + 1
-          if (nextIndex >= queue.length) {
-            if (repeatMode === 'all') nextIndex = 0
-            else return null
+        if (isShuffled && shuffledOrder.length === queue.length) {
+          const nextPos = shuffledPosition + 1
+          if (nextPos < shuffledOrder.length) {
+            return shuffledOrder[nextPos]
           }
+          if (repeatMode === 'all' && shuffledOrder.length > 0) {
+            return shuffledOrder[0]
+          }
+          return null
         }
 
-        set({ queueIndex: nextIndex })
-        return queue[nextIndex]
+        const nextIndex = queueIndex + 1
+        if (nextIndex < queue.length) return nextIndex
+        if (repeatMode === 'all') return 0
+        return null
+      },
+
+      getNextTrack: () => {
+        const { queue, getNextTrackIndex } = get()
+        const idx = getNextTrackIndex()
+        return idx !== null && idx >= 0 && idx < queue.length ? queue[idx] : null
+      },
+
+      getUpcomingQueue: () => {
+        const { queue, queueIndex, isShuffled, shuffledOrder, shuffledPosition } = get()
+        if (queue.length === 0) return []
+        if (isShuffled && shuffledOrder.length === queue.length) {
+          return shuffledOrder
+            .slice(shuffledPosition + 1)
+            .map((idx) => queue[idx])
+            .filter(Boolean)
+        }
+        return queue.slice(queueIndex + 1)
+      },
+
+      nextInQueue: () => {
+        const nextTrack = get().getNextTrack()
+        const nextIdx = get().getNextTrackIndex()
+        if (nextIdx !== null) set({ queueIndex: nextIdx })
+        return nextTrack
       },
 
       prevInQueue: () => {
@@ -467,7 +572,11 @@ export const usePlayerStore = create<ExtendedPlayerState & PlayerActions>()(
       // ─── Universal Playback ─────────────────────────────────
       playUniversal: async (items: QueueItem[], startIndex = 0) => {
         const queue = [...items]
-        set({ queue, queueIndex: startIndex, volume: 50, isMuted: false })
+        const isShuffled = get().isShuffled
+        const shuffledOrder = isShuffled && queue.length > 0
+          ? generateShuffleOrder(queue.length, startIndex)
+          : []
+        set({ queue, queueIndex: startIndex, shuffledOrder, shuffledPosition: 0, volume: 50, isMuted: false })
         await get().playQueueIndex(startIndex)
       },
 

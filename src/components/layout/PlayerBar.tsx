@@ -63,6 +63,7 @@ export function PlayerBar({ onExpandPlayer }: PlayerBarProps) {
     queue,
     queueIndex,
     togglePerfectTransition,
+    getNextTrack,
     setIsPlaying,
     setVolume,
     toggleMute,
@@ -79,7 +80,7 @@ export function PlayerBar({ onExpandPlayer }: PlayerBarProps) {
   const [showQueueDrawer, setShowQueueDrawer] = useState(false)
   const audioElementRef = useRef<HTMLAudioElement | null>(null)
 
-  const nextTrack = queue[queueIndex + 1] || null
+  const nextTrack = getNextTrack()
 
   // ─── HTML5 Audio Engine ───────────────────────────────────
   useEffect(() => {

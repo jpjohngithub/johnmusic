@@ -73,6 +73,7 @@ export function CustomPlaylistDetail() {
     isResolving,
     perfectTransition,
     togglePerfectTransition,
+    getNextTrack,
     togglePlay,
     playUniversal,
     playNext,
@@ -586,7 +587,8 @@ export function CustomPlaylistDetail() {
           <div className="space-y-1.5">
             {playlist.items.map((item, index) => {
               const isCurrent = isCurrentPlayingInPlaylist(item)
-              const isNext = activeIndex >= 0 && index === activeIndex + 1
+              const nextTrack = getNextTrack()
+              const isNext = !isCurrent && nextTrack?.id === item.id
               const isBeingDragged = draggedIndex === index
               const isDragOver = dragOverIndex === index
 

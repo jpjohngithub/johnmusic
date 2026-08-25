@@ -283,6 +283,8 @@ export interface PlayerState {
   // Queue
   queue: QueueItem[]
   queueIndex: number
+  shuffledOrder: number[]
+  shuffledPosition: number
 }
 
 export interface QueueItem {

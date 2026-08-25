@@ -32,6 +32,8 @@ export function QueueDrawer({ isOpen, onClose }: QueueDrawerProps) {
     isShuffled,
     perfectTransition,
     playQueueIndex,
+    playNext,
+    getUpcomingQueue,
     removeFromQueue,
     clearQueue,
     toggleShuffle,
@@ -50,8 +52,8 @@ export function QueueDrawer({ isOpen, onClose }: QueueDrawerProps) {
 
   if (!isOpen) return null
 
-  // Calcula faixas a seguir
-  const upcomingTracks = queue.slice(queueIndex + 1)
+  // Calcula faixas a seguir de forma sincronizada com o Shuffle
+  const upcomingTracks = getUpcomingQueue()
   const nextTrack = upcomingTracks[0] || null
   const restOfQueue = upcomingTracks.slice(1)
 
@@ -184,7 +186,7 @@ export function QueueDrawer({ isOpen, onClose }: QueueDrawerProps) {
 
             {nextTrack ? (
               <div
-                onClick={() => playQueueIndex(queueIndex + 1)}
+                onClick={() => playNext()}
                 className="group p-3.5 rounded-2xl bg-gradient-to-r from-purple-500/15 via-white/5 to-transparent border border-purple-500/30 hover:border-purple-400/60 cursor-pointer transition-all flex items-center gap-3.5 shadow-md hover:scale-[1.01]"
               >
                 <div className="w-12 h-12 rounded-xl overflow-hidden bg-white/10 flex-shrink-0 relative">
@@ -247,15 +249,16 @@ export function QueueDrawer({ isOpen, onClose }: QueueDrawerProps) {
 
               <div className="space-y-1.5">
                 {restOfQueue.map((track, idx) => {
-                  const absoluteIdx = queueIndex + 2 + idx
+                  const targetIdx = queue.findIndex((t) => t.id === track.id)
+                  const displayPos = idx + 2
                   return (
                     <div
-                      key={`${track.id}-${absoluteIdx}`}
+                      key={`${track.id}-${idx}`}
                       className="group flex items-center gap-3 p-2.5 rounded-xl hover:bg-white/5 transition-all cursor-pointer border border-transparent hover:border-white/5"
-                      onClick={() => playQueueIndex(absoluteIdx)}
+                      onClick={() => targetIdx >= 0 && playQueueIndex(targetIdx)}
                     >
                       <span className="text-white/30 font-mono text-xs w-6 text-center group-hover:hidden">
-                        {absoluteIdx + 1}
+                        {displayPos}
                       </span>
                       <button className="w-6 hidden group-hover:flex items-center justify-center text-spotify-green">
                         <Play size={14} className="fill-current" />

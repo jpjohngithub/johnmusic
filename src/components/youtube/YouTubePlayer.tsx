@@ -91,9 +91,7 @@ export function YouTubePlayer() {
           if (remaining <= 12 && remaining > 7 && !hasPreCuedRef.current) {
             hasPreCuedRef.current = true
             const standby = getStandbyPlayer()
-            const { queue, queueIndex, isShuffled } = store
-            const nextIdx = isShuffled ? Math.floor(Math.random() * queue.length) : (queueIndex + 1) % queue.length
-            const nextItem = queue[nextIdx]
+            const nextItem = store.getNextTrack()
             if (nextItem?.videoId && standby?.cueVideoById) {
               try {
                 standby.cueVideoById(nextItem.videoId)
@@ -116,7 +114,7 @@ export function YouTubePlayer() {
     if (isCrossfadingRef.current) return
 
     const store = usePlayerStore.getState()
-    const { queue, queueIndex, isShuffled, repeatMode, playQueueIndex } = store
+    const { queue, queueIndex, repeatMode, playQueueIndex, getNextTrackIndex, getNextTrack } = store
 
     if (queue.length === 0) return
 
@@ -125,19 +123,11 @@ export function YouTubePlayer() {
       return
     }
 
-    // Próxima faixa
-    let nextIndex: number
-    if (isShuffled) {
-      nextIndex = Math.floor(Math.random() * queue.length)
-    } else {
-      nextIndex = queueIndex + 1
-      if (nextIndex >= queue.length) {
-        if (repeatMode === 'all') nextIndex = 0
-        else return
-      }
-    }
+    // Próxima faixa determinística
+    const nextIndex = getNextTrackIndex()
+    if (nextIndex === null) return
 
-    let nextTrack = queue[nextIndex]
+    let nextTrack = getNextTrack()
     if (!nextTrack) return
 
     // Se ainda não tiver videoId, tenta resolver na hora
