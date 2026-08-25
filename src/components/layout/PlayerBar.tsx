@@ -243,7 +243,14 @@ export function PlayerBar({ onExpandPlayer }: PlayerBarProps) {
       />
 
       {/* Main Persistent Universal Bar */}
-      <div className="fixed bottom-0 left-0 right-0 z-50 bg-black/95 backdrop-blur-md border-t border-white/10 px-4 py-3 select-none">
+      <div
+        className={cn(
+          'fixed bottom-0 left-0 right-0 z-50 bg-black/95 backdrop-blur-md border-t px-4 py-3 select-none transition-all duration-500',
+          isCrossfading
+            ? 'border-purple-500/60 shadow-[0_-8px_30px_rgba(168,85,247,0.25)]'
+            : 'border-white/10'
+        )}
+      >
         <div className="max-w-screen-xl mx-auto flex items-center gap-4">
 
           {/* Left: Track Info & Platform Badge */}
@@ -289,9 +296,9 @@ export function PlayerBar({ onExpandPlayer }: PlayerBarProps) {
                   <Loader2 size={12} className="text-spotify-green animate-spin flex-shrink-0" />
                 )}
                 {isCrossfading && (
-                  <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-purple-500/20 border border-purple-500/40 text-[10px] font-extrabold text-purple-300 animate-pulse flex-shrink-0 shadow-sm shadow-purple-500/30">
-                    <Sparkles size={10} className="text-purple-400" />
-                    Transição Mágica
+                  <span className="flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-gradient-to-r from-purple-500/30 to-emerald-500/30 border border-purple-400/50 text-[10px] font-black text-purple-200 animate-pulse flex-shrink-0 shadow-lg shadow-purple-500/30">
+                    <Sparkles size={11} className="text-purple-300" />
+                    <span>Mixando</span>
                   </span>
                 )}
               </div>
