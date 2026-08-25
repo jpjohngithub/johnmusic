@@ -150,8 +150,12 @@ export function PlayerBar({ onExpandPlayer }: PlayerBarProps) {
   }, [isPlaying, setIsPlaying])
 
   const handleNextTrack = useCallback(async () => {
-    await playNext()
-  }, [playNext])
+    if (source === 'youtube' && perfectTransition) {
+      window.dispatchEvent(new CustomEvent('yt-player-smooth-next'))
+    } else {
+      await playNext()
+    }
+  }, [source, perfectTransition, playNext])
 
   const handlePrevTrack = useCallback(async () => {
     await playPrev()

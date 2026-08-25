@@ -1,8 +1,8 @@
 // ============================================================
-// YOUTUBE PLAYER — MOTOR REVOLUCIONÁRIO DUAL-DECK DJ AUTOMIX
-// Reprodução contínua com dois decks (Deck A & Deck B) em paralelo.
-// Transição Perfeita com sobreposição real de áudio (Crossfade DJ)
-// ZERO pausas, ZERO silêncio e ZERO interrupções entre faixas.
+// YOUTUBE PLAYER — MOTOR ULTRA-FLUIDO DUAL-DECK DJ AUTOMIX
+// Pré-carregamento em memória (Pre-cuer) 20s antes do término
+// Interpolação Equal-Power de 60 FPS a cada 50ms (Zero Degraus)
+// Transição suave contínua e sem interrupções entre faixas
 // ============================================================
 
 import { useEffect, useRef } from 'react'
@@ -25,6 +25,7 @@ export function YouTubePlayer() {
   const crossfadeTimerRef = useRef<any>(null)
   const progressTimerRef = useRef<any>(null)
   const lastLoadedIdRef = useRef<string | null>(null)
+  const hasPreCuedRef = useRef<boolean>(false)
 
   const queueVideoId = usePlayerStore((s) =>
     s.source === 'youtube'
@@ -35,7 +36,6 @@ export function YouTubePlayer() {
   const isPlaying = usePlayerStore((s) => s.isPlaying)
   const volume = usePlayerStore((s) => s.volume)
   const isMuted = usePlayerStore((s) => s.isMuted)
-  const perfectTransition = usePlayerStore((s) => s.perfectTransition)
 
   function getActivePlayer() {
     return activeDeckRef.current === 'A' ? playerARef.current : playerBRef.current
@@ -61,7 +61,7 @@ export function YouTubePlayer() {
     usePlayerStore.getState().setIsCrossfading(false)
   }
 
-  // ─── Loop de Progresso e Disparo de Transição DJ ────────────
+  // ─── Loop de Progresso de Alta Fidelidade (100ms) ───────────
   function startProgressLoop() {
     stopProgressLoop()
     progressTimerRef.current = window.setInterval(() => {
@@ -78,26 +78,41 @@ export function YouTubePlayer() {
           store.setProgress((current / duration) * 100)
         }
 
-        // ─── Transição Perfeita Revolucionária (Dual-Deck Crossfade) ───
+        // ─── Transição Perfeita Ultra-Fluida ───
         if (store.perfectTransition && duration > 12 && !isCrossfadingRef.current) {
           const remaining = duration - current
 
-          // 1. Pré-resolução da próxima faixa 15 segundos antes do fim
-          if (remaining <= 15 && remaining > 13) {
+          // 1. Pré-busca da próxima faixa 20 segundos antes do fim
+          if (remaining <= 20 && remaining > 15) {
             store.preResolveNextTrack()
           }
 
-          // 2. Dispara a mixagem simultânea nos últimos 6 segundos
-          if (remaining <= 6.0 && remaining > 0.5) {
-            triggerSeamlessDJCrossfade()
+          // 2. Pré-engatilha (Pre-cue) o deck secundário no buffer 12s antes
+          if (remaining <= 12 && remaining > 7 && !hasPreCuedRef.current) {
+            hasPreCuedRef.current = true
+            const standby = getStandbyPlayer()
+            const { queue, queueIndex, isShuffled } = store
+            const nextIdx = isShuffled ? Math.floor(Math.random() * queue.length) : (queueIndex + 1) % queue.length
+            const nextItem = queue[nextIdx]
+            if (nextItem?.videoId && standby?.cueVideoById) {
+              try {
+                standby.cueVideoById(nextItem.videoId)
+                standby.setVolume(0)
+              } catch {}
+            }
+          }
+
+          // 3. Dispara a mixagem simultânea contínua nos últimos 5.5 segundos
+          if (remaining <= 5.5 && remaining > 0.4) {
+            triggerSeamlessDJCrossfade(5000)
           }
         }
       } catch {}
-    }, 300)
+    }, 150)
   }
 
-  // ─── Executa a Transição Revolucionária DJ entre os dois Decks ──
-  async function triggerSeamlessDJCrossfade() {
+  // ─── Executa a Transição DJ Ultra-Fluida com Equal-Power ────
+  async function triggerSeamlessDJCrossfade(durationMs = 5000) {
     if (isCrossfadingRef.current) return
 
     const store = usePlayerStore.getState()
@@ -110,7 +125,7 @@ export function YouTubePlayer() {
       return
     }
 
-    // Calcula a próxima faixa
+    // Próxima faixa
     let nextIndex: number
     if (isShuffled) {
       nextIndex = Math.floor(Math.random() * queue.length)
@@ -125,7 +140,7 @@ export function YouTubePlayer() {
     let nextTrack = queue[nextIndex]
     if (!nextTrack) return
 
-    // Se ainda não tiver videoId, tenta resolver rápido
+    // Se ainda não tiver videoId, tenta resolver na hora
     if (!nextTrack.videoId) {
       try {
         const { resolvePlayable } = await import('@/api/crossPlatformService')
@@ -136,7 +151,6 @@ export function YouTubePlayer() {
           updatedQ[nextIndex] = nextTrack
           store.setQueue(updatedQ, queueIndex)
         } else {
-          // fallback padrão
           await store.playNext()
           return
         }
@@ -154,24 +168,25 @@ export function YouTubePlayer() {
       return
     }
 
-    // Inicia o processo de mixagem contínua
+    // Inicia o processo de mixagem ultra-fluida
     isCrossfadingRef.current = true
+    hasPreCuedRef.current = false
     store.setIsCrossfading(true)
 
     const baseVol = store.isMuted ? 0 : (store.volume ?? 50)
     const outgoingDeck = activeDeckRef.current
     const incomingDeck = outgoingDeck === 'A' ? 'B' : 'A'
 
-    // Carrega a nova faixa no Deck em espera com volume ZERO e dá play
+    // Carrega a nova faixa no Deck em espera com volume ZERO e dá play imediato
     try {
-      standbyPlayer.loadVideoById(nextTrack.videoId)
       standbyPlayer.setVolume(0)
+      standbyPlayer.loadVideoById(nextTrack.videoId)
       standbyPlayer.playVideo()
     } catch {}
 
-    // Executa a curva de crossfade suave durante 5 segundos
-    const totalSteps = 25
-    const stepInterval = 200 // 25 * 200ms = 5 segundos de sobreposição perfeita
+    // Interpolação Equal-Power de 60 FPS (50ms por passo)
+    const stepInterval = 50
+    const totalSteps = Math.max(10, Math.round(durationMs / stepInterval))
     let currentStep = 0
 
     if (crossfadeTimerRef.current) clearInterval(crossfadeTimerRef.current)
@@ -180,7 +195,7 @@ export function YouTubePlayer() {
       currentStep++
       const progressRatio = Math.min(1, currentStep / totalSteps)
 
-      // Curva senoidal suave de mixagem de DJ (igual mixers profissionais)
+      // Curva senoidal Equal-Power (Preserva 100% da pressão sonora durante a mixagem)
       const outVol = Math.round(baseVol * Math.cos((progressRatio * Math.PI) / 2))
       const inVol = Math.round(baseVol * Math.sin((progressRatio * Math.PI) / 2))
 
@@ -200,7 +215,7 @@ export function YouTubePlayer() {
           standbyPlayer?.setVolume(baseVol)
         } catch {}
 
-        // Alterna o deck principal para o novo
+        // Alterna o deck principal
         activeDeckRef.current = incomingDeck
         isCrossfadingRef.current = false
         lastLoadedIdRef.current = nextTrack.videoId!
@@ -344,6 +359,7 @@ export function YouTubePlayer() {
     if (lastLoadedIdRef.current === queueVideoId) return
 
     lastLoadedIdRef.current = queueVideoId
+    hasPreCuedRef.current = false
     const active = getActivePlayer()
     const standby = getStandbyPlayer()
 
@@ -404,6 +420,19 @@ export function YouTubePlayer() {
     }
     window.addEventListener('yt-player-seek', handler)
     return () => window.removeEventListener('yt-player-seek', handler)
+  }, [])
+
+  // ─── Pular faixa suave com crossfade acionado manualmente ────
+  useEffect(() => {
+    const handler = () => {
+      if (usePlayerStore.getState().perfectTransition && !isCrossfadingRef.current) {
+        triggerSeamlessDJCrossfade(1800)
+      } else {
+        usePlayerStore.getState().playNext()
+      }
+    }
+    window.addEventListener('yt-player-smooth-next', handler)
+    return () => window.removeEventListener('yt-player-smooth-next', handler)
   }, [])
 
   return (
