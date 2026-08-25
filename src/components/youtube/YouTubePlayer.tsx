@@ -337,9 +337,9 @@ export function YouTubePlayer() {
   // ─── Carrega novo vídeo quando o usuário seleciona manualmente ──
   useEffect(() => {
     if (!queueVideoId) return
-    if (isCrossfadingRef.current) return
     if (lastLoadedIdRef.current === queueVideoId) return
 
+    stopCrossfade()
     lastLoadedIdRef.current = queueVideoId
     hasTriggeredTransitionRef.current = false
 
