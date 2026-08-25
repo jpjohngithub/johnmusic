@@ -378,28 +378,26 @@ export function PlayerBar({ onExpandPlayer }: PlayerBarProps) {
               </button>
             </div>
 
-            {/* Progress bar — Sempre visível com tempo e duração em tempo real */}
-            {Boolean(currentQueueItem || source || duration > 0) && (
-              <div className="w-full max-w-md flex items-center gap-2">
-                <span className="text-white/40 text-xs w-10 text-right font-mono">
-                  {formatSeconds(currentTime)}
-                </span>
-                <input
-                  type="range"
-                  min={0}
-                  max={100}
-                  value={progress || 0}
-                  onChange={handleSeek}
-                  className="flex-1 h-1 accent-spotify-green cursor-pointer"
-                  style={{
-                    background: `linear-gradient(to right, #1db954 ${progress || 0}%, rgba(255,255,255,0.2) ${progress || 0}%)`,
-                  }}
-                />
-                <span className="text-white/40 text-xs w-10 font-mono">
-                  {formatSeconds(duration > 0 ? duration : (currentQueueItem?.durationMs ? Math.round(currentQueueItem.durationMs / 1000) : 0))}
-                </span>
-              </div>
-            )}
+            {/* Progress bar — Sempre visível incondicionalmente com tempo decorrido e total */}
+            <div className="w-full max-w-md flex items-center gap-2">
+              <span className="text-white/40 text-xs w-10 text-right font-mono">
+                {formatSeconds(currentTime)}
+              </span>
+              <input
+                type="range"
+                min={0}
+                max={100}
+                value={progress || 0}
+                onChange={handleSeek}
+                className="flex-1 h-1 accent-spotify-green cursor-pointer"
+                style={{
+                  background: `linear-gradient(to right, #1db954 ${progress || 0}%, rgba(255,255,255,0.2) ${progress || 0}%)`,
+                }}
+              />
+              <span className="text-white/40 text-xs w-10 font-mono">
+                {formatSeconds(duration > 0 ? duration : (currentQueueItem?.durationMs ? Math.round(currentQueueItem.durationMs / 1000) : 0))}
+              </span>
+            </div>
           </div>
 
           {/* Right: Volume */}
