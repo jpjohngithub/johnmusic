@@ -45,6 +45,7 @@ export interface PlayerActions {
   // Transição Perfeita (Crossfade + Gapless + Pre-buffer)
   togglePerfectTransition: () => void
   setPerfectTransition: (active: boolean) => void
+  setIsCrossfading: (isCrossfading: boolean) => void
   preResolveNextTrack: () => Promise<void>
 
   // Direct Audio Track (HTML5 player)
@@ -104,6 +105,7 @@ const initialState: ExtendedPlayerState = {
   queueIndex: 0,
   currentQueueItem: null,
   isResolving: false,
+  isCrossfading: false,
 }
 
 export const usePlayerStore = create<ExtendedPlayerState & PlayerActions>()(
@@ -149,6 +151,8 @@ export const usePlayerStore = create<ExtendedPlayerState & PlayerActions>()(
         } catch {}
         set({ perfectTransition: active })
       },
+
+      setIsCrossfading: (isCrossfading) => set({ isCrossfading }),
 
       preResolveNextTrack: async () => {
         const { queue, queueIndex, isShuffled } = get()

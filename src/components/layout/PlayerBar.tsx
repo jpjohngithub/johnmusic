@@ -57,6 +57,7 @@ export function PlayerBar({ onExpandPlayer }: PlayerBarProps) {
     isShuffled,
     repeatMode,
     perfectTransition,
+    isCrossfading,
     togglePerfectTransition,
     setIsPlaying,
     setVolume,
@@ -274,6 +275,12 @@ export function PlayerBar({ onExpandPlayer }: PlayerBarProps) {
                 </p>
                 {isResolving && (
                   <Loader2 size={12} className="text-spotify-green animate-spin flex-shrink-0" />
+                )}
+                {isCrossfading && (
+                  <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-purple-500/20 border border-purple-500/40 text-[10px] font-extrabold text-purple-300 animate-pulse flex-shrink-0">
+                    <Sparkles size={10} className="text-purple-400" />
+                    DJ Automix
+                  </span>
                 )}
               </div>
               {currentSubtitle ? (
