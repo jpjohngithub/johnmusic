@@ -319,3 +319,40 @@ export interface LocalLibrary {
   tiktokPlaylists: TikTokPlaylist[]
   tiktokVideos: TikTokVideo[]
 }
+
+// ─── History & Recommendations Types ─────────────────────────
+
+export interface HistoryItem {
+  id: string
+  source: MediaSource
+  title: string
+  subtitle: string
+  imageUrl: string
+  videoId?: string
+  audioUrl?: string
+  playedAt: string      // ISO string
+  playCount: number
+}
+
+export interface PersonalizedMix {
+  id: string
+  title: string
+  description: string
+  coverGradient: string
+  coverIcon?: string
+  coverUrl?: string
+  tags: string[]
+  items: QueueItem[]
+}
+
+export interface RecommendedPlaylist {
+  id: string
+  name: string
+  description: string
+  source: MediaSource
+  coverUrl: string
+  itemCount: number
+  creatorName?: string
+  url?: string
+  items?: QueueItem[]
+}

@@ -30,6 +30,7 @@ import {
 import { importYouTubePlaylist, importSpotifyPlaylist } from '@/api/playlistImportService'
 import { usePlayerStore } from '@/store/playerStore'
 import { useLibraryStore } from '@/store/libraryStore'
+import { useHistoryStore } from '@/store/historyStore'
 import { AddToPlaylistModal } from '@/components/playlist/AddToPlaylistModal'
 import { formatMs, cn } from '@/lib/utils'
 import type { PlaylistItem, QueueItem } from '@/types'
@@ -101,6 +102,9 @@ export function Search({ isAuthenticated = false }: SearchProps) {
       setDebouncedQuery(trimmed)
       if (trimmed) {
         setSearchParams({ q: trimmed, mode: searchMode }, { replace: true })
+        if (trimmed.length >= 2) {
+          useHistoryStore.getState().recordSearch(trimmed)
+        }
       } else {
         setSearchParams({}, { replace: true })
       }

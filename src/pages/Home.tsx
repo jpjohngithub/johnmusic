@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import {
   Music2,
@@ -6,21 +6,31 @@ import {
   Play,
   Sparkles,
   ArrowRight,
-  Trash2,
   Search,
-  Plus,
   Layers,
   ListPlus,
   Loader2,
+  Disc3,
+  Clock,
+  Flame,
+  Radio,
+  Shuffle,
+  Heart,
+  TrendingUp,
 } from 'lucide-react'
+import { useQuery } from '@tanstack/react-query'
 import { isValidSpotifyUrl, createSpotifyItemFromUrl } from '@/api/spotifyUrlService'
 import { isValidYouTubeUrl, createYouTubeVideoFromUrl } from '@/api/youtubeService'
 import { isValidTikTokUrl, createTikTokVideoFromUrl } from '@/api/tiktokService'
 import { importSpotifyPlaylist } from '@/api/playlistImportService'
+import { getPersonalizedRecommendations } from '@/api/recommendationService'
 import { usePlayerStore } from '@/store/playerStore'
 import { useLibraryStore } from '@/store/libraryStore'
+import { useHistoryStore } from '@/store/historyStore'
 import { AddToPlaylistModal } from '@/components/playlist/AddToPlaylistModal'
-import type { PlaylistItem, QueueItem, YouTubeVideo, TikTokVideo } from '@/types'
+import { formatMs, cn } from '@/lib/utils'
+import type { PlaylistItem, QueueItem, YouTubeVideo, TikTokVideo, PersonalizedMix, RecommendedPlaylist } from '@/types'
+import type { SearchTrackItem } from '@/api/universalSearchService'
 
 const TikTokIcon = () => (
   <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
@@ -35,7 +45,7 @@ export function Home() {
   const [inputFeedback, setInputFeedback] = useState<string | null>(null)
   const [modalItem, setModalItem] = useState<PlaylistItem | null>(null)
 
-  const { playUniversal } = usePlayerStore()
+  const { playUniversal, isPlaying, currentQueueItem } = usePlayerStore()
   const {
     spotifyItems,
     youtubeVideos,
@@ -44,10 +54,29 @@ export function Home() {
     addSpotifyItem,
     addYouTubeVideo,
     addTikTokVideo,
-    removeSpotifyItem,
-    removeYouTubeVideo,
-    removeTikTokVideo,
+    addCustomPlaylist,
   } = useLibraryStore()
+
+  const { history, recentSearches, getTopArtists, getTopKeywords } = useHistoryStore()
+
+  // Saudação Dinâmica
+  const greeting = useMemo(() => {
+    const hour = new Date().getHours()
+    if (hour >= 5 && hour < 12) return 'Bom dia'
+    if (hour >= 12 && hour < 18) return 'Boa tarde'
+    return 'Boa noite'
+  }, [])
+
+  // Chave reativa para as recomendações baseadas no perfil do usuário
+  const topArtists = useMemo(() => getTopArtists(), [history])
+  const topKeywords = useMemo(() => getTopKeywords(), [history, recentSearches])
+
+  // Busca Recomendações Personalizadas
+  const { data: recommendations, isLoading: isLoadingRecs } = useQuery({
+    queryKey: ['recommendations', topArtists.join(','), customPlaylists.length, history.length],
+    queryFn: getPersonalizedRecommendations,
+    staleTime: 10 * 60 * 1000, // 10 minutos de cache
+  })
 
   // Processa URL ou redireciona busca universal
   const handleUniversalSubmit = async (e: React.FormEvent) => {
@@ -58,6 +87,11 @@ export function Home() {
     setIsProcessing(true)
     setInputFeedback(null)
 
+    // Registra a busca no histórico
+    if (!val.startsWith('http')) {
+      useHistoryStore.getState().recordSearch(val)
+    }
+
     try {
       // 0. Link Compartilhado do JohnMusic
       const { isJohnMusicShareUrl, importPlaylistFromShareUrl } = await import('@/api/playlistShareService')
@@ -65,7 +99,7 @@ export function Home() {
         setInputFeedback('Clonando playlist compartilhada com todas as faixas...')
         const pl = importPlaylistFromShareUrl(val)
         if (pl && pl.items.length > 0) {
-          useLibraryStore.getState().addCustomPlaylist(pl)
+          addCustomPlaylist(pl)
           setUniversalInput('')
           setInputFeedback(`Playlist "${pl.name}" clonada com sucesso (${pl.items.length} músicas)!`)
 
@@ -93,7 +127,7 @@ export function Home() {
         if (parsed?.type === 'playlist' || parsed?.type === 'album') {
           setInputFeedback('Separando faixas da playlist do Spotify...')
           const pl = await importSpotifyPlaylist(val)
-          useLibraryStore.getState().addCustomPlaylist(pl)
+          addCustomPlaylist(pl)
           setUniversalInput('')
           setInputFeedback(`Playlist "${pl.name}" importada com ${pl.items.length} faixas!`)
 
@@ -133,7 +167,7 @@ export function Home() {
           setInputFeedback('Separando vídeos da playlist do YouTube...')
           const { importYouTubePlaylist } = await import('@/api/playlistImportService')
           const pl = await importYouTubePlaylist(val)
-          useLibraryStore.getState().addCustomPlaylist(pl)
+          addCustomPlaylist(pl)
           setUniversalInput('')
           setInputFeedback(`Playlist "${pl.name}" importada com ${pl.items.length} vídeos!`)
 
@@ -196,33 +230,57 @@ export function Home() {
     }
   }
 
-  const playSavedYouTube = async (video: YouTubeVideo) => {
+  // Toca um Mix Personalizado completo
+  const playPersonalizedMix = async (mix: PersonalizedMix) => {
+    if (!mix.items || mix.items.length === 0) return
+    await playUniversal(mix.items, 0)
+  }
+
+  // Toca uma faixa recomendada
+  const playTrackItem = async (track: SearchTrackItem) => {
     const queueItem: QueueItem = {
-      id: video.id,
-      source: 'youtube',
-      title: video.title,
-      subtitle: video.channelTitle,
-      imageUrl: video.thumbnailUrl,
-      videoId: video.videoId,
+      id: track.id,
+      source: track.source,
+      title: track.title,
+      subtitle: track.subtitle,
+      imageUrl: track.artworkUrl,
+      videoId: track.videoId,
+      uri: track.spotifyUri,
+      durationMs: track.durationMs,
     }
     await playUniversal([queueItem], 0)
   }
 
-  const playSavedTikTok = async (video: TikTokVideo) => {
-    const queueItem: QueueItem = {
-      id: video.id,
-      source: 'tiktok',
-      title: video.title || 'TikTok Music',
-      subtitle: `@${video.authorName}`,
-      imageUrl: video.thumbnailUrl,
-      tiktokPostId: video.postId,
-      tiktokUrl: video.url,
+  // Importa e toca Playlist Recomendada do YouTube
+  const playRecommendedPlaylist = async (playlist: RecommendedPlaylist) => {
+    if (playlist.url) {
+      try {
+        const { importYouTubePlaylist } = await import('@/api/playlistImportService')
+        const pl = await importYouTubePlaylist(playlist.url)
+        addCustomPlaylist(pl)
+        if (pl.items.length > 0) {
+          const queueItems: QueueItem[] = pl.items.map((i) => ({
+            id: i.id,
+            source: i.source,
+            title: i.title,
+            subtitle: i.subtitle,
+            imageUrl: i.imageUrl,
+            videoId: i.videoId,
+            durationMs: i.durationMs,
+          }))
+          await playUniversal(queueItems, 0)
+          navigate(`/playlist/${pl.id}`)
+        }
+      } catch {
+        navigate(`/search?q=${encodeURIComponent(playlist.name)}&mode=playlists`)
+      }
+    } else {
+      navigate(`/search?q=${encodeURIComponent(playlist.name)}&mode=playlists`)
     }
-    await playUniversal([queueItem], 0)
   }
 
   return (
-    <div className="space-y-10 max-w-7xl mx-auto select-none pb-16">
+    <div className="space-y-10 max-w-7xl mx-auto select-none pb-20">
       {/* Modal Adicionar à Playlist */}
       <AddToPlaylistModal
         isOpen={modalItem !== null}
@@ -230,20 +288,20 @@ export function Home() {
         item={modalItem}
       />
 
-      {/* Hero Banner Unificado */}
+      {/* Hero Banner Inteligente com Saudação */}
       <div className="relative rounded-3xl overflow-hidden bg-gradient-to-r from-purple-950/90 via-violet-950/70 to-black p-8 md:p-12 border border-purple-500/20 shadow-2xl">
-        <div className="relative z-10 max-w-3xl space-y-6">
+        <div className="relative z-10 max-w-3xl space-y-5">
           <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/10 border border-white/10 text-white text-xs font-semibold backdrop-blur-md">
             <Sparkles size={14} className="text-yellow-400" />
-            <span>JohnMusic 2.0 • Reprodução Unificada Spotify + YouTube + TikTok</span>
+            <span>{greeting}! Recomendações personalizadas para o seu gosto musical</span>
           </div>
 
           <h1 className="text-3xl md:text-5xl font-black text-white tracking-tight leading-tight">
-            Todas as suas músicas juntas em um só player.
+            Descubra novas músicas e ouça suas playlists favoritas.
           </h1>
 
           <p className="text-white/60 text-sm md:text-base leading-relaxed">
-            Pesquise qualquer artista ou cole qualquer link do <strong className="text-spotify-green">Spotify</strong>, <strong className="text-youtube-red">YouTube</strong> ou <strong className="text-tiktok-pink">TikTok</strong>. Todas as faixas tocam em fila contínua sem parar.
+            Pesquise qualquer artista ou cole links do <strong className="text-spotify-green">Spotify</strong>, <strong className="text-youtube-red">YouTube</strong> ou <strong className="text-tiktok-pink">TikTok</strong>. Todas as faixas tocam em harmonia contínua com <strong>Transição Mágica</strong>.
           </p>
 
           {/* Universal Smart Input */}
@@ -257,13 +315,13 @@ export function Home() {
                   setUniversalInput(e.target.value)
                   setInputFeedback(null)
                 }}
-                placeholder="Cole um link do Spotify, YouTube, TikTok ou busque qualquer música..."
+                placeholder="Cole um link do Spotify, YouTube, TikTok ou pesquise qualquer música/artista..."
                 className="w-full bg-black/60 border border-white/20 rounded-2xl pl-12 pr-28 py-4 text-white placeholder-white/40 text-sm focus:outline-none focus:border-spotify-green focus:ring-2 focus:ring-spotify-green/20 backdrop-blur-md shadow-2xl transition-all"
               />
               <button
                 type="submit"
                 disabled={isProcessing || !universalInput.trim()}
-                className="absolute right-2 px-5 py-2.5 bg-spotify-green hover:bg-purple-400 active:scale-95 text-black font-bold text-xs rounded-xl disabled:opacity-40 transition-all shadow-lg flex items-center gap-1.5"
+                className="absolute right-2 px-5 py-2.5 bg-spotify-green hover:bg-green-400 active:scale-95 text-black font-bold text-xs rounded-xl disabled:opacity-40 transition-all shadow-lg flex items-center gap-1.5"
               >
                 {isProcessing ? <Loader2 size={14} className="animate-spin" /> : <Play size={14} className="fill-black" />}
                 <span>{isProcessing ? 'Carregando...' : 'Tocar'}</span>
@@ -276,14 +334,284 @@ export function Home() {
               </p>
             )}
           </form>
+
+          {/* Tags de Buscas Recentes Rápidas */}
+          {recentSearches.length > 0 && (
+            <div className="flex items-center gap-2 flex-wrap pt-1">
+              <span className="text-white/40 text-xs font-medium">Buscas recentes:</span>
+              {recentSearches.slice(0, 5).map((term) => (
+                <button
+                  key={term}
+                  onClick={() => navigate(`/search?q=${encodeURIComponent(term)}`)}
+                  className="px-3 py-1 rounded-full bg-white/5 hover:bg-white/15 border border-white/10 text-white/70 hover:text-white text-xs transition-all flex items-center gap-1"
+                >
+                  <Search size={10} />
+                  <span>{term}</span>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Ambient glow */}
-        <div className="absolute top-0 right-0 w-96 h-96 bg-spotify-green/20 rounded-full blur-3xl pointer-events-none" />
-        <div className="absolute bottom-0 right-1/4 w-80 h-80 bg-tiktok-pink/15 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute top-0 right-0 w-96 h-96 bg-purple-600/20 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute bottom-0 right-1/4 w-80 h-80 bg-spotify-green/15 rounded-full blur-3xl pointer-events-none" />
       </div>
 
-      {/* Seção de Playlists Multiplataforma Personalizadas */}
+      {/* 🔮 SEÇÃO 1: MIXES FEITOS PARA VOCÊ (Algoritmo Personalizado) */}
+      <section className="space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-xl md:text-2xl font-black text-white tracking-tight flex items-center gap-2">
+              <Sparkles size={22} className="text-purple-400 animate-pulse" />
+              <span>Feito Para Você • Mixes Personalizados</span>
+            </h2>
+            <p className="text-white/50 text-xs md:text-sm mt-0.5">
+              Gerados automaticamente com base nas suas playlists, buscas e histórico
+            </p>
+          </div>
+        </div>
+
+        {isLoadingRecs ? (
+          <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 gap-4">
+            {[1, 2, 3, 4].map((n) => (
+              <div key={n} className="p-4 rounded-2xl bg-white/5 border border-white/5 animate-pulse h-48 flex flex-col justify-end space-y-2">
+                <div className="h-4 bg-white/10 rounded w-3/4" />
+                <div className="h-3 bg-white/5 rounded w-1/2" />
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+            {(recommendations?.personalizedMixes || []).map((mix) => (
+              <div
+                key={mix.id}
+                onClick={() => playPersonalizedMix(mix)}
+                className="group p-4 rounded-2xl bg-white/[0.03] hover:bg-white/[0.08] transition-all duration-300 border border-white/10 hover:border-purple-500/40 cursor-pointer flex flex-col justify-between space-y-3 relative overflow-hidden shadow-lg hover:shadow-purple-500/10 hover:scale-[1.02]"
+              >
+                {/* Capa com Gradiente Vibrante */}
+                <div className={cn('relative aspect-video rounded-xl overflow-hidden bg-gradient-to-br flex items-center justify-center shadow-md', mix.coverGradient)}>
+                  {mix.coverUrl ? (
+                    <img src={mix.coverUrl} alt={mix.title} className="w-full h-full object-cover opacity-60 group-hover:scale-105 transition-transform duration-300 mix-blend-overlay" />
+                  ) : null}
+                  <div className="absolute inset-0 bg-black/20" />
+                  
+                  <div className="relative z-10 text-center px-3">
+                    <Disc3 size={32} className="text-white/80 mx-auto mb-1 animate-spin-slow" />
+                    <span className="text-[10px] font-black uppercase tracking-widest text-white/90 drop-shadow">
+                      {mix.tags[0] || 'Mix'}
+                    </span>
+                  </div>
+
+                  {/* Play Hover Button */}
+                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                    <div className="w-12 h-12 rounded-full bg-spotify-green flex items-center justify-center shadow-2xl transform group-hover:scale-110 active:scale-95 transition-transform">
+                      <Play size={20} className="text-black fill-black ml-0.5" />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Textos */}
+                <div>
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <span className="px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30 text-[9px] font-extrabold uppercase tracking-wider">
+                      Mix Diário
+                    </span>
+                    <span className="text-white/40 text-[10px]">{mix.items.length} faixas</span>
+                  </div>
+                  <h3 className="text-white font-bold text-sm md:text-base leading-snug group-hover:text-purple-300 transition-colors">
+                    {mix.title}
+                  </h3>
+                  <p className="text-white/50 text-xs line-clamp-2 mt-1 leading-relaxed">
+                    {mix.description}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
+      {/* 🎵 SEÇÃO 2: MÚSICAS RECOMENDADAS (Porque você ouviu...) */}
+      {recommendations?.becauseYouListened && recommendations.becauseYouListened.tracks.length > 0 && (
+        <section className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-xl font-bold text-white tracking-tight flex items-center gap-2">
+                <Flame size={20} className="text-orange-400" />
+                <span>Porque você ouviu <strong className="text-purple-300">{recommendations.becauseYouListened.artistName}</strong></span>
+              </h2>
+              <p className="text-white/40 text-xs mt-0.5">Faixas recomendadas que combinam com este artista</p>
+            </div>
+            <button
+              onClick={() => navigate(`/search?q=${encodeURIComponent(recommendations.becauseYouListened!.artistName)}`)}
+              className="text-white/40 hover:text-white text-xs font-semibold flex items-center gap-1 transition-colors"
+            >
+              <span>Ver mais</span>
+              <ArrowRight size={14} />
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
+            {recommendations.becauseYouListened.tracks.map((track) => {
+              const isCurrent = currentQueueItem?.id === track.id
+              return (
+                <div
+                  key={track.id}
+                  className={cn(
+                    'group p-3 rounded-2xl bg-white/[0.03] hover:bg-white/[0.08] transition-all border border-white/5 hover:border-white/20 flex items-center gap-3 cursor-pointer',
+                    isCurrent && 'border-spotify-green bg-spotify-green/10'
+                  )}
+                  onClick={() => playTrackItem(track)}
+                >
+                  <div className="w-12 h-12 rounded-xl overflow-hidden bg-white/10 flex-shrink-0 relative">
+                    {track.artworkUrl ? (
+                      <img src={track.artworkUrl} alt={track.title} className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-white/30"><Music2 size={20} /></div>
+                    )}
+                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                      <Play size={16} className="text-white fill-white ml-0.5" />
+                    </div>
+                  </div>
+
+                  <div className="min-w-0 flex-1">
+                    <p className={cn('text-sm font-bold truncate', isCurrent ? 'text-spotify-green' : 'text-white group-hover:text-purple-300')}>
+                      {track.title}
+                    </p>
+                    <p className="text-white/50 text-xs truncate mt-0.5">{track.subtitle}</p>
+                  </div>
+
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setModalItem({
+                        id: track.id,
+                        source: track.source,
+                        title: track.title,
+                        subtitle: track.subtitle,
+                        imageUrl: track.artworkUrl,
+                        videoId: track.videoId,
+                        durationMs: track.durationMs,
+                        addedAt: new Date().toISOString(),
+                      })
+                    }}
+                    className="opacity-0 group-hover:opacity-100 p-2 text-white/40 hover:text-white transition-all flex-shrink-0"
+                    title="Adicionar à playlist"
+                  >
+                    <ListPlus size={16} />
+                  </button>
+                </div>
+              )
+            })}
+          </div>
+        </section>
+      )}
+
+      {/* ⚡ SEÇÃO 3: TOCADAS RECENTEMENTE (Histórico Rápido) */}
+      {(recommendations?.recentlyPlayed || []).length > 0 && (
+        <section className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-xl font-bold text-white tracking-tight flex items-center gap-2">
+              <Clock size={20} className="text-spotify-green" />
+              <span>Tocadas Recentemente</span>
+            </h2>
+            <button
+              onClick={() => useHistoryStore.getState().clearHistory()}
+              className="text-white/30 hover:text-red-400 text-xs transition-colors"
+            >
+              Limpar histórico
+            </button>
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
+            {recommendations!.recentlyPlayed.slice(0, 6).map((item) => (
+              <div
+                key={item.id}
+                onClick={() => playUniversal([item], 0)}
+                className="group p-3 rounded-2xl bg-white/[0.03] hover:bg-white/[0.08] transition-all border border-white/5 hover:border-spotify-green/40 cursor-pointer space-y-2"
+              >
+                <div className="relative aspect-square rounded-xl overflow-hidden bg-black shadow-md flex items-center justify-center">
+                  {item.imageUrl ? (
+                    <img src={item.imageUrl} alt={item.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                  ) : (
+                    <Music2 size={32} className="text-white/30" />
+                  )}
+                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                    <div className="w-10 h-10 rounded-full bg-spotify-green flex items-center justify-center shadow-xl">
+                      <Play size={16} className="text-black fill-black ml-0.5" />
+                    </div>
+                  </div>
+                </div>
+                <div className="min-w-0">
+                  <p className="text-white text-xs font-bold truncate group-hover:text-spotify-green transition-colors">
+                    {item.title}
+                  </p>
+                  <p className="text-white/40 text-[10px] truncate mt-0.5">{item.subtitle}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* 📂 SEÇÃO 4: PLAYLISTS RECOMENDADAS PARA VOCÊ (YouTube & Spotify) */}
+      {(recommendations?.recommendedPlaylists || []).length > 0 && (
+        <section className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-xl font-bold text-white tracking-tight flex items-center gap-2">
+                <Radio size={20} className="text-yellow-400" />
+                <span>Playlists Recomendadas no YouTube & Spotify</span>
+              </h2>
+              <p className="text-white/40 text-xs mt-0.5">Coleções perfeitas baseadas nos seus artistas mais ouvidos</p>
+            </div>
+            <button
+              onClick={() => navigate('/search?mode=playlists')}
+              className="text-white/40 hover:text-white text-xs font-semibold flex items-center gap-1 transition-colors"
+            >
+              <span>Explorar Playlists</span>
+              <ArrowRight size={14} />
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+            {recommendations!.recommendedPlaylists.map((pl) => (
+              <div
+                key={pl.id}
+                onClick={() => playRecommendedPlaylist(pl)}
+                className="group p-3.5 rounded-2xl bg-white/[0.03] hover:bg-white/[0.08] transition-all border border-white/5 hover:border-yellow-400/40 cursor-pointer flex items-center gap-3.5 shadow-md hover:scale-[1.01]"
+              >
+                <div className="w-16 h-16 rounded-xl overflow-hidden bg-black flex-shrink-0 relative shadow-md">
+                  {pl.coverUrl ? (
+                    <img src={pl.coverUrl} alt={pl.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-white/30"><Layers size={24} /></div>
+                  )}
+                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                    <Play size={18} className="text-white fill-white ml-0.5" />
+                  </div>
+                </div>
+
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-1.5 mb-0.5">
+                    <span className="px-1.5 py-0.5 rounded-full bg-yellow-400/20 text-yellow-300 text-[9px] font-extrabold uppercase">
+                      Playlist
+                    </span>
+                    <span className="text-white/40 text-[10px]">{pl.itemCount} vídeos</span>
+                  </div>
+                  <h4 className="text-white text-sm font-bold truncate group-hover:text-yellow-300 transition-colors">
+                    {pl.name}
+                  </h4>
+                  <p className="text-white/50 text-xs truncate mt-0.5">{pl.description}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* 📁 SEÇÃO 5: SUAS PLAYLISTS MULTIPLATAFORMA */}
       {customPlaylists.length > 0 && (
         <section className="space-y-4">
           <div className="flex items-center justify-between">
@@ -326,7 +654,7 @@ export function Home() {
         </section>
       )}
 
-      {/* Saved YouTube Videos Grid */}
+      {/* 📹 SEÇÃO 6: VÍDEOS SALVOS DO YOUTUBE */}
       {youtubeVideos.length > 0 && (
         <section className="space-y-4">
           <div className="flex items-center justify-between">
@@ -350,149 +678,29 @@ export function Home() {
                 className="group p-3 rounded-2xl bg-white/[0.03] hover:bg-white/[0.08] transition-all border border-white/5 flex flex-col justify-between space-y-2"
               >
                 <div
-                  onClick={() => playSavedYouTube(video)}
-                  className="relative aspect-video rounded-xl overflow-hidden bg-black shadow-md cursor-pointer"
+                  className="relative aspect-video rounded-xl overflow-hidden bg-black cursor-pointer"
+                  onClick={() => {
+                    const queueItem: QueueItem = {
+                      id: video.id,
+                      source: 'youtube',
+                      title: video.title,
+                      subtitle: video.channelTitle,
+                      imageUrl: video.thumbnailUrl,
+                      videoId: video.videoId,
+                    }
+                    playUniversal([queueItem], 0)
+                  }}
                 >
-                  <img
-                    src={video.thumbnailUrl}
-                    alt={video.title}
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                  />
+                  <img src={video.thumbnailUrl} alt={video.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
                   <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                    <div className="w-10 h-10 rounded-full bg-youtube-red flex items-center justify-center shadow-lg">
-                      <Play size={18} className="text-white fill-white ml-0.5" />
+                    <div className="w-10 h-10 rounded-full bg-youtube-red flex items-center justify-center shadow-xl">
+                      <Play size={16} className="text-white fill-white ml-0.5" />
                     </div>
                   </div>
                 </div>
-                <div className="space-y-1">
-                  <p
-                    onClick={() => playSavedYouTube(video)}
-                    className="text-white text-xs font-semibold truncate leading-snug cursor-pointer hover:underline"
-                  >
-                    {video.title}
-                  </p>
-                  <p className="text-white/40 text-[11px] truncate">{video.channelTitle}</p>
-                </div>
-                <div className="flex items-center justify-between pt-2 border-t border-white/5">
-                  <button
-                    onClick={() =>
-                      setModalItem({
-                        id: video.id,
-                        source: 'youtube',
-                        title: video.title,
-                        subtitle: video.channelTitle,
-                        imageUrl: video.thumbnailUrl,
-                        videoId: video.videoId,
-                        url: video.url,
-                        addedAt: new Date().toISOString(),
-                      })
-                    }
-                    className="p-1 text-white/40 hover:text-spotify-green text-xs flex items-center gap-1 transition-colors"
-                    title="Adicionar à Playlist"
-                  >
-                    <ListPlus size={14} />
-                    <span className="text-[10px]">Playlist</span>
-                  </button>
-                  <button
-                    onClick={() => removeYouTubeVideo(video.id)}
-                    className="p-1 text-white/30 hover:text-red-400 transition-colors"
-                    title="Remover"
-                  >
-                    <Trash2 size={13} />
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
-
-      {/* Saved TikTok Videos Grid */}
-      {tiktokVideos.length > 0 && (
-        <section className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-xl font-bold text-white tracking-tight flex items-center gap-2">
-              <span className="text-tiktok-pink"><TikTokIcon /></span>
-              <span>Sons do TikTok Salvos ({tiktokVideos.length})</span>
-            </h2>
-            <Link
-              to="/tiktok"
-              className="text-white/40 hover:text-white text-xs font-semibold flex items-center gap-1 transition-colors"
-            >
-              <span>Ver Todos</span>
-              <ArrowRight size={14} />
-            </Link>
-          </div>
-
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
-            {tiktokVideos.slice(0, 6).map((video) => (
-              <div
-                key={video.id}
-                className="group p-3 rounded-2xl bg-white/[0.03] hover:bg-white/[0.08] transition-all border border-white/5 space-y-2 flex flex-col justify-between"
-              >
-                <div
-                  onClick={() => playSavedTikTok(video)}
-                  className="relative w-full aspect-[9/16] rounded-xl overflow-hidden bg-black/60 flex items-center justify-center border border-white/10 shadow-md cursor-pointer"
-                >
-                  {video.thumbnailUrl ? (
-                    <img
-                      src={video.thumbnailUrl}
-                      alt={video.title}
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                    />
-                  ) : (
-                    <div className="text-tiktok-pink opacity-50">
-                      <TikTokIcon />
-                    </div>
-                  )}
-                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                    <div className="w-10 h-10 rounded-full bg-tiktok-pink flex items-center justify-center shadow-lg">
-                      <Play size={18} className="text-white fill-white ml-0.5" />
-                    </div>
-                  </div>
-                </div>
-                <div className="space-y-0.5">
-                  <p
-                    onClick={() => playSavedTikTok(video)}
-                    className="text-white text-xs font-semibold truncate cursor-pointer hover:underline"
-                    title={video.title}
-                  >
-                    {video.title || 'Vídeo do TikTok'}
-                  </p>
-                  {video.soundTitle && (
-                    <p className="text-tiktok-pink text-[10px] font-medium truncate flex items-center gap-1" title={video.soundTitle}>
-                      <span>🎵</span>
-                      <span>{video.soundTitle}</span>
-                    </p>
-                  )}
-                  <p className="text-white/40 text-[9px] truncate">@{video.authorName}</p>
-                </div>
-                <div className="flex items-center justify-between pt-1 border-t border-white/5">
-                  <button
-                    onClick={() =>
-                      setModalItem({
-                        id: video.id,
-                        source: 'tiktok',
-                        title: video.title || 'Vídeo do TikTok',
-                        subtitle: video.soundTitle ? `Som: ${video.soundTitle} • @${video.authorName}` : `@${video.authorName}`,
-                        imageUrl: video.thumbnailUrl,
-                        tiktokPostId: video.postId,
-                        url: video.url,
-                        addedAt: new Date().toISOString(),
-                      })
-                    }
-                    className="p-1 text-white/40 hover:text-tiktok-pink transition-colors"
-                    title="Adicionar à Playlist"
-                  >
-                    <ListPlus size={13} />
-                  </button>
-                  <button
-                    onClick={() => removeTikTokVideo(video.id)}
-                    className="p-1 text-white/30 hover:text-red-400 transition-colors"
-                    title="Remover"
-                  >
-                    <Trash2 size={13} />
-                  </button>
+                <div>
+                  <p className="text-white text-xs font-bold truncate">{video.title}</p>
+                  <p className="text-white/40 text-[10px] truncate">{video.channelTitle}</p>
                 </div>
               </div>
             ))}

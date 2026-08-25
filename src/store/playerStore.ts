@@ -5,6 +5,7 @@
 
 import { create } from 'zustand'
 import { devtools } from 'zustand/middleware'
+import { useHistoryStore } from '@/store/historyStore'
 import type {
   PlayerState,
   PlayerSource,
@@ -338,6 +339,11 @@ export const usePlayerStore = create<ExtendedPlayerState & PlayerActions>()(
           shuffledPosition: newShuffledPos,
           isResolving: true,
         })
+
+        // Registra histórico de reprodução para recomendações inteligentes
+        try {
+          useHistoryStore.getState().recordPlay(targetItem)
+        } catch {}
 
         // 1. Se já possui áudio direto (ex: MP3 extraído do TikTok ou áudio preview)
         if (targetItem.audioUrl) {
