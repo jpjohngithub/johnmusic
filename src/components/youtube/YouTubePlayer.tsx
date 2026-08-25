@@ -6,6 +6,7 @@
 import { useEffect, useRef } from 'react'
 import { useYouTubeIframeApi } from '@/hooks/useYouTubeIframeApi'
 import { usePlayerStore } from '@/store/playerStore'
+import { useHistoryStore } from '@/store/historyStore'
 import type { QueueItem } from '@/types'
 
 export function YouTubePlayer() {
@@ -122,9 +123,7 @@ export function YouTubePlayer() {
         const resolved = await resolvePlayable(playableTrack)
         if (resolved?.videoId) {
           playableTrack.videoId = resolved.videoId
-          const updatedQ = [...store.queue]
-          updatedQ[targetIndex] = playableTrack
-          store.setQueue(updatedQ, store.queueIndex)
+          store.updateQueueItem(targetIndex, { videoId: resolved.videoId })
         } else {
           await store.playQueueIndex(targetIndex)
           return
@@ -196,9 +195,17 @@ export function YouTubePlayer() {
         hasTriggeredTransitionRef.current = false
         lastLoadedIdRef.current = playableTrack.videoId!
 
-        // Atualiza o estado global sem reiniciar
+        const currentStoreState = usePlayerStore.getState()
+        let newShuffledPos = 0
+        if (currentStoreState.isShuffled && currentStoreState.shuffledOrder.length === currentStoreState.queue.length) {
+          const foundPos = currentStoreState.shuffledOrder.indexOf(targetIndex)
+          newShuffledPos = foundPos >= 0 ? foundPos : 0
+        }
+
+        // Atualiza o estado global com a nova posição determinística
         usePlayerStore.setState({
           queueIndex: targetIndex,
+          shuffledPosition: newShuffledPos,
           currentQueueItem: playableTrack,
           youtubeVideo: {
             id: playableTrack.id,
@@ -212,6 +219,11 @@ export function YouTubePlayer() {
           isPlaying: true,
           isCrossfading: false,
         })
+
+        // Registra no histórico de reprodução
+        try {
+          useHistoryStore.getState().recordPlay(playableTrack)
+        } catch {}
 
         startProgressLoop()
       }

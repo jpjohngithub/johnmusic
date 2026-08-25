@@ -69,6 +69,7 @@ export interface PlayerActions {
 
   // Queue & Universal Playback
   setQueue: (items: QueueItem[], startIndex?: number) => void
+  updateQueueItem: (index: number, updates: Partial<QueueItem>) => void
   addToQueue: (item: QueueItem) => void
   removeFromQueue: (id: string) => void
   clearQueue: () => void
@@ -290,12 +291,34 @@ export const usePlayerStore = create<ExtendedPlayerState & PlayerActions>()(
       },
 
       setQueue: (queue, startIndex = 0) => {
-        const isShuffled = get().isShuffled
-        const shuffledOrder = isShuffled && queue.length > 0
-          ? generateShuffleOrder(queue.length, startIndex)
-          : []
-        set({ queue, queueIndex: startIndex, shuffledOrder, shuffledPosition: 0 })
+        const { isShuffled, shuffledOrder, shuffledPosition } = get()
+        let newShuffledOrder = shuffledOrder
+        let newShuffledPosition = shuffledPosition
+
+        if (isShuffled && queue.length > 0) {
+          if (shuffledOrder.length !== queue.length) {
+            newShuffledOrder = generateShuffleOrder(queue.length, startIndex)
+            newShuffledPosition = 0
+          }
+        } else {
+          newShuffledOrder = []
+          newShuffledPosition = 0
+        }
+
+        set({
+          queue,
+          queueIndex: startIndex,
+          shuffledOrder: newShuffledOrder,
+          shuffledPosition: newShuffledPosition,
+        })
       },
+      updateQueueItem: (index, updates) =>
+        set((s) => {
+          if (index < 0 || index >= s.queue.length) return {}
+          const newQueue = [...s.queue]
+          newQueue[index] = { ...newQueue[index], ...updates }
+          return { queue: newQueue }
+        }),
       addToQueue: (item) =>
         set((s) => {
           const newQueue = [...s.queue, item]
