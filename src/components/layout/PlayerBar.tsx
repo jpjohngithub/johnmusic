@@ -22,10 +22,12 @@ import {
   ExternalLink,
   Loader2,
   Sparkles,
+  ListMusic,
 } from 'lucide-react'
 import { usePlayerStore } from '@/store/playerStore'
 import { formatSeconds, cn } from '@/lib/utils'
 import { YouTubePlayer } from '@/components/youtube/YouTubePlayer'
+import { QueueDrawer } from '@/components/player/QueueDrawer'
 
 // TikTok mini icon
 const TikTokIcon = () => (
@@ -58,6 +60,8 @@ export function PlayerBar({ onExpandPlayer }: PlayerBarProps) {
     repeatMode,
     perfectTransition,
     isCrossfading,
+    queue,
+    queueIndex,
     togglePerfectTransition,
     setIsPlaying,
     setVolume,
@@ -72,7 +76,10 @@ export function PlayerBar({ onExpandPlayer }: PlayerBarProps) {
   } = usePlayerStore()
 
   const [showEmbedDrawer, setShowEmbedDrawer] = useState(false)
+  const [showQueueDrawer, setShowQueueDrawer] = useState(false)
   const audioElementRef = useRef<HTMLAudioElement | null>(null)
+
+  const nextTrack = queue[queueIndex + 1] || null
 
   // ─── HTML5 Audio Engine ───────────────────────────────────
   useEffect(() => {
@@ -296,6 +303,19 @@ export function PlayerBar({ onExpandPlayer }: PlayerBarProps) {
                   {currentSubtitle}
                 </Link>
               ) : null}
+
+              {nextTrack && (
+                <button
+                  onClick={() => setShowQueueDrawer(true)}
+                  className="flex items-center gap-1 mt-0.5 text-[11px] text-white/40 hover:text-purple-300 transition-colors truncate max-w-[280px] group text-left"
+                  title={`Próxima: ${nextTrack.title} — ${nextTrack.subtitle} (Clique para ver a fila completa)`}
+                >
+                  <span className="font-bold text-purple-400 group-hover:underline flex items-center gap-0.5 flex-shrink-0">
+                    <Sparkles size={10} /> A Seguir:
+                  </span>
+                  <span className="truncate">{nextTrack.title}</span>
+                </button>
+              )}
             </div>
 
             {onExpandPlayer && (
@@ -404,28 +424,54 @@ export function PlayerBar({ onExpandPlayer }: PlayerBarProps) {
             </div>
           </div>
 
-          {/* Right: Volume */}
-          <div className="flex items-center gap-2 w-40 flex-shrink-0 justify-end">
+          {/* Right: Volume & Queue */}
+          <div className="flex items-center gap-3 w-48 flex-shrink-0 justify-end">
             <button
-              onClick={toggleMute}
-              className="text-white/50 hover:text-white transition-colors p-1"
+              onClick={() => setShowQueueDrawer((v) => !v)}
+              className={cn(
+                'p-2 rounded-lg transition-all relative flex items-center justify-center',
+                showQueueDrawer
+                  ? 'bg-spotify-green/20 text-spotify-green border border-spotify-green/40 shadow-sm shadow-spotify-green/20'
+                  : 'text-white/50 hover:text-white hover:bg-white/5'
+              )}
+              title="Fila de Reprodução & A Seguir (Ver próximas músicas)"
             >
-              {isMuted || volume === 0 ? <VolumeX size={18} /> : <Volume2 size={18} />}
+              <ListMusic size={19} />
+              {queue.length > 0 && (
+                <span className="absolute -top-1 -right-1 px-1.5 min-w-[15px] h-4 bg-spotify-green text-black font-black text-[9px] rounded-full flex items-center justify-center shadow">
+                  {queue.length}
+                </span>
+              )}
             </button>
-            <input
-              type="range"
-              min={0}
-              max={100}
-              value={isMuted ? 0 : volume}
-              onChange={handleVolumeChange}
-              className="w-24 h-1 accent-white cursor-pointer"
-              style={{
-                background: `linear-gradient(to right, white ${isMuted ? 0 : volume}%, rgba(255,255,255,0.2) ${isMuted ? 0 : volume}%)`,
-              }}
-            />
+
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={toggleMute}
+                className="text-white/50 hover:text-white transition-colors p-1"
+              >
+                {isMuted || volume === 0 ? <VolumeX size={18} /> : <Volume2 size={18} />}
+              </button>
+              <input
+                type="range"
+                min={0}
+                max={100}
+                value={isMuted ? 0 : volume}
+                onChange={handleVolumeChange}
+                className="w-20 sm:w-24 h-1 accent-white cursor-pointer"
+                style={{
+                  background: `linear-gradient(to right, white ${isMuted ? 0 : volume}%, rgba(255,255,255,0.2) ${isMuted ? 0 : volume}%)`,
+                }}
+              />
+            </div>
           </div>
         </div>
       </div>
+
+      {/* Drawer de Fila de Reprodução & A Seguir */}
+      <QueueDrawer
+        isOpen={showQueueDrawer}
+        onClose={() => setShowQueueDrawer(false)}
+      />
     </>
   )
 }

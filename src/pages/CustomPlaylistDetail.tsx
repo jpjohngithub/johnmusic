@@ -586,6 +586,7 @@ export function CustomPlaylistDetail() {
           <div className="space-y-1.5">
             {playlist.items.map((item, index) => {
               const isCurrent = isCurrentPlayingInPlaylist(item)
+              const isNext = activeIndex >= 0 && index === activeIndex + 1
               const isBeingDragged = draggedIndex === index
               const isDragOver = dragOverIndex === index
 
@@ -628,6 +629,8 @@ export function CustomPlaylistDetail() {
                     isDragOver && 'border-spotify-green ring-2 ring-spotify-green/40 bg-spotify-green/10 scale-[1.01]',
                     !isBeingDragged && !isDragOver && isCurrent
                       ? 'bg-gradient-to-r from-spotify-green/20 via-purple-950/30 to-black border-spotify-green/50 shadow-lg text-white'
+                      : !isBeingDragged && !isDragOver && isNext
+                      ? 'bg-purple-500/10 border-purple-500/30 text-white hover:bg-purple-500/15'
                       : 'bg-white/[0.02] hover:bg-white/[0.07] border-white/5 text-white/80 hover:text-white'
                   )}
                   style={{ gridTemplateColumns: '80px 1fr auto' }}
@@ -723,8 +726,14 @@ export function CustomPlaylistDetail() {
                           {item.title}
                         </p>
                         {isCurrent && (
-                          <span className="px-2 py-0.5 rounded-full bg-spotify-green/20 text-spotify-green text-[10px] font-extrabold uppercase tracking-wider">
+                          <span className="px-2 py-0.5 rounded-full bg-spotify-green/20 text-spotify-green text-[10px] font-extrabold uppercase tracking-wider flex-shrink-0">
                             Tocando
+                          </span>
+                        )}
+                        {isNext && (
+                          <span className="px-2 py-0.5 rounded-full bg-purple-500/25 text-purple-200 border border-purple-500/40 text-[10px] font-extrabold uppercase tracking-wider flex items-center gap-1 flex-shrink-0 shadow-sm">
+                            <Sparkles size={10} className="text-purple-400" />
+                            A Seguir
                           </span>
                         )}
                       </div>
