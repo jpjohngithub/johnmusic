@@ -1,7 +1,7 @@
 // ============================================================
-// YOUTUBE PLAYER — MOTOR DUAL-DECK TRANSIÇÃO MÁGICA 4.0 (CONFIRMED-AUDIO HANDSHAKE)
-// Início do Crossfade apenas após confirmação de reprodução do Deck B (Zero Queda de Volume)
-// Curva Acústica Equal-Power Perfeita (cos / sin) sem silêncio e sem gaps
+// YOUTUBE PLAYER — MOTOR DUAL-DECK TRANSIÇÃO MÁGICA 5.0 (DEEP OVERLAP AUTOMIX)
+// Gatilho a 8.5s para transição sem silêncio de final de faixa + Entrada Enérgica
+// Confirmed-Audio Handshake + Curva Acústica de Potência Estendida (6.5s)
 // ============================================================
 
 import { useEffect, useRef } from 'react'
@@ -65,7 +65,7 @@ export function YouTubePlayer() {
     usePlayerStore.getState().setIsCrossfading(false)
   }
 
-  // ─── Loop de Monitoramento de Progresso de Alta Precisão (80ms) ───
+  // ─── Loop de Monitoramento de Progresso de Alta Precisão (70ms) ───
   function startProgressLoop() {
     stopProgressLoop()
     progressTimerRef.current = window.setInterval(() => {
@@ -82,40 +82,40 @@ export function YouTubePlayer() {
           store.setDuration(duration)
           store.setProgress((current / duration) * 100)
 
-          // ─── Automação de Transição Mágica no Fim da Faixa ───
+          // ─── Automação de Transição Mágica a 8.5s (Antes do Silêncio Final) ───
           if (
             store.perfectTransition &&
-            duration > 12 &&
+            duration > 15 &&
             !isCrossfadingRef.current &&
             !hasTriggeredTransitionRef.current
           ) {
             const remaining = duration - current
 
-            // Pré-busca em nuvem da próxima faixa a 18s do fim
-            if (remaining <= 18 && remaining > 12) {
+            // Pré-busca em nuvem da próxima faixa a 20s do fim
+            if (remaining <= 20 && remaining > 14) {
               store.preResolveNextTrack()
             }
 
-            // Dispara a Transição Mágica nos últimos 5.5s da música
-            if (remaining <= 5.5 && remaining > 0.4) {
+            // Dispara o Crossfade Mágico enquanto a música A ainda está com energia musical total (8.5s)
+            if (remaining <= 8.5 && remaining > 0.5) {
               hasTriggeredTransitionRef.current = true
               const nextTrack = store.getNextTrack()
               const nextIndex = store.getNextTrackIndex()
               if (nextTrack && nextIndex !== null) {
-                performHandshakeCrossfade(nextTrack, nextIndex, 4800)
+                performHandshakeCrossfade(nextTrack, nextIndex, 6500)
               }
             }
           }
         }
       } catch {}
-    }, 80)
+    }, 70)
   }
 
   // ─── Motor de Transição Mágica com Handshake de Áudio Ativo ───────
   async function performHandshakeCrossfade(
     targetTrack: QueueItem,
     targetIndex: number,
-    durationMs = 4800
+    durationMs = 6500
   ) {
     if (isCrossfadingRef.current) return
 
@@ -155,7 +155,7 @@ export function YouTubePlayer() {
     const outgoingDeck = activeDeckRef.current
     const incomingDeck = outgoingDeck === 'A' ? 'B' : 'A'
 
-    // Mantém a música atual no volume normal enquanto a nova carrega
+    // Mantém a música atual no volume integral enquanto a nova carrega
     try {
       activePlayer?.setVolume(masterVol)
     } catch {}
@@ -172,9 +172,9 @@ export function YouTubePlayer() {
       handshakeTimerRef.current = null
     }
 
-    // ─── Handshake: Aguarda o Deck B realmente começar a reproduzir áudio ───
+    // ─── Handshake: Aguarda o Deck B realmente começar a reproduzir som ───
     let waitAttempts = 0
-    const maxWaitAttempts = 30 // Max 3.0s de espera pelo buffer
+    const maxWaitAttempts = 28
 
     handshakeTimerRef.current = window.setInterval(() => {
       waitAttempts++
@@ -183,7 +183,6 @@ export function YouTubePlayer() {
       try {
         const standbyState = standbyPlayer.getPlayerState?.()
         const standbyTime = standbyPlayer.getCurrentTime?.() || 0
-        // Estado 1 = PLAYING e já começou a avançar o tempo
         if (standbyState === 1 || standbyTime > 0.05 || waitAttempts >= maxWaitAttempts) {
           isReadyToCrossfade = true
         }
@@ -195,13 +194,13 @@ export function YouTubePlayer() {
         clearInterval(handshakeTimerRef.current)
         handshakeTimerRef.current = null
 
-        // ─── Ambos os decks estão confirmados tocando! Inicia o Crossfade Perfeito ───
+        // Inicia a rampa de potência estendida
         startEqualPowerRamp(activePlayer, standbyPlayer, masterVol, incomingDeck, playableTrack, targetIndex, durationMs)
       }
-    }, 100)
+    }, 80)
   }
 
-  // ─── Rampa Acústica Equal-Power de Alta Fidelidade (60 FPS) ──────
+  // ─── Rampa Acústica de Alta Energia (Potência Estendida) ───────────
   function startEqualPowerRamp(
     activePlayer: any,
     standbyPlayer: any,
@@ -224,11 +223,15 @@ export function YouTubePlayer() {
       const elapsed = currentTime - startTime
       const progress = Math.min(1.0, elapsed / durationMs)
 
-      // Curva Equal-Power Suave (Fórmula Acústica de Potência Constante: cos / sin)
-      // Mantém a pressão sonora total 100% estável: cos^2(t) + sin^2(t) = 1.0
+      // Curva Musical de Alta Energia:
+      // A música que entra (in) sobe rápido e presente (sin^0.65)
+      // A música que sai (out) mantém a base rítmica até o meio (cos^1.25)
       const angle = (progress * Math.PI) / 2
-      const outVol = Math.max(0, Math.min(100, Math.round(masterVol * Math.cos(angle))))
-      const inVol = Math.max(0, Math.min(100, Math.round(masterVol * Math.sin(angle))))
+      const outRatio = Math.pow(Math.cos(angle), 1.25)
+      const inRatio = Math.pow(Math.sin(angle), 0.65)
+
+      const outVol = Math.max(0, Math.min(100, Math.round(masterVol * outRatio)))
+      const inVol = Math.max(0, Math.min(100, Math.round(masterVol * inRatio)))
 
       if (outVol !== lastActiveVol) {
         lastActiveVol = outVol
@@ -441,7 +444,7 @@ export function YouTubePlayer() {
       const nextTrack = store.getNextTrack()
       const nextIndex = store.getNextTrackIndex()
       if (nextTrack && nextIndex !== null) {
-        performHandshakeCrossfade(nextTrack, nextIndex, 2400)
+        performHandshakeCrossfade(nextTrack, nextIndex, 2600)
       } else {
         store.playNext()
       }
@@ -452,7 +455,7 @@ export function YouTubePlayer() {
       const prevTrack = store.getPrevTrack()
       const prevIndex = store.getPrevTrackIndex()
       if (prevTrack && prevIndex !== null) {
-        performHandshakeCrossfade(prevTrack, prevIndex, 2400)
+        performHandshakeCrossfade(prevTrack, prevIndex, 2600)
       } else {
         store.playPrev()
       }
