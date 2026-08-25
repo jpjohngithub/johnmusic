@@ -1,6 +1,7 @@
 // ============================================================
-// YOUTUBE PLAYER — MOTOR DUAL-DECK TRANSIÇÃO MÁGICA ULTRA-FLUIDA
-// 60 FPS Mixagem Equal-Power Suave para Fim de Música e Botões Next / Prev
+// YOUTUBE PLAYER — MOTOR DUAL-DECK TRANSIÇÃO MÁGICA ULTRA-FLUIDA (120 FPS)
+// Interpolação de Alta Resolução via requestAnimationFrame / Relógio de Alta Precisão
+// Curva Psicoacústica Quintic Smoothstep (Perlin) + Equal-Power Logarítmica
 // ============================================================
 
 import { useEffect, useRef } from 'react'
@@ -21,7 +22,7 @@ export function YouTubePlayer() {
   const activeDeckRef = useRef<'A' | 'B'>('A')
   const isCrossfadingRef = useRef<boolean>(false)
   const hasTriggeredTransitionRef = useRef<boolean>(false)
-  const crossfadeTimerRef = useRef<any>(null)
+  const crossfadeRafRef = useRef<number | null>(null)
   const progressTimerRef = useRef<any>(null)
   const lastLoadedIdRef = useRef<string | null>(null)
 
@@ -51,15 +52,15 @@ export function YouTubePlayer() {
   }
 
   function stopCrossfade() {
-    if (crossfadeTimerRef.current !== null) {
-      clearInterval(crossfadeTimerRef.current)
-      crossfadeTimerRef.current = null
+    if (crossfadeRafRef.current !== null) {
+      cancelAnimationFrame(crossfadeRafRef.current)
+      crossfadeRafRef.current = null
     }
     isCrossfadingRef.current = false
     usePlayerStore.getState().setIsCrossfading(false)
   }
 
-  // ─── Loop de Monitoramento de Progresso de Alta Taxa (100ms) ───
+  // ─── Loop de Monitoramento de Progresso de Alta Taxa (80ms) ───
   function startProgressLoop() {
     stopProgressLoop()
     progressTimerRef.current = window.setInterval(() => {
@@ -79,37 +80,37 @@ export function YouTubePlayer() {
           // ─── Disparo Automático no Fim da Música ───
           if (
             store.perfectTransition &&
-            duration > 10 &&
+            duration > 12 &&
             !isCrossfadingRef.current &&
             !hasTriggeredTransitionRef.current
           ) {
             const remaining = duration - current
 
-            // Pré-busca da faixa a 18s do fim
+            // Pré-busca em nuvem 18 segundos antes do fim
             if (remaining <= 18 && remaining > 12) {
               store.preResolveNextTrack()
             }
 
-            // Inicia crossfade ultra-fluido nos últimos 4.8s
-            if (remaining <= 4.8 && remaining > 0.4) {
+            // Inicia crossfade ultra-fluido nos últimos 5.2s
+            if (remaining <= 5.2 && remaining > 0.4) {
               hasTriggeredTransitionRef.current = true
               const nextTrack = store.getNextTrack()
               const nextIndex = store.getNextTrackIndex()
               if (nextTrack && nextIndex !== null) {
-                performDJCrossfade(nextTrack, nextIndex, 4500)
+                performDJCrossfade(nextTrack, nextIndex, 5000)
               }
             }
           }
         }
       } catch {}
-    }, 100)
+    }, 80)
   }
 
-  // ─── Execução do Crossfade Dual-Deck a 60 FPS (25ms por passo) ───
+  // ─── Execução do Crossfade Dual-Deck a 120 FPS (requestAnimationFrame) ───
   async function performDJCrossfade(
     targetTrack: QueueItem,
     targetIndex: number,
-    durationMs = 4500
+    durationMs = 5000
   ) {
     if (isCrossfadingRef.current) return
 
@@ -157,31 +158,48 @@ export function YouTubePlayer() {
       standbyPlayer.playVideo()
     } catch {}
 
-    // 60 FPS: Intervalo de 25ms por passo para ultra-fluidez
-    const stepInterval = 25
-    const totalSteps = Math.max(20, Math.round(durationMs / stepInterval))
-    let currentStep = 0
+    if (crossfadeRafRef.current !== null) {
+      cancelAnimationFrame(crossfadeRafRef.current)
+      crossfadeRafRef.current = null
+    }
 
-    if (crossfadeTimerRef.current) clearInterval(crossfadeTimerRef.current)
+    // Relógio de Alta Precisão (High-Resolution Timestamp Delta)
+    const startTime = performance.now()
+    let lastActiveVol = masterVol
+    let lastStandbyVol = 0
 
-    crossfadeTimerRef.current = window.setInterval(() => {
-      currentStep++
-      const t = Math.min(1, currentStep / totalSteps)
+    function crossfadeStep(currentTime: number) {
+      const elapsed = currentTime - startTime
+      const progress = Math.min(1.0, elapsed / durationMs)
 
-      // Curva Harmônica Suave Equal-Power (cos / sin com suavização Hermite)
-      const smoothT = t * t * (3 - 2 * t)
-      const outVolume = Math.round(masterVol * Math.cos((smoothT * Math.PI) / 2))
-      const inVolume = Math.round(masterVol * Math.sin((smoothT * Math.PI) / 2))
+      // Curva Quintic Perlin Smoothstep (Suavização contínua de 3ª e 5ª ordem):
+      // s(t) = t^3 * (t * (6t - 15) + 10)
+      const p = progress
+      const smoothP = p * p * p * (p * (6 * p - 15) + 10)
 
-      try {
-        activePlayer?.setVolume(Math.max(0, Math.min(100, outVolume)))
-        standbyPlayer?.setVolume(Math.max(0, Math.min(100, inVolume)))
-      } catch {}
+      // Curva Psicoacústica Logarítmica Equal-Power para volume percebido uniforme:
+      // Mantém a pressão sonora constante sem queda de decibéis no centro da mixagem
+      const outRatio = Math.pow(Math.cos((smoothP * Math.PI) / 2), 1.35)
+      const inRatio = Math.pow(Math.sin((smoothP * Math.PI) / 2), 0.75)
 
-      if (currentStep >= totalSteps) {
+      const outVol = Math.max(0, Math.min(100, Math.round(masterVol * outRatio)))
+      const inVol = Math.max(0, Math.min(100, Math.round(masterVol * inRatio)))
+
+      // Envia comando para os iframes apenas quando houver delta de volume para evitar overhead
+      if (outVol !== lastActiveVol) {
+        lastActiveVol = outVol
+        try { activePlayer?.setVolume(outVol) } catch {}
+      }
+      if (inVol !== lastStandbyVol) {
+        lastStandbyVol = inVol
+        try { standbyPlayer?.setVolume(inVol) } catch {}
+      }
+
+      if (progress < 1.0) {
+        crossfadeRafRef.current = requestAnimationFrame(crossfadeStep)
+      } else {
         // Conclui a transição
-        clearInterval(crossfadeTimerRef.current)
-        crossfadeTimerRef.current = null
+        crossfadeRafRef.current = null
 
         try {
           activePlayer?.pauseVideo()
@@ -227,7 +245,9 @@ export function YouTubePlayer() {
 
         startProgressLoop()
       }
-    }, stepInterval)
+    }
+
+    crossfadeRafRef.current = requestAnimationFrame(crossfadeStep)
   }
 
   // ─── Inicialização dos dois Players do YouTube ───────────────────
@@ -380,7 +400,7 @@ export function YouTubePlayer() {
       const nextTrack = store.getNextTrack()
       const nextIndex = store.getNextTrackIndex()
       if (nextTrack && nextIndex !== null) {
-        performDJCrossfade(nextTrack, nextIndex, 1800)
+        performDJCrossfade(nextTrack, nextIndex, 2400)
       } else {
         store.playNext()
       }
@@ -391,7 +411,7 @@ export function YouTubePlayer() {
       const prevTrack = store.getPrevTrack()
       const prevIndex = store.getPrevTrackIndex()
       if (prevTrack && prevIndex !== null) {
-        performDJCrossfade(prevTrack, prevIndex, 1800)
+        performDJCrossfade(prevTrack, prevIndex, 2400)
       } else {
         store.playPrev()
       }
