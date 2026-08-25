@@ -21,6 +21,7 @@ import {
   Youtube,
   ExternalLink,
   Loader2,
+  Sparkles,
 } from 'lucide-react'
 import { usePlayerStore } from '@/store/playerStore'
 import { formatSeconds, cn } from '@/lib/utils'
@@ -55,6 +56,8 @@ export function PlayerBar({ onExpandPlayer }: PlayerBarProps) {
     duration,
     isShuffled,
     repeatMode,
+    perfectTransition,
+    togglePerfectTransition,
     setIsPlaying,
     setVolume,
     toggleMute,
@@ -104,6 +107,22 @@ export function PlayerBar({ onExpandPlayer }: PlayerBarProps) {
     if (!audio || !audio.duration) return
     setCurrentTime(audio.currentTime)
     setProgress((audio.currentTime / audio.duration) * 100)
+
+    // ─── Transição Perfeita no Áudio HTML5 ───
+    if (perfectTransition && audio.duration > 10) {
+      const remaining = audio.duration - audio.currentTime
+      if (remaining <= 15 && remaining > 13) {
+        usePlayerStore.getState().preResolveNextTrack()
+      }
+      if (remaining <= 3.5 && remaining > 0.6) {
+        const baseVol = isMuted ? 0 : volume / 100
+        const fadeRatio = Math.max(0.08, (remaining - 0.6) / 2.9)
+        audio.volume = baseVol * fadeRatio
+      }
+      if (remaining <= 0.6) {
+        playNext()
+      }
+    }
   }
 
   const handleLoadedMetadata = () => {
@@ -332,6 +351,23 @@ export function PlayerBar({ onExpandPlayer }: PlayerBarProps) {
                 title={repeatMode === 'one' ? 'Repetir uma' : repeatMode === 'all' ? 'Repetir tudo' : 'Não repetir'}
               >
                 <RepeatIcon size={18} />
+              </button>
+
+              <button
+                onClick={togglePerfectTransition}
+                className={cn(
+                  'transition-all p-1.5 rounded-lg flex items-center gap-1 text-xs font-semibold',
+                  perfectTransition
+                    ? 'text-purple-300 bg-purple-500/20 border border-purple-500/40 shadow-sm shadow-purple-500/30 scale-105'
+                    : 'text-white/30 hover:text-white hover:bg-white/5 border border-transparent'
+                )}
+                title={
+                  perfectTransition
+                    ? 'Transição Perfeita ATIVADA: Crossfade suave, sem pausas e corte de silêncio'
+                    : 'Ativar Transição Perfeita (Crossfade suave entre músicas)'
+                }
+              >
+                <Sparkles size={16} className={cn(perfectTransition && 'animate-pulse text-purple-400')} />
               </button>
             </div>
 

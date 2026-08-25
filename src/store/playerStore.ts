@@ -42,6 +42,11 @@ export interface PlayerActions {
   toggleShuffle: () => void
   cycleRepeat: () => void
 
+  // Transição Perfeita (Crossfade + Gapless + Pre-buffer)
+  togglePerfectTransition: () => void
+  setPerfectTransition: (active: boolean) => void
+  preResolveNextTrack: () => Promise<void>
+
   // Direct Audio Track (HTML5 player)
   setAudioTrack: (track: AudioTrack | null) => void
   playAudioTrack: (track: AudioTrack) => void
@@ -88,6 +93,7 @@ const initialState: ExtendedPlayerState = {
   currentTime: 0,
   isShuffled: false,
   repeatMode: 'none',
+  perfectTransition: typeof window !== 'undefined' ? localStorage.getItem('jm_perfect_transition') !== 'false' : true,
   audioTrack: null,
   spotifyTrack: null,
   spotifyDeviceId: null,
@@ -127,6 +133,50 @@ export const usePlayerStore = create<ExtendedPlayerState & PlayerActions>()(
           repeatMode:
             s.repeatMode === 'none' ? 'all' : s.repeatMode === 'all' ? 'one' : 'none',
         })),
+
+      togglePerfectTransition: () =>
+        set((s) => {
+          const next = !s.perfectTransition
+          try {
+            localStorage.setItem('jm_perfect_transition', String(next))
+          } catch {}
+          return { perfectTransition: next }
+        }),
+
+      setPerfectTransition: (active) => {
+        try {
+          localStorage.setItem('jm_perfect_transition', String(active))
+        } catch {}
+        set({ perfectTransition: active })
+      },
+
+      preResolveNextTrack: async () => {
+        const { queue, queueIndex, isShuffled } = get()
+        if (queue.length <= 1) return
+
+        const nextIndex = isShuffled
+          ? Math.floor(Math.random() * queue.length)
+          : (queueIndex + 1) % queue.length
+
+        const nextItem = queue[nextIndex]
+        if (!nextItem || nextItem.videoId || nextItem.audioUrl) return
+
+        try {
+          const { resolvePlayable } = await import('@/api/crossPlatformService')
+          const resolved = await resolvePlayable(nextItem)
+          if (resolved?.videoId) {
+            const currentQ = get().queue
+            if (currentQ[nextIndex]?.id === nextItem.id) {
+              const updatedQueue = [...currentQ]
+              updatedQueue[nextIndex] = {
+                ...nextItem,
+                videoId: resolved.videoId,
+              }
+              set({ queue: updatedQueue })
+            }
+          }
+        } catch {}
+      },
 
       setAudioTrack: (audioTrack) => set({ audioTrack }),
       playAudioTrack: (track) =>
@@ -335,6 +385,8 @@ export const usePlayerStore = create<ExtendedPlayerState & PlayerActions>()(
               isPlaying: true,
               isResolving: false,
             })
+            // Pré-resolve a próxima música em segundo plano se a transição perfeita estiver ativa
+            get().preResolveNextTrack()
           } else {
             set({ isPlaying: false, isResolving: false })
           }

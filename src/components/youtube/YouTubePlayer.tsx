@@ -13,7 +13,9 @@ export function YouTubePlayer() {
   const containerRef = useRef<HTMLDivElement | null>(null)
   const playerRef = useRef<any>(null)
   const progressTimerRef = useRef<number | null>(null)
+  const fadeInTimerRef = useRef<number | null>(null)
   const isTransitioningRef = useRef<boolean>(false)
+  const hasTriggeredSeamlessNextRef = useRef<boolean>(false)
 
   // ID do vídeo a tocar: faixa atual quando source=youtube
   const queueVideoId = usePlayerStore((s) =>
@@ -37,8 +39,35 @@ export function YouTubePlayer() {
         if (duration > 0) {
           store.setProgress((current / duration) * 100)
         }
+
+        // ─── Transição Perfeita (Crossfade suave + Zero silêncio) ───
+        if (store.perfectTransition && duration > 10) {
+          const remaining = duration - current
+
+          // 1. Pré-busca / pré-resolução da próxima faixa 15 segundos antes do fim
+          if (remaining <= 15 && remaining > 13) {
+            store.preResolveNextTrack()
+          }
+
+          // 2. Crossfade Fade-Out nos últimos 3.5 segundos da música
+          if (remaining <= 3.5 && remaining > 0.8 && !hasTriggeredSeamlessNextRef.current) {
+            const baseVol = store.isMuted ? 0 : (store.volume ?? 50)
+            const fadeFactor = Math.max(0.08, (remaining - 0.8) / 2.7)
+            const currentFadeVol = Math.round(baseVol * fadeFactor)
+            try {
+              player.setVolume(currentFadeVol)
+            } catch {}
+          }
+
+          // 3. Dispara a próxima música nos últimos 0.8s para cortar o silêncio final
+          if (remaining <= 0.8 && !hasTriggeredSeamlessNextRef.current && !isTransitioningRef.current) {
+            hasTriggeredSeamlessNextRef.current = true
+            stopProgressLoop()
+            handleEnded()
+          }
+        }
       } catch {}
-    }, 500)
+    }, 400)
   }
 
   function stopProgressLoop() {
@@ -66,9 +95,31 @@ export function YouTubePlayer() {
 
     if (e.data === YTState.PLAYING) {
       isTransitioningRef.current = false
+      hasTriggeredSeamlessNextRef.current = false
+      const targetVol = store.isMuted ? 0 : (store.volume ?? 50)
+
+      if (store.perfectTransition) {
+        // Fade-in suave do início da música
+        let step = 0
+        if (fadeInTimerRef.current) clearInterval(fadeInTimerRef.current)
+        fadeInTimerRef.current = window.setInterval(() => {
+          step++
+          const volRatio = Math.min(1, 0.2 + (step / 6) * 0.8)
+          try {
+            e.target.setVolume(Math.round(targetVol * volRatio))
+          } catch {}
+          if (step >= 6) {
+            if (fadeInTimerRef.current) clearInterval(fadeInTimerRef.current)
+          }
+        }, 150)
+      } else {
+        try {
+          e.target.setVolume(targetVol)
+        } catch {}
+      }
+
       try {
         store.setDuration(e.target.getDuration())
-        e.target.setVolume(store.isMuted ? 0 : (store.volume ?? 50))
       } catch {}
       store.setIsPlaying(true)
       startProgressLoop(e.target)

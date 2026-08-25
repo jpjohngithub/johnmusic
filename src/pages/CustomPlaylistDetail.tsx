@@ -71,6 +71,8 @@ export function CustomPlaylistDetail() {
     currentQueueItem,
     isPlaying,
     isResolving,
+    perfectTransition,
+    togglePerfectTransition,
     togglePlay,
     playUniversal,
     playNext,
@@ -418,6 +420,24 @@ export function CustomPlaylistDetail() {
           >
             <Play size={14} className="fill-black" />
             <span>Tocar Tudo</span>
+          </button>
+
+          <button
+            onClick={togglePerfectTransition}
+            className={cn(
+              'flex items-center gap-1.5 px-4 py-2.5 rounded-full font-bold text-xs transition-all border active:scale-95 shadow-sm',
+              perfectTransition
+                ? 'bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 border-purple-500/40 shadow-purple-500/20'
+                : 'bg-white/5 hover:bg-white/10 text-white/50 hover:text-white border-white/5'
+            )}
+            title={
+              perfectTransition
+                ? 'Transição Perfeita ATIVADA: Crossfade suave e corte inteligente de silêncio entre faixas'
+                : 'Ativar Transição Perfeita para esta playlist'
+            }
+          >
+            <Sparkles size={14} className={cn(perfectTransition && 'text-purple-400 animate-pulse')} />
+            <span>Transição Perfeita: {perfectTransition ? 'Ligada' : 'Desligada'}</span>
           </button>
 
           <button

@@ -268,6 +268,7 @@ export interface PlayerState {
   currentTime: number   // segundos
   isShuffled: boolean
   repeatMode: 'none' | 'one' | 'all'
+  perfectTransition: boolean // Transição Perfeita: Crossfade suave + zero silêncio + pré-carregamento
   // Direct Audio Track (HTML5 player)
   audioTrack: AudioTrack | null
   // Spotify
