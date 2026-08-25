@@ -432,12 +432,12 @@ export function CustomPlaylistDetail() {
             )}
             title={
               perfectTransition
-                ? 'Transição Perfeita ATIVADA: Crossfade suave e corte inteligente de silêncio entre faixas'
-                : 'Ativar Transição Perfeita para esta playlist'
+                ? 'Transição Mágica ATIVADA: Mixagem mágica contínua e sem silêncio entre faixas'
+                : 'Ativar Transição Mágica para esta playlist'
             }
           >
             <Sparkles size={14} className={cn(perfectTransition && 'text-purple-400 animate-pulse')} />
-            <span>Transição Perfeita: {perfectTransition ? 'Ligada' : 'Desligada'}</span>
+            <span>Transição Mágica: {perfectTransition ? 'Ligada' : 'Desligada'}</span>
           </button>
 
           <button

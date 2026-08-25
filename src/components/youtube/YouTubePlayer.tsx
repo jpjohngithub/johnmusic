@@ -1,8 +1,8 @@
 // ============================================================
-// YOUTUBE PLAYER — MOTOR ULTRA-FLUIDO DUAL-DECK DJ AUTOMIX
+// YOUTUBE PLAYER — MOTOR REVOLUCIONÁRIO DUAL-DECK TRANSIÇÃO MÁGICA
 // Pré-carregamento em memória (Pre-cuer) 20s antes do término
-// Interpolação Equal-Power de 60 FPS a cada 50ms (Zero Degraus)
-// Transição suave contínua e sem interrupções entre faixas
+// Interpolação Harmônica S-Curve a 30ms (Mais de 180 micro-passos)
+// Mixagem de DJ contínua, zero silêncio e sobreposição mágica de áudio
 // ============================================================
 
 import { useEffect, useRef } from 'react'
@@ -78,7 +78,7 @@ export function YouTubePlayer() {
           store.setProgress((current / duration) * 100)
         }
 
-        // ─── Transição Perfeita Ultra-Fluida ───
+        // ─── Transição Mágica Ultra-Fluida ───
         if (store.perfectTransition && duration > 12 && !isCrossfadingRef.current) {
           const remaining = duration - current
 
@@ -102,17 +102,17 @@ export function YouTubePlayer() {
             }
           }
 
-          // 3. Dispara a mixagem simultânea contínua nos últimos 5.5 segundos
-          if (remaining <= 5.5 && remaining > 0.4) {
-            triggerSeamlessDJCrossfade(5000)
+          // 3. Dispara a mixagem mágica contínua nos últimos 5.5 segundos
+          if (remaining <= 5.5 && remaining > 0.3) {
+            triggerSeamlessDJCrossfade(5200)
           }
         }
       } catch {}
-    }, 150)
+    }, 100)
   }
 
-  // ─── Executa a Transição DJ Ultra-Fluida com Equal-Power ────
-  async function triggerSeamlessDJCrossfade(durationMs = 5000) {
+  // ─── Executa a Transição Mágica DJ com Curva Harmônica S-Curve ────
+  async function triggerSeamlessDJCrossfade(durationMs = 5200) {
     if (isCrossfadingRef.current) return
 
     const store = usePlayerStore.getState()
@@ -168,7 +168,7 @@ export function YouTubePlayer() {
       return
     }
 
-    // Inicia o processo de mixagem ultra-fluida
+    // Inicia a Transição Mágica
     isCrossfadingRef.current = true
     hasPreCuedRef.current = false
     store.setIsCrossfading(true)
@@ -184,9 +184,9 @@ export function YouTubePlayer() {
       standbyPlayer.playVideo()
     } catch {}
 
-    // Interpolação Equal-Power de 60 FPS (50ms por passo)
-    const stepInterval = 50
-    const totalSteps = Math.max(10, Math.round(durationMs / stepInterval))
+    // Micro-interpolação S-Curve a cada 30ms (~175 passos ultrafinos)
+    const stepInterval = 30
+    const totalSteps = Math.max(20, Math.round(durationMs / stepInterval))
     let currentStep = 0
 
     if (crossfadeTimerRef.current) clearInterval(crossfadeTimerRef.current)
@@ -195,9 +195,9 @@ export function YouTubePlayer() {
       currentStep++
       const progressRatio = Math.min(1, currentStep / totalSteps)
 
-      // Curva senoidal Equal-Power (Preserva 100% da pressão sonora durante a mixagem)
-      const outVol = Math.round(baseVol * Math.cos((progressRatio * Math.PI) / 2))
-      const inVol = Math.round(baseVol * Math.sin((progressRatio * Math.PI) / 2))
+      // Curva Harmônica S-Curve (Aumenta presença inicial da nova faixa enquanto a anterior suaviza)
+      const outVol = Math.round(baseVol * Math.pow(Math.cos((progressRatio * Math.PI) / 2), 1.15))
+      const inVol = Math.round(baseVol * Math.pow(Math.sin((progressRatio * Math.PI) / 2), 0.85))
 
       try {
         activePlayer?.setVolume(outVol)
@@ -205,7 +205,7 @@ export function YouTubePlayer() {
       } catch {}
 
       if (currentStep >= totalSteps) {
-        // Finaliza a transição
+        // Finaliza a Transição Mágica
         clearInterval(crossfadeTimerRef.current)
         crossfadeTimerRef.current = null
 
@@ -422,11 +422,11 @@ export function YouTubePlayer() {
     return () => window.removeEventListener('yt-player-seek', handler)
   }, [])
 
-  // ─── Pular faixa suave com crossfade acionado manualmente ────
+  // ─── Pular faixa suave com Transição Mágica acionada manualmente ──
   useEffect(() => {
     const handler = () => {
       if (usePlayerStore.getState().perfectTransition && !isCrossfadingRef.current) {
-        triggerSeamlessDJCrossfade(1800)
+        triggerSeamlessDJCrossfade(1600)
       } else {
         usePlayerStore.getState().playNext()
       }

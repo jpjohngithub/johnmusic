@@ -281,9 +281,9 @@ export function PlayerBar({ onExpandPlayer }: PlayerBarProps) {
                   <Loader2 size={12} className="text-spotify-green animate-spin flex-shrink-0" />
                 )}
                 {isCrossfading && (
-                  <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-purple-500/20 border border-purple-500/40 text-[10px] font-extrabold text-purple-300 animate-pulse flex-shrink-0">
+                  <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-purple-500/20 border border-purple-500/40 text-[10px] font-extrabold text-purple-300 animate-pulse flex-shrink-0 shadow-sm shadow-purple-500/30">
                     <Sparkles size={10} className="text-purple-400" />
-                    DJ Automix
+                    Transição Mágica
                   </span>
                 )}
               </div>
@@ -348,7 +348,7 @@ export function PlayerBar({ onExpandPlayer }: PlayerBarProps) {
               <button
                 onClick={handleNextTrack}
                 className="text-white/70 hover:text-white transition-colors p-1"
-                title="Próxima Faixa"
+                title="Próxima Faixa (com Transição Mágica se ativa)"
               >
                 <SkipForward size={22} className="fill-current" />
               </button>
@@ -374,8 +374,8 @@ export function PlayerBar({ onExpandPlayer }: PlayerBarProps) {
                 )}
                 title={
                   perfectTransition
-                    ? 'Transição Perfeita ATIVADA: Crossfade suave, sem pausas e corte de silêncio'
-                    : 'Ativar Transição Perfeita (Crossfade suave entre músicas)'
+                    ? 'Transição Mágica ATIVADA: Mixagem mágica ultra-fluida, zero silêncio e sobreposição harmônica'
+                    : 'Ativar Transição Mágica (Mixagem fluida contínua entre músicas)'
                 }
               >
                 <Sparkles size={16} className={cn(perfectTransition && 'animate-pulse text-purple-400')} />

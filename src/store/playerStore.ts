@@ -42,7 +42,7 @@ export interface PlayerActions {
   toggleShuffle: () => void
   cycleRepeat: () => void
 
-  // Transição Perfeita (Crossfade + Gapless + Pre-buffer)
+  // Transição Mágica (Dual-Deck DJ Automix + S-Curve Crossfade + Pre-buffer)
   togglePerfectTransition: () => void
   setPerfectTransition: (active: boolean) => void
   setIsCrossfading: (isCrossfading: boolean) => void

@@ -268,8 +268,8 @@ export interface PlayerState {
   currentTime: number   // segundos
   isShuffled: boolean
   repeatMode: 'none' | 'one' | 'all'
-  perfectTransition: boolean // Transição Perfeita: Crossfade suave + zero silêncio + pré-carregamento
-  isCrossfading: boolean // Indicador ativo de mixagem/crossfade entre faixas
+  perfectTransition: boolean // Transição Mágica: Crossfade ultra-fluido + zero silêncio + pré-carregamento DJ
+  isCrossfading: boolean // Indicador ativo de mixagem/crossfade mágico entre faixas
   // Direct Audio Track (HTML5 player)
   audioTrack: AudioTrack | null
   // Spotify
