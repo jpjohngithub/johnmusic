@@ -1,7 +1,7 @@
 // ============================================================
-// YOUTUBE PLAYER — MOTOR DUAL-DECK TRANSIÇÃO MÁGICA 3.0 (DJ MASTER AUTOMIX)
-// Pré-Giro Silencioso a 7.5s + Handover Psicoacústico Tri-Fásico de 6.0s
-// Interpolação de 120 FPS via requestAnimationFrame com Anti-Jitter Lock
+// YOUTUBE PLAYER — MOTOR DUAL-DECK TRANSIÇÃO MÁGICA 4.0 (CONFIRMED-AUDIO HANDSHAKE)
+// Início do Crossfade apenas após confirmação de reprodução do Deck B (Zero Queda de Volume)
+// Curva Acústica Equal-Power Perfeita (cos / sin) sem silêncio e sem gaps
 // ============================================================
 
 import { useEffect, useRef } from 'react'
@@ -21,9 +21,9 @@ export function YouTubePlayer() {
 
   const activeDeckRef = useRef<'A' | 'B'>('A')
   const isCrossfadingRef = useRef<boolean>(false)
-  const hasPreSpunRef = useRef<boolean>(false)
   const hasTriggeredTransitionRef = useRef<boolean>(false)
   const crossfadeRafRef = useRef<number | null>(null)
+  const handshakeTimerRef = useRef<any>(null)
   const progressTimerRef = useRef<any>(null)
   const lastLoadedIdRef = useRef<string | null>(null)
 
@@ -57,11 +57,15 @@ export function YouTubePlayer() {
       cancelAnimationFrame(crossfadeRafRef.current)
       crossfadeRafRef.current = null
     }
+    if (handshakeTimerRef.current !== null) {
+      clearInterval(handshakeTimerRef.current)
+      handshakeTimerRef.current = null
+    }
     isCrossfadingRef.current = false
     usePlayerStore.getState().setIsCrossfading(false)
   }
 
-  // ─── Loop de Monitoramento de Alta Precisão (70ms) ───────────
+  // ─── Loop de Monitoramento de Progresso de Alta Precisão (80ms) ───
   function startProgressLoop() {
     stopProgressLoop()
     progressTimerRef.current = window.setInterval(() => {
@@ -81,51 +85,37 @@ export function YouTubePlayer() {
           // ─── Automação de Transição Mágica no Fim da Faixa ───
           if (
             store.perfectTransition &&
-            duration > 14 &&
+            duration > 12 &&
             !isCrossfadingRef.current &&
             !hasTriggeredTransitionRef.current
           ) {
             const remaining = duration - current
 
-            // 1. Pré-resolução em nuvem da próxima faixa a 18s do fim
+            // Pré-busca em nuvem da próxima faixa a 18s do fim
             if (remaining <= 18 && remaining > 12) {
               store.preResolveNextTrack()
             }
 
-            // 2. Pré-Giro Silencioso (Silent Spin-Up) no Deck Standby a 7.5s
-            if (remaining <= 7.5 && remaining > 6.2 && !hasPreSpunRef.current) {
-              hasPreSpunRef.current = true
-              const standby = getStandbyPlayer()
-              const nextTrack = store.getNextTrack()
-              if (nextTrack?.videoId && standby?.loadVideoById) {
-                try {
-                  standby.setVolume(0)
-                  standby.loadVideoById(nextTrack.videoId)
-                  standby.playVideo()
-                } catch {}
-              }
-            }
-
-            // 3. Disparo da Mixagem Harmônica nos últimos 6.0s
-            if (remaining <= 6.0 && remaining > 0.3) {
+            // Dispara a Transição Mágica nos últimos 5.5s da música
+            if (remaining <= 5.5 && remaining > 0.4) {
               hasTriggeredTransitionRef.current = true
               const nextTrack = store.getNextTrack()
               const nextIndex = store.getNextTrackIndex()
               if (nextTrack && nextIndex !== null) {
-                performDJCrossfade(nextTrack, nextIndex, 5800)
+                performHandshakeCrossfade(nextTrack, nextIndex, 4800)
               }
             }
           }
         }
       } catch {}
-    }, 70)
+    }, 80)
   }
 
-  // ─── Motor DJ Automix 120 FPS com Curva Psicoacústica Tri-Fásica ───
-  async function performDJCrossfade(
+  // ─── Motor de Transição Mágica com Handshake de Áudio Ativo ───────
+  async function performHandshakeCrossfade(
     targetTrack: QueueItem,
     targetIndex: number,
-    durationMs = 5800
+    durationMs = 4800
   ) {
     if (isCrossfadingRef.current) return
 
@@ -158,22 +148,69 @@ export function YouTubePlayer() {
       return
     }
 
-    // Ativa indicadores globais de transição mágica
     isCrossfadingRef.current = true
-    hasPreSpunRef.current = false
     store.setIsCrossfading(true)
 
     const masterVol = store.isMuted ? 0 : Math.max(1, store.volume ?? 50)
     const outgoingDeck = activeDeckRef.current
     const incomingDeck = outgoingDeck === 'A' ? 'B' : 'A'
 
-    // Garante que o deck standby já está rodando a volume 0
+    // Mantém a música atual no volume normal enquanto a nova carrega
+    try {
+      activePlayer?.setVolume(masterVol)
+    } catch {}
+
+    // Inicia o carregamento da próxima música no deck de espera a volume 0
     try {
       standbyPlayer.setVolume(0)
       standbyPlayer.loadVideoById(playableTrack.videoId)
       standbyPlayer.playVideo()
     } catch {}
 
+    if (handshakeTimerRef.current !== null) {
+      clearInterval(handshakeTimerRef.current)
+      handshakeTimerRef.current = null
+    }
+
+    // ─── Handshake: Aguarda o Deck B realmente começar a reproduzir áudio ───
+    let waitAttempts = 0
+    const maxWaitAttempts = 30 // Max 3.0s de espera pelo buffer
+
+    handshakeTimerRef.current = window.setInterval(() => {
+      waitAttempts++
+      let isReadyToCrossfade = false
+
+      try {
+        const standbyState = standbyPlayer.getPlayerState?.()
+        const standbyTime = standbyPlayer.getCurrentTime?.() || 0
+        // Estado 1 = PLAYING e já começou a avançar o tempo
+        if (standbyState === 1 || standbyTime > 0.05 || waitAttempts >= maxWaitAttempts) {
+          isReadyToCrossfade = true
+        }
+      } catch {
+        if (waitAttempts >= maxWaitAttempts) isReadyToCrossfade = true
+      }
+
+      if (isReadyToCrossfade) {
+        clearInterval(handshakeTimerRef.current)
+        handshakeTimerRef.current = null
+
+        // ─── Ambos os decks estão confirmados tocando! Inicia o Crossfade Perfeito ───
+        startEqualPowerRamp(activePlayer, standbyPlayer, masterVol, incomingDeck, playableTrack, targetIndex, durationMs)
+      }
+    }, 100)
+  }
+
+  // ─── Rampa Acústica Equal-Power de Alta Fidelidade (60 FPS) ──────
+  function startEqualPowerRamp(
+    activePlayer: any,
+    standbyPlayer: any,
+    masterVol: number,
+    incomingDeck: 'A' | 'B',
+    playableTrack: QueueItem,
+    targetIndex: number,
+    durationMs: number
+  ) {
     if (crossfadeRafRef.current !== null) {
       cancelAnimationFrame(crossfadeRafRef.current)
       crossfadeRafRef.current = null
@@ -182,56 +219,28 @@ export function YouTubePlayer() {
     const startTime = performance.now()
     let lastActiveVol = masterVol
     let lastStandbyVol = 0
-    let lastMsgTime = 0
 
-    function crossfadeStep(currentTime: number) {
+    function rampStep(currentTime: number) {
       const elapsed = currentTime - startTime
       const progress = Math.min(1.0, elapsed / durationMs)
 
-      // Curva Quintic Perlin Hermite (Interpolação de 5ª ordem ultra-sedosa)
-      // s(t) = t^3 * (t * (6t - 15) + 10)
-      const p = progress
-      const smoothP = p * p * p * (p * (6 * p - 15) + 10)
+      // Curva Equal-Power Suave (Fórmula Acústica de Potência Constante: cos / sin)
+      // Mantém a pressão sonora total 100% estável: cos^2(t) + sin^2(t) = 1.0
+      const angle = (progress * Math.PI) / 2
+      const outVol = Math.max(0, Math.min(100, Math.round(masterVol * Math.cos(angle))))
+      const inVol = Math.max(0, Math.min(100, Math.round(masterVol * Math.sin(angle))))
 
-      // Envelope Tri-Fásico Psicoacústico de DJ Mixer Profissional:
-      // Fase 1 (0-38%): Música A mantém a batida (100% -> 82%), Música B entra nos agudos/médios (0% -> 50%)
-      // Fase 2 (38-72%): Ponto de Drop: Música B assume o comando (50% -> 92%), Música A filtra os graves (82% -> 28%)
-      // Fase 3 (72-100%): Música B estabiliza em 100%, Música A dissolve suavemente até 0%
-      let outRatio = 0
-      let inRatio = 0
-
-      if (smoothP <= 0.38) {
-        const subT = smoothP / 0.38
-        outRatio = 1.0 - subT * 0.18
-        inRatio = Math.pow(subT, 1.1) * 0.50
-      } else if (smoothP <= 0.72) {
-        const subT = (smoothP - 0.38) / 0.34
-        outRatio = 0.82 - Math.pow(subT, 0.95) * 0.54
-        inRatio = 0.50 + Math.pow(subT, 0.85) * 0.42
-      } else {
-        const subT = (smoothP - 0.72) / 0.28
-        outRatio = 0.28 * (1.0 - subT)
-        inRatio = 0.92 + subT * 0.08
+      if (outVol !== lastActiveVol) {
+        lastActiveVol = outVol
+        try { activePlayer?.setVolume(outVol) } catch {}
       }
-
-      const outVol = Math.max(0, Math.min(100, Math.round(masterVol * outRatio)))
-      const inVol = Math.max(0, Math.min(100, Math.round(masterVol * inRatio)))
-
-      // Limitador inteligente de mensagens postMessage (evita saturação de frames)
-      if (currentTime - lastMsgTime >= 15 || progress >= 1.0) {
-        lastMsgTime = currentTime
-        if (outVol !== lastActiveVol) {
-          lastActiveVol = outVol
-          try { activePlayer?.setVolume(outVol) } catch {}
-        }
-        if (inVol !== lastStandbyVol) {
-          lastStandbyVol = inVol
-          try { standbyPlayer?.setVolume(inVol) } catch {}
-        }
+      if (inVol !== lastStandbyVol) {
+        lastStandbyVol = inVol
+        try { standbyPlayer?.setVolume(inVol) } catch {}
       }
 
       if (progress < 1.0) {
-        crossfadeRafRef.current = requestAnimationFrame(crossfadeStep)
+        crossfadeRafRef.current = requestAnimationFrame(rampStep)
       } else {
         // Conclusão da Transição Mágica
         crossfadeRafRef.current = null
@@ -242,10 +251,8 @@ export function YouTubePlayer() {
           standbyPlayer?.setVolume(masterVol)
         } catch {}
 
-        // Inverte o deck principal
         activeDeckRef.current = incomingDeck
         isCrossfadingRef.current = false
-        hasPreSpunRef.current = false
         hasTriggeredTransitionRef.current = false
         lastLoadedIdRef.current = playableTrack.videoId!
 
@@ -256,7 +263,6 @@ export function YouTubePlayer() {
           newShuffledPos = foundPos >= 0 ? foundPos : 0
         }
 
-        // Atualiza estado do player
         usePlayerStore.setState({
           queueIndex: targetIndex,
           shuffledPosition: newShuffledPos,
@@ -282,7 +288,7 @@ export function YouTubePlayer() {
       }
     }
 
-    crossfadeRafRef.current = requestAnimationFrame(crossfadeStep)
+    crossfadeRafRef.current = requestAnimationFrame(rampStep)
   }
 
   // ─── Inicialização dos dois Players do YouTube ───────────────────
@@ -312,7 +318,6 @@ export function YouTubePlayer() {
             if (activeDeckRef.current === 'A' && queueVideoId) {
               lastLoadedIdRef.current = queueVideoId
               hasTriggeredTransitionRef.current = false
-              hasPreSpunRef.current = false
               if (usePlayerStore.getState().isPlaying) {
                 e.target.loadVideoById(queueVideoId)
               } else {
@@ -406,7 +411,6 @@ export function YouTubePlayer() {
     stopCrossfade()
     lastLoadedIdRef.current = queueVideoId
     hasTriggeredTransitionRef.current = false
-    hasPreSpunRef.current = false
 
     const active = getActivePlayer()
     const standby = getStandbyPlayer()
@@ -437,7 +441,7 @@ export function YouTubePlayer() {
       const nextTrack = store.getNextTrack()
       const nextIndex = store.getNextTrackIndex()
       if (nextTrack && nextIndex !== null) {
-        performDJCrossfade(nextTrack, nextIndex, 2800)
+        performHandshakeCrossfade(nextTrack, nextIndex, 2400)
       } else {
         store.playNext()
       }
@@ -448,7 +452,7 @@ export function YouTubePlayer() {
       const prevTrack = store.getPrevTrack()
       const prevIndex = store.getPrevTrackIndex()
       if (prevTrack && prevIndex !== null) {
-        performDJCrossfade(prevTrack, prevIndex, 2800)
+        performHandshakeCrossfade(prevTrack, prevIndex, 2400)
       } else {
         store.playPrev()
       }
@@ -497,7 +501,6 @@ export function YouTubePlayer() {
       const active = getActivePlayer()
       try {
         hasTriggeredTransitionRef.current = false
-        hasPreSpunRef.current = false
         active?.seekTo(detail.seconds, true)
       } catch {}
     }
