@@ -79,6 +79,8 @@ export interface PlayerActions {
   prevInQueue: () => QueueItem | null
   getNextTrackIndex: () => number | null
   getNextTrack: () => QueueItem | null
+  getPrevTrackIndex: () => number | null
+  getPrevTrack: () => QueueItem | null
   getUpcomingQueue: () => QueueItem[]
 
   // Universal playback across all platforms
@@ -545,6 +547,27 @@ export const usePlayerStore = create<ExtendedPlayerState & PlayerActions>()(
       getNextTrack: () => {
         const { queue, getNextTrackIndex } = get()
         const idx = getNextTrackIndex()
+        return idx !== null && idx >= 0 && idx < queue.length ? queue[idx] : null
+      },
+
+      getPrevTrackIndex: () => {
+        const { queue, queueIndex, isShuffled, shuffledOrder, shuffledPosition } = get()
+        if (queue.length === 0) return null
+
+        if (isShuffled && shuffledOrder.length === queue.length) {
+          const prevPos = shuffledPosition - 1
+          if (prevPos >= 0 && prevPos < shuffledOrder.length) {
+            return shuffledOrder[prevPos]
+          }
+          return shuffledOrder[shuffledOrder.length - 1]
+        }
+
+        return queueIndex > 0 ? queueIndex - 1 : queue.length - 1
+      },
+
+      getPrevTrack: () => {
+        const { queue, getPrevTrackIndex } = get()
+        const idx = getPrevTrackIndex()
         return idx !== null && idx >= 0 && idx < queue.length ? queue[idx] : null
       },
 

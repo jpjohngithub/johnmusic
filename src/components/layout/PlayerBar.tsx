@@ -158,12 +158,20 @@ export function PlayerBar({ onExpandPlayer }: PlayerBarProps) {
   }, [isPlaying, setIsPlaying])
 
   const handleNextTrack = useCallback(async () => {
-    await playNext()
-  }, [playNext])
+    if (source === 'youtube' && perfectTransition) {
+      window.dispatchEvent(new CustomEvent('yt-player-crossfade-next'))
+    } else {
+      await playNext()
+    }
+  }, [source, perfectTransition, playNext])
 
   const handlePrevTrack = useCallback(async () => {
-    await playPrev()
-  }, [playPrev])
+    if (source === 'youtube' && perfectTransition) {
+      window.dispatchEvent(new CustomEvent('yt-player-crossfade-prev'))
+    } else {
+      await playPrev()
+    }
+  }, [source, perfectTransition, playPrev])
 
   const handleSeek = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {

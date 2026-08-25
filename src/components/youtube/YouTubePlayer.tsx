@@ -1,11 +1,12 @@
 // ============================================================
-// YOUTUBE PLAYER — MOTOR DUAL-DECK TRANSIÇÃO MÁGICA 100% ESTÁVEL
-// Mixagem Equal-Power Crossfade sem cortes, sem pulo duplo e sem travamentos
+// YOUTUBE PLAYER — MOTOR DUAL-DECK TRANSIÇÃO MÁGICA ULTRA-FLUIDA
+// 60 FPS Mixagem Equal-Power Suave para Fim de Música e Botões Next / Prev
 // ============================================================
 
 import { useEffect, useRef } from 'react'
 import { useYouTubeIframeApi } from '@/hooks/useYouTubeIframeApi'
 import { usePlayerStore } from '@/store/playerStore'
+import type { QueueItem } from '@/types'
 
 export function YouTubePlayer() {
   const { ready } = useYouTubeIframeApi()
@@ -57,7 +58,7 @@ export function YouTubePlayer() {
     usePlayerStore.getState().setIsCrossfading(false)
   }
 
-  // ─── Loop de Monitoramento de Progresso & Gatilho da Transição ───
+  // ─── Loop de Monitoramento de Progresso de Alta Taxa (100ms) ───
   function startProgressLoop() {
     stopProgressLoop()
     progressTimerRef.current = window.setInterval(() => {
@@ -74,7 +75,7 @@ export function YouTubePlayer() {
           store.setDuration(duration)
           store.setProgress((current / duration) * 100)
 
-          // ─── Disparo da Transição Mágica ───
+          // ─── Disparo Automático no Fim da Música ───
           if (
             store.perfectTransition &&
             duration > 10 &&
@@ -88,53 +89,48 @@ export function YouTubePlayer() {
               store.preResolveNextTrack()
             }
 
-            // Inicia o crossfade contínuo nos últimos 5 segundos da faixa
-            if (remaining <= 5.0 && remaining > 0.4) {
+            // Inicia crossfade ultra-fluido nos últimos 4.8s
+            if (remaining <= 4.8 && remaining > 0.4) {
               hasTriggeredTransitionRef.current = true
-              performSeamlessCrossfade(4800)
+              const nextTrack = store.getNextTrack()
+              const nextIndex = store.getNextTrackIndex()
+              if (nextTrack && nextIndex !== null) {
+                performDJCrossfade(nextTrack, nextIndex, 4500)
+              }
             }
           }
         }
       } catch {}
-    }, 150)
+    }, 100)
   }
 
-  // ─── Execução do Crossfade Equal-Power sem silêncio ──────────────
-  async function performSeamlessCrossfade(durationMs = 4800) {
+  // ─── Execução do Crossfade Dual-Deck a 60 FPS (25ms por passo) ───
+  async function performDJCrossfade(
+    targetTrack: QueueItem,
+    targetIndex: number,
+    durationMs = 4500
+  ) {
     if (isCrossfadingRef.current) return
 
     const store = usePlayerStore.getState()
-    const { queue, queueIndex, repeatMode, playQueueIndex, getNextTrackIndex, getNextTrack } = store
 
-    if (queue.length === 0) return
-
-    if (repeatMode === 'one') {
-      await playQueueIndex(queueIndex)
-      return
-    }
-
-    const nextIndex = getNextTrackIndex()
-    if (nextIndex === null) return
-
-    let nextTrack = getNextTrack()
-    if (!nextTrack) return
-
-    // Se a próxima faixa não tiver videoId resolvido, resolve agora
-    if (!nextTrack.videoId) {
+    // 1. Garante que a faixa alvo possui videoId do YouTube
+    let playableTrack = { ...targetTrack }
+    if (!playableTrack.videoId) {
       try {
         const { resolvePlayable } = await import('@/api/crossPlatformService')
-        const resolved = await resolvePlayable(nextTrack)
+        const resolved = await resolvePlayable(playableTrack)
         if (resolved?.videoId) {
-          nextTrack = { ...nextTrack, videoId: resolved.videoId }
-          const updatedQ = [...queue]
-          updatedQ[nextIndex] = nextTrack
-          store.setQueue(updatedQ, queueIndex)
+          playableTrack.videoId = resolved.videoId
+          const updatedQ = [...store.queue]
+          updatedQ[targetIndex] = playableTrack
+          store.setQueue(updatedQ, store.queueIndex)
         } else {
-          await store.playNext()
+          await store.playQueueIndex(targetIndex)
           return
         }
       } catch {
-        await store.playNext()
+        await store.playQueueIndex(targetIndex)
         return
       }
     }
@@ -142,8 +138,8 @@ export function YouTubePlayer() {
     const activePlayer = getActivePlayer()
     const standbyPlayer = getStandbyPlayer()
 
-    if (!standbyPlayer?.loadVideoById || !nextTrack.videoId) {
-      await store.playNext()
+    if (!standbyPlayer?.loadVideoById || !playableTrack.videoId) {
+      await store.playQueueIndex(targetIndex)
       return
     }
 
@@ -155,14 +151,15 @@ export function YouTubePlayer() {
     const outgoingDeck = activeDeckRef.current
     const incomingDeck = outgoingDeck === 'A' ? 'B' : 'A'
 
-    // Carrega a próxima faixa no deck de espera a volume zero e inicia imediatamente
+    // Carrega e dá play na faixa de entrada a volume 0 imediatamente
     try {
       standbyPlayer.setVolume(0)
-      standbyPlayer.loadVideoById(nextTrack.videoId)
+      standbyPlayer.loadVideoById(playableTrack.videoId)
       standbyPlayer.playVideo()
     } catch {}
 
-    const stepInterval = 50
+    // 60 FPS: Intervalo de 25ms por passo para ultra-fluidez
+    const stepInterval = 25
     const totalSteps = Math.max(20, Math.round(durationMs / stepInterval))
     let currentStep = 0
 
@@ -172,10 +169,10 @@ export function YouTubePlayer() {
       currentStep++
       const t = Math.min(1, currentStep / totalSteps)
 
-      // Curva Equal-Power (Potência Acústica Constante: cos / sin)
-      // Mantém o volume percebido 100% estável e uniforme durante toda a transição
-      const outVolume = Math.round(masterVol * Math.cos((t * Math.PI) / 2))
-      const inVolume = Math.round(masterVol * Math.sin((t * Math.PI) / 2))
+      // Curva Harmônica Suave Equal-Power (cos / sin com suavização Hermite)
+      const smoothT = t * t * (3 - 2 * t)
+      const outVolume = Math.round(masterVol * Math.cos((smoothT * Math.PI) / 2))
+      const inVolume = Math.round(masterVol * Math.sin((smoothT * Math.PI) / 2))
 
       try {
         activePlayer?.setVolume(Math.max(0, Math.min(100, outVolume)))
@@ -197,19 +194,19 @@ export function YouTubePlayer() {
         activeDeckRef.current = incomingDeck
         isCrossfadingRef.current = false
         hasTriggeredTransitionRef.current = false
-        lastLoadedIdRef.current = nextTrack.videoId!
+        lastLoadedIdRef.current = playableTrack.videoId!
 
-        // Atualiza o estado global sem disparar recarregamento
+        // Atualiza o estado global sem reiniciar
         usePlayerStore.setState({
-          queueIndex: nextIndex,
-          currentQueueItem: nextTrack,
+          queueIndex: targetIndex,
+          currentQueueItem: playableTrack,
           youtubeVideo: {
-            id: nextTrack.id,
-            videoId: nextTrack.videoId!,
-            title: nextTrack.title,
-            channelTitle: nextTrack.subtitle,
-            thumbnailUrl: nextTrack.imageUrl,
-            url: `https://www.youtube.com/watch?v=${nextTrack.videoId}`,
+            id: playableTrack.id,
+            videoId: playableTrack.videoId!,
+            title: playableTrack.title,
+            channelTitle: playableTrack.subtitle,
+            thumbnailUrl: playableTrack.imageUrl,
+            url: `https://www.youtube.com/watch?v=${playableTrack.videoId}`,
             addedAt: new Date().toISOString(),
           },
           isPlaying: true,
@@ -265,7 +262,6 @@ export function YouTubePlayer() {
               usePlayerStore.getState().setIsPlaying(true)
               startProgressLoop()
             } else if (activeDeckRef.current === 'A' && e.data === YTState.ENDED) {
-              // Só chama playNext se NÃO estiver no meio de um crossfade
               if (!isCrossfadingRef.current && !hasTriggeredTransitionRef.current) {
                 stopProgressLoop()
                 usePlayerStore.getState().playNext()
@@ -364,6 +360,39 @@ export function YouTubePlayer() {
       } catch {}
     }
   }, [queueVideoId, isPlaying])
+
+  // ─── Transição Mágica Disparada Manualmente pelos Botões ─────────
+  useEffect(() => {
+    const handleManualNext = () => {
+      const store = usePlayerStore.getState()
+      const nextTrack = store.getNextTrack()
+      const nextIndex = store.getNextTrackIndex()
+      if (nextTrack && nextIndex !== null) {
+        performDJCrossfade(nextTrack, nextIndex, 1800)
+      } else {
+        store.playNext()
+      }
+    }
+
+    const handleManualPrev = () => {
+      const store = usePlayerStore.getState()
+      const prevTrack = store.getPrevTrack()
+      const prevIndex = store.getPrevTrackIndex()
+      if (prevTrack && prevIndex !== null) {
+        performDJCrossfade(prevTrack, prevIndex, 1800)
+      } else {
+        store.playPrev()
+      }
+    }
+
+    window.addEventListener('yt-player-crossfade-next', handleManualNext)
+    window.addEventListener('yt-player-crossfade-prev', handleManualPrev)
+
+    return () => {
+      window.removeEventListener('yt-player-crossfade-next', handleManualNext)
+      window.removeEventListener('yt-player-crossfade-prev', handleManualPrev)
+    }
+  }, [])
 
   // ─── Sincronização Play / Pause ───────────────────────────────────
   useEffect(() => {
