@@ -166,6 +166,13 @@ export function PlayerBar({ onExpandPlayer }: PlayerBarProps) {
 
   // ─── Controls ─────────────────────────────────────────────
   const handlePlayPause = useCallback(() => {
+    const store = usePlayerStore.getState()
+    if (!store.currentQueueItem && !store.source) {
+      if (store.queue.length > 0) {
+        store.playQueueIndex(store.queueIndex || 0)
+      }
+      return
+    }
     setIsPlaying(!isPlaying)
   }, [isPlaying, setIsPlaying])
 
@@ -213,20 +220,23 @@ export function PlayerBar({ onExpandPlayer }: PlayerBarProps) {
 
   // ─── Current media info ───────────────────────────────────
   const effectiveSource = currentQueueItem?.source || source
+  const hasMedia = Boolean(source || currentQueueItem || audioTrack || spotifySavedItem || youtubeVideo || tiktokVideo)
 
   const currentTitle =
     currentQueueItem?.title ||
     audioTrack?.title ||
     spotifySavedItem?.title ||
     youtubeVideo?.title ||
-    tiktokVideo?.title
+    tiktokVideo?.title ||
+    'Nenhuma música tocando'
 
   const currentSubtitle =
     currentQueueItem?.subtitle ||
     (audioTrack ? `${audioTrack.artist}${audioTrack.album ? ` • ${audioTrack.album}` : ''}` : null) ||
     spotifySavedItem?.subtitle ||
     youtubeVideo?.channelTitle ||
-    tiktokVideo?.authorName
+    tiktokVideo?.authorName ||
+    'Escolha uma música para iniciar'
 
   const currentImage =
     currentQueueItem?.imageUrl ||
@@ -245,8 +255,6 @@ export function PlayerBar({ onExpandPlayer }: PlayerBarProps) {
       : 'text-spotify-green'
 
   const RepeatIcon = repeatMode === 'one' ? Repeat1 : Repeat
-
-  if (!source && !currentQueueItem) return null
 
   return (
     <>
@@ -318,7 +326,7 @@ export function PlayerBar({ onExpandPlayer }: PlayerBarProps) {
                   </span>
                 )}
               </div>
-              {currentSubtitle ? (
+              {hasMedia ? (
                 <Link
                   to={`/search?q=${encodeURIComponent(currentSubtitle)}`}
                   className="text-white/50 hover:text-spotify-green hover:underline text-xs truncate transition-colors block"
@@ -326,7 +334,11 @@ export function PlayerBar({ onExpandPlayer }: PlayerBarProps) {
                 >
                   {currentSubtitle}
                 </Link>
-              ) : null}
+              ) : (
+                <span className="text-white/40 text-xs truncate block">
+                  {currentSubtitle}
+                </span>
+              )}
 
               {nextTrack && (
                 <button
