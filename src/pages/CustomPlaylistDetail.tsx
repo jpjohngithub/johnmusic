@@ -38,6 +38,7 @@ import { useLibraryStore } from '@/store/libraryStore'
 import { usePlayerStore } from '@/store/playerStore'
 import { AddToPlaylistModal } from '@/components/playlist/AddToPlaylistModal'
 import { DownloadModal } from '@/components/player/DownloadModal'
+import { downloadTrackInstant } from '@/api/downloadService'
 import { generatePlaylistShareUrl } from '@/api/playlistShareService'
 import { createSpotifyItemFromUrl, isValidSpotifyUrl } from '@/api/spotifyUrlService'
 import { createYouTubeVideoFromUrl, isValidYouTubeUrl } from '@/api/youtubeService'
@@ -782,10 +783,14 @@ export function CustomPlaylistDetail() {
                     <button
                       onClick={(e) => {
                         e.stopPropagation()
+                        downloadTrackInstant(item)
+                      }}
+                      onContextMenu={(e) => {
+                        e.preventDefault()
                         setDownloadTrackItem(item)
                       }}
                       className="p-2 rounded-xl text-white/30 hover:text-spotify-green hover:bg-white/10 transition-all opacity-0 group-hover:opacity-100"
-                      title="Baixar Música em MP3"
+                      title="Baixar Música em MP3 (1 Clique Direto)"
                     >
                       <Download size={15} />
                     </button>

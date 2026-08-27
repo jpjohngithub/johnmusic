@@ -1,6 +1,6 @@
 // ============================================================
-// DOWNLOAD SERVICE — DOWNLOAD DE MÚSICAS EM MP3 ALTA QUALIDADE
-// Suporte para YouTube, Spotify, TikTok e Áudio Direto com Múltiplos Espelhos
+// DOWNLOAD SERVICE — DOWNLOAD INSTANTÂNEO DE MÚSICAS EM MP3
+// 1-Click Direct Download para qualquer música (YouTube, Spotify, TikTok, Áudio)
 // ============================================================
 
 import { resolvePlayable } from '@/api/crossPlatformService'
@@ -22,18 +22,17 @@ export interface DownloadResult {
   downloadUrl?: string
   filename: string
   error?: string
-  isDirectBlob?: boolean
 }
 
 // Sanitiza o nome do arquivo para Windows, Mac e Linux
 export function sanitizeFilename(filename: string): string {
   return filename
-    .replace(/[/\\?%*:|"<>]/g, '') // remove caracteres proibidos
+    .replace(/[/\\?%*:|"<>]/g, '')
     .replace(/\s+/g, ' ')
     .trim()
 }
 
-// Dispara download nativo no navegador a partir de Blob ou URL direta
+// Dispara download nativo no navegador
 export function triggerBrowserDownload(url: string, filename: string) {
   const link = document.createElement('a')
   link.href = url
@@ -45,48 +44,30 @@ export function triggerBrowserDownload(url: string, filename: string) {
   document.body.removeChild(link)
 }
 
-// Baixa blob diretamente e salva no disco
-export async function downloadBlobAndSave(url: string, filename: string): Promise<boolean> {
-  try {
-    const res = await fetch(url, { mode: 'cors' })
-    if (!res.ok) throw new Error('Falha no download direto')
-    const blob = await res.blob()
-    const objectUrl = URL.createObjectURL(blob)
-    triggerBrowserDownload(objectUrl, filename)
-    setTimeout(() => URL.revokeObjectURL(objectUrl), 60000)
-    return true
-  } catch {
-    // Fallback: abre a URL diretamente para o navegador baixar
-    triggerBrowserDownload(url, filename)
-    return true
-  }
-}
+// ─── Servidores de Extração de Áudio MP3 ──────────────────────
 
-// ─── Provedores de Conversão de Áudio YouTube -> MP3 ─────────
-
-const COBALT_INSTANCES = [
+const COBALT_ENDPOINTS = [
   'https://api.cobalt.tools',
-  'https://cobalt-api.kwiatekm.tokyo',
   'https://co.wuk.sh',
+  'https://cobalt-api.kwiatekm.tokyo',
 ]
 
-const INVIDIOUS_INSTANCES = [
+const INVIDIOUS_AUDIO_MIRRORS = [
   'https://invidious.nerdvpn.de',
   'https://inv.tux.pizza',
   'https://yt.drgnz.club',
-  'https://invidious.drgns.space',
 ]
 
-// 1. Tenta Cobalt Tools API (Melhor qualidade MP3 320kbps)
-async function fetchCobaltMp3(videoId: string): Promise<string | null> {
+// 1. Tenta Cobalt Tools API
+async function fetchCobaltDownloadUrl(videoId: string): Promise<string | null> {
   const youtubeUrl = `https://www.youtube.com/watch?v=${videoId}`
 
-  for (const instance of COBALT_INSTANCES) {
+  for (const endpoint of COBALT_ENDPOINTS) {
     try {
       const controller = new AbortController()
-      const timeoutId = setTimeout(() => controller.abort(), 6000)
+      const timeoutId = setTimeout(() => controller.abort(), 4000)
 
-      const response = await fetch(`${instance}/`, {
+      const res = await fetch(`${endpoint}/`, {
         method: 'POST',
         headers: {
           Accept: 'application/json',
@@ -103,27 +84,19 @@ async function fetchCobaltMp3(videoId: string): Promise<string | null> {
 
       clearTimeout(timeoutId)
 
-      if (response.ok) {
-        const data = await response.json()
+      if (res.ok) {
+        const data = await res.json()
         if (data.url) return data.url
         if (data.audio) return data.audio
       }
-    } catch {
-      // Tenta a próxima instância
-    }
+    } catch {}
   }
 
   return null
 }
 
-// 2. Tenta Stream de Áudio Direto via Invidious (M4A / Áudio Puro)
-export function getInvidiousAudioUrl(videoId: string): string {
-  const randomInstance = INVIDIOUS_INSTANCES[Math.floor(Math.random() * INVIDIOUS_INSTANCES.length)]
-  return `${randomInstance}/latest_version?id=${videoId}&itag=140`
-}
-
-// 3. Links de Espelhos Rápidos Externos para Download em 1 Clique
-export function getExternalDownloadLinks(videoId: string, title: string) {
+// Espelhos de Download Alternativos
+export function getExternalDownloadLinks(videoId: string, title?: string) {
   return [
     {
       name: 'Y2Mate MP3 (Alta Velocidade)',
@@ -148,20 +121,20 @@ export function getExternalDownloadLinks(videoId: string, title: string) {
   ]
 }
 
-// ─── Função Principal de Download ────────────────────────────
+// ─── Função de Download em 1 Clique (Instantâneo) ────────────
 
-export async function processTrackDownload(item: DownloadSource): Promise<DownloadResult> {
+export async function downloadTrackInstant(item: DownloadSource): Promise<DownloadResult> {
   const cleanTitle = sanitizeFilename(item.title || 'musica')
   const cleanArtist = sanitizeFilename(item.subtitle || 'JohnMusic')
   const filename = `${cleanArtist} - ${cleanTitle}.mp3`
 
-  // Caso 1: Áudio Direto ou TikTok
+  // 1. Se tem áudio direto (TikTok / MP3 local / CDN)
   if (item.audioUrl) {
-    await downloadBlobAndSave(item.audioUrl, filename)
-    return { success: true, downloadUrl: item.audioUrl, filename, isDirectBlob: true }
+    triggerBrowserDownload(item.audioUrl, filename)
+    return { success: true, downloadUrl: item.audioUrl, filename }
   }
 
-  // Caso 2: Resolver videoId se não estiver pronto
+  // 2. Resolve videoId se necessário
   let videoId = item.videoId
   if (!videoId) {
     const resolved = await resolvePlayable({
@@ -176,25 +149,45 @@ export async function processTrackDownload(item: DownloadSource): Promise<Downlo
   }
 
   if (!videoId) {
-    return {
-      success: false,
-      filename,
-      error: 'Não foi possível encontrar a fonte de áudio desta música para download.',
+    // Fallback: busca rápida por nome
+    const { searchYouTubeKeyless } = await import('@/api/youtubeSearchService')
+    const query = `${item.subtitle || ''} ${item.title}`.trim()
+    const matches = await searchYouTubeKeyless(query, 1)
+    if (matches.length > 0) {
+      videoId = matches[0].videoId
     }
   }
 
-  // Tenta conversão direta via Cobalt
+  if (!videoId) {
+    return {
+      success: false,
+      filename,
+      error: 'Não foi possível encontrar a música para download.',
+    }
+  }
+
+  // 3. Tenta obter URL direta de MP3 via Cobalt
   try {
-    const cobaltUrl = await fetchCobaltMp3(videoId)
+    const cobaltUrl = await fetchCobaltDownloadUrl(videoId)
     if (cobaltUrl) {
       triggerBrowserDownload(cobaltUrl, filename)
       return { success: true, downloadUrl: cobaltUrl, filename }
     }
   } catch {}
 
-  // Fallback: Invidious Audio Stream
-  const invidiousUrl = getInvidiousAudioUrl(videoId)
-  triggerBrowserDownload(invidiousUrl, filename)
+  // 4. Fallback Instantâneo: Invidious Audio Stream
+  const mirror = INVIDIOUS_AUDIO_MIRRORS[Math.floor(Math.random() * INVIDIOUS_AUDIO_MIRRORS.length)]
+  const directAudioUrl = `${mirror}/latest_version?id=${videoId}&itag=140`
 
-  return { success: true, downloadUrl: invidiousUrl, filename }
+  // 5. Fallback Alternativo Confiável
+  try {
+    triggerBrowserDownload(directAudioUrl, filename)
+    return { success: true, downloadUrl: directAudioUrl, filename }
+  } catch {
+    const fastConverterUrl = `https://www.y2mate.com/youtube-mp3/${videoId}`
+    window.open(fastConverterUrl, '_blank')
+    return { success: true, downloadUrl: fastConverterUrl, filename }
+  }
 }
+
+export const processTrackDownload = downloadTrackInstant

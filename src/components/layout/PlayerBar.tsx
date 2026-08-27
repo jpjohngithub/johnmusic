@@ -26,10 +26,12 @@ import {
   Cast,
   AudioLines,
   Download,
+  Check,
 } from 'lucide-react'
 import { usePlayerStore } from '@/store/playerStore'
 import { useEqualizerStore } from '@/store/equalizerStore'
 import { equalizerAudioService } from '@/api/equalizerAudioService'
+import { downloadTrackInstant } from '@/api/downloadService'
 import { formatSeconds, cn } from '@/lib/utils'
 import { YouTubePlayer } from '@/components/youtube/YouTubePlayer'
 import { QueueDrawer } from '@/components/player/QueueDrawer'
@@ -89,6 +91,8 @@ export function PlayerBar({ onExpandPlayer }: PlayerBarProps) {
   const [showCastModal, setShowCastModal] = useState(false)
   const [showEqualizerModal, setShowEqualizerModal] = useState(false)
   const [showDownloadModal, setShowDownloadModal] = useState(false)
+  const [isDownloadingTrack, setIsDownloadingTrack] = useState(false)
+  const [downloadDone, setDownloadDone] = useState(false)
   const isEqEnabled = useEqualizerStore((s) => s.isEnabled)
   const audioElementRef = useRef<HTMLAudioElement | null>(null)
 
@@ -258,6 +262,30 @@ export function PlayerBar({ onExpandPlayer }: PlayerBarProps) {
       : 'text-spotify-green'
 
   const RepeatIcon = repeatMode === 'one' ? Repeat1 : Repeat
+
+  const handleDirectDownload = useCallback(async (e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (isDownloadingTrack) return
+    setIsDownloadingTrack(true)
+    setDownloadDone(false)
+    try {
+      await downloadTrackInstant({
+        title: currentTitle,
+        subtitle: currentSubtitle,
+        imageUrl: currentImage,
+        videoId: currentQueueItem?.videoId || youtubeVideo?.videoId,
+        audioUrl: currentQueueItem?.audioUrl || audioTrack?.audioUrl,
+        source: effectiveSource || undefined,
+        uri: currentQueueItem?.uri,
+      })
+      setDownloadDone(true)
+      setTimeout(() => setDownloadDone(false), 3000)
+    } catch {
+      setShowDownloadModal(true)
+    } finally {
+      setIsDownloadingTrack(false)
+    }
+  }, [isDownloadingTrack, currentTitle, currentSubtitle, currentImage, currentQueueItem, youtubeVideo, audioTrack, effectiveSource])
 
   return (
     <>
@@ -465,18 +493,37 @@ export function PlayerBar({ onExpandPlayer }: PlayerBarProps) {
 
           {/* Right: Volume & Queue & Cast & Equalizer & Download */}
           <div className="flex items-center gap-2 w-72 flex-shrink-0 justify-end">
-            {/* Botão Baixar MP3 */}
+            {/* Botão Baixar MP3 (1 Clique Direto) */}
             <button
-              onClick={() => setShowDownloadModal(true)}
+              onClick={handleDirectDownload}
+              onContextMenu={(e) => {
+                e.preventDefault()
+                setShowDownloadModal(true)
+              }}
+              disabled={isDownloadingTrack}
               className={cn(
-                'p-2 rounded-lg transition-all flex items-center justify-center',
-                showDownloadModal
-                  ? 'bg-spotify-green/20 text-spotify-green border border-spotify-green/40 shadow-sm shadow-spotify-green/20'
+                'p-2 rounded-lg transition-all flex items-center justify-center relative',
+                downloadDone
+                  ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 shadow-sm shadow-emerald-500/20 scale-105'
+                  : isDownloadingTrack
+                  ? 'bg-spotify-green/20 text-spotify-green'
                   : 'text-white/50 hover:text-white hover:bg-white/5'
               )}
-              title="Baixar Música em MP3 (Alta Qualidade 320kbps)"
+              title={
+                downloadDone
+                  ? 'Download Iniciado!'
+                  : isDownloadingTrack
+                  ? 'Baixando MP3...'
+                  : 'Baixar Música em MP3 (1 Clique Direto)'
+              }
             >
-              <Download size={18} />
+              {isDownloadingTrack ? (
+                <Loader2 size={18} className="animate-spin text-spotify-green" />
+              ) : downloadDone ? (
+                <Check size={18} className="text-emerald-400" />
+              ) : (
+                <Download size={18} />
+              )}
             </button>
 
             {/* Botão Equalizador */}
