@@ -226,8 +226,8 @@ export function CustomPlaylistDetail() {
     }
   }
 
-  // Toca a partir do índice
-  const handlePlayItem = async (index: number) => {
+  // Toca a partir do índice (inicia aleatório se for início geral com Shuffle ativo)
+  const handlePlayItem = async (index: number, isExplicitClick = false) => {
     const queueItems: QueueItem[] = playlist.items.map((i) => ({
       id: i.id,
       source: i.source,
@@ -242,7 +242,7 @@ export function CustomPlaylistDetail() {
       durationMs: i.durationMs,
     }))
 
-    await playUniversal(queueItems, index)
+    await playUniversal(queueItems, index, isExplicitClick)
   }
 
   const isCurrentPlayingInPlaylist = (item: PlaylistItem) => {
@@ -344,7 +344,7 @@ export function CustomPlaylistDetail() {
                     if (activeIndex >= 0) {
                       togglePlay()
                     } else {
-                      handlePlayItem(0)
+                      handlePlayItem(0, false)
                     }
                   }}
                   disabled={isResolving}
@@ -684,7 +684,7 @@ export function CustomPlaylistDetail() {
 
                   {/* Artwork & Info (Click to Play) */}
                   <div
-                    onClick={() => handlePlayItem(index)}
+                    onClick={() => handlePlayItem(index, true)}
                     className="flex items-center gap-3 min-w-0 pr-4 cursor-pointer"
                   >
                     {item.imageUrl || item.videoId ? (

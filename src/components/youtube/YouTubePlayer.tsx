@@ -8,6 +8,7 @@ import { useEffect, useRef } from 'react'
 import { useYouTubeIframeApi } from '@/hooks/useYouTubeIframeApi'
 import { usePlayerStore } from '@/store/playerStore'
 import { useHistoryStore } from '@/store/historyStore'
+import { useEqualizerStore } from '@/store/equalizerStore'
 import type { QueueItem } from '@/types'
 
 export function YouTubePlayer() {
@@ -487,15 +488,29 @@ export function YouTubePlayer() {
     } catch {}
   }, [isPlaying])
 
-  // ─── Sincronização de Volume ─────────────────────────────────────
+  const eqIsEnabled = useEqualizerStore((s) => s.isEnabled)
+  const eqPreAmpGain = useEqualizerStore((s) => s.preAmpGain)
+  const eqGains = useEqualizerStore((s) => s.gains)
+  const eqBassBoost = useEqualizerStore((s) => s.bassBoost)
+  const eqVocalClarity = useEqualizerStore((s) => s.vocalClarity)
+
+  // ─── Sincronização de Volume & Equalização Dinâmica ──────────────
   useEffect(() => {
     if (isCrossfadingRef.current) return
     const active = getActivePlayer()
     if (!active?.setVolume) return
     try {
-      active.setVolume(isMuted ? 0 : (volume ?? 50))
+      let effectiveVol = isMuted ? 0 : (volume ?? 50)
+      if (eqIsEnabled && effectiveVol > 0) {
+        // Pre-amp gain calculation (-12dB to +12dB) e média das bandas de frequência
+        const avgGain = eqGains.reduce((a, b) => a + b, 0) / eqGains.length
+        const totalGainDb = eqPreAmpGain + (avgGain * 0.45) + ((eqBassBoost / 100) * 3) + ((eqVocalClarity / 100) * 2)
+        const multiplier = Math.pow(10, totalGainDb / 20)
+        effectiveVol = Math.max(1, Math.min(100, Math.round(effectiveVol * multiplier)))
+      }
+      active.setVolume(effectiveVol)
     } catch {}
-  }, [volume, isMuted])
+  }, [volume, isMuted, eqIsEnabled, eqPreAmpGain, eqGains, eqBassBoost, eqVocalClarity])
 
   // ─── Seek de Progresso ───────────────────────────────────────────
   useEffect(() => {

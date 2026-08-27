@@ -38,14 +38,27 @@ export function SpotifyLiked({ isAuthenticated = false, onPlayTrack }: SpotifyLi
           uri: t.uri,
           durationMs: t.duration_ms,
         })),
-        index
+        index,
+        true
       )
     }
   }
 
   const handlePlayAll = () => {
     if (tracks.length > 0) {
-      handlePlayTrackInternal(tracks[0], 0)
+      playUniversal(
+        tracks.map((t) => ({
+          id: t.id,
+          source: 'spotify',
+          title: t.name,
+          subtitle: t.artists.map((a) => a.name).join(', '),
+          imageUrl: t.album.images?.[0]?.url || '',
+          uri: t.uri,
+          durationMs: t.duration_ms,
+        })),
+        0,
+        false
+      )
     }
   }
 

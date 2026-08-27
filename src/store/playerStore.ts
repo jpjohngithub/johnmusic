@@ -85,7 +85,7 @@ export interface PlayerActions {
   getUpcomingQueue: () => QueueItem[]
 
   // Universal playback across all platforms
-  playUniversal: (items: QueueItem[], startIndex?: number) => Promise<void>
+  playUniversal: (items: QueueItem[], startIndex?: number, isExplicitClick?: boolean) => Promise<void>
 
   // Reset
   reset: () => void
@@ -622,14 +622,29 @@ export const usePlayerStore = create<ExtendedPlayerState & PlayerActions>()(
       },
 
       // ─── Universal Playback ─────────────────────────────────
-      playUniversal: async (items: QueueItem[], startIndex = 0) => {
+      playUniversal: async (items: QueueItem[], startIndex = 0, isExplicitClick = false) => {
         const queue = [...items]
         const isShuffled = get().isShuffled
+        let actualIndex = startIndex
+
+        // Se a ordem aleatória estiver ativa e o usuário deu play na playlist inteira (sem clicar em uma faixa específica):
+        if (isShuffled && queue.length > 1 && !isExplicitClick && startIndex === 0) {
+          actualIndex = Math.floor(Math.random() * queue.length)
+        }
+
         const shuffledOrder = isShuffled && queue.length > 0
-          ? generateShuffleOrder(queue.length, startIndex)
+          ? generateShuffleOrder(queue.length, actualIndex)
           : []
-        set({ queue, queueIndex: startIndex, shuffledOrder, shuffledPosition: 0, volume: 50, isMuted: false })
-        await get().playQueueIndex(startIndex)
+
+        set({
+          queue,
+          queueIndex: actualIndex,
+          shuffledOrder,
+          shuffledPosition: 0,
+          isMuted: false,
+        })
+
+        await get().playQueueIndex(actualIndex)
       },
 
       reset: () => set(initialState),

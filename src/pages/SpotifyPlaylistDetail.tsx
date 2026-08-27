@@ -68,7 +68,7 @@ export function SpotifyPlaylistDetail() {
   }
 
   // Toca as faixas da playlist separadamente na fila unificada
-  const handlePlayAll = async (startIndex = 0) => {
+  const handlePlayAll = async (startIndex = 0, isExplicitClick = false) => {
     const queueItems: QueueItem[] = playlist.items.map((i) => ({
       id: i.id,
       source: 'spotify',
@@ -79,7 +79,7 @@ export function SpotifyPlaylistDetail() {
       durationMs: i.durationMs,
     }))
 
-    await playUniversal(queueItems, startIndex)
+    await playUniversal(queueItems, startIndex, isExplicitClick)
   }
 
   const isCurrentPlaying = (item: PlaylistItem) => {
@@ -141,7 +141,7 @@ export function SpotifyPlaylistDetail() {
       {/* Play All Button */}
       <div className="flex items-center gap-4">
         <button
-          onClick={() => handlePlayAll(0)}
+          onClick={() => handlePlayAll(0, false)}
           className="flex items-center gap-2.5 px-8 py-3.5 bg-spotify-green hover:bg-green-400 active:scale-95 text-black font-extrabold rounded-full transition-all shadow-xl shadow-spotify-green/20 text-sm tracking-wide"
         >
           <Play size={18} className="fill-black" />
@@ -172,7 +172,7 @@ export function SpotifyPlaylistDetail() {
               return (
                 <div
                   key={item.id || index}
-                  onClick={() => handlePlayAll(index)}
+                  onClick={() => handlePlayAll(index, true)}
                   className={cn(
                     'group grid items-center px-4 py-3 rounded-2xl cursor-pointer transition-all duration-150 border',
                     isCurrent

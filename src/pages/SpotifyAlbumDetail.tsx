@@ -118,7 +118,8 @@ export function SpotifyAlbumDetail({
                   uri: t.uri,
                   durationMs: t.duration_ms,
                 })),
-                index
+                index,
+                true
               )
             }
           }}
