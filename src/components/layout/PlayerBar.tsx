@@ -493,37 +493,18 @@ export function PlayerBar({ onExpandPlayer }: PlayerBarProps) {
 
           {/* Right: Volume & Queue & Cast & Equalizer & Download */}
           <div className="flex items-center gap-2 w-72 flex-shrink-0 justify-end">
-            {/* Botão Baixar MP3 (1 Clique Direto) */}
+            {/* Botão Baixar MP3 */}
             <button
-              onClick={handleDirectDownload}
-              onContextMenu={(e) => {
-                e.preventDefault()
-                setShowDownloadModal(true)
-              }}
-              disabled={isDownloadingTrack}
+              onClick={() => setShowDownloadModal(true)}
               className={cn(
                 'p-2 rounded-lg transition-all flex items-center justify-center relative',
-                downloadDone
-                  ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 shadow-sm shadow-emerald-500/20 scale-105'
-                  : isDownloadingTrack
-                  ? 'bg-spotify-green/20 text-spotify-green'
+                showDownloadModal
+                  ? 'bg-spotify-green/20 text-spotify-green border border-spotify-green/40 shadow-sm shadow-spotify-green/20'
                   : 'text-white/50 hover:text-white hover:bg-white/5'
               )}
-              title={
-                downloadDone
-                  ? 'Download Iniciado!'
-                  : isDownloadingTrack
-                  ? 'Baixando MP3...'
-                  : 'Baixar Música em MP3 (1 Clique Direto)'
-              }
+              title="Baixar Música em MP3 (Alta Qualidade 320kbps)"
             >
-              {isDownloadingTrack ? (
-                <Loader2 size={18} className="animate-spin text-spotify-green" />
-              ) : downloadDone ? (
-                <Check size={18} className="text-emerald-400" />
-              ) : (
-                <Download size={18} />
-              )}
+              <Download size={18} />
             </button>
 
             {/* Botão Equalizador */}

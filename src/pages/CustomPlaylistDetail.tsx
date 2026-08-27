@@ -783,14 +783,10 @@ export function CustomPlaylistDetail() {
                     <button
                       onClick={(e) => {
                         e.stopPropagation()
-                        downloadTrackInstant(item)
-                      }}
-                      onContextMenu={(e) => {
-                        e.preventDefault()
                         setDownloadTrackItem(item)
                       }}
                       className="p-2 rounded-xl text-white/30 hover:text-spotify-green hover:bg-white/10 transition-all opacity-0 group-hover:opacity-100"
-                      title="Baixar Música em MP3 (1 Clique Direto)"
+                      title="Baixar Música em MP3"
                     >
                       <Download size={15} />
                     </button>
