@@ -24,12 +24,16 @@ import {
   Sparkles,
   ListMusic,
   Cast,
+  AudioLines,
 } from 'lucide-react'
 import { usePlayerStore } from '@/store/playerStore'
+import { useEqualizerStore } from '@/store/equalizerStore'
+import { equalizerAudioService } from '@/api/equalizerAudioService'
 import { formatSeconds, cn } from '@/lib/utils'
 import { YouTubePlayer } from '@/components/youtube/YouTubePlayer'
 import { QueueDrawer } from '@/components/player/QueueDrawer'
 import { CastDeviceModal } from '@/components/player/CastDeviceModal'
+import { EqualizerModal } from '@/components/player/EqualizerModal'
 
 // TikTok mini icon
 const TikTokIcon = () => (
@@ -81,6 +85,8 @@ export function PlayerBar({ onExpandPlayer }: PlayerBarProps) {
   const [showEmbedDrawer, setShowEmbedDrawer] = useState(false)
   const [showQueueDrawer, setShowQueueDrawer] = useState(false)
   const [showCastModal, setShowCastModal] = useState(false)
+  const [showEqualizerModal, setShowEqualizerModal] = useState(false)
+  const isEqEnabled = useEqualizerStore((s) => s.isEnabled)
   const audioElementRef = useRef<HTMLAudioElement | null>(null)
 
   const nextTrack = getNextTrack()
@@ -95,6 +101,9 @@ export function PlayerBar({ onExpandPlayer }: PlayerBarProps) {
         audio.src = audioTrack.audioUrl
         audio.load()
       }
+
+      // Conecta ao DSP do Equalizador
+      equalizerAudioService.attachAudioElement(audio)
 
       if (isPlaying) {
         audio.play().catch(() => {})
@@ -439,8 +448,25 @@ export function PlayerBar({ onExpandPlayer }: PlayerBarProps) {
             </div>
           </div>
 
-          {/* Right: Volume & Queue & Cast */}
-          <div className="flex items-center gap-2.5 w-56 flex-shrink-0 justify-end">
+          {/* Right: Volume & Queue & Cast & Equalizer */}
+          <div className="flex items-center gap-2 w-64 flex-shrink-0 justify-end">
+            {/* Botão Equalizador */}
+            <button
+              onClick={() => setShowEqualizerModal(true)}
+              className={cn(
+                'p-2 rounded-lg transition-all flex items-center justify-center relative',
+                showEqualizerModal || isEqEnabled
+                  ? 'bg-emerald-500/20 text-spotify-green border border-emerald-500/40 shadow-sm shadow-emerald-500/20'
+                  : 'text-white/50 hover:text-white hover:bg-white/5'
+              )}
+              title="Equalizador Gráfico & Presets (Mais Grave, Vocal Enhanced, Rock, Pop)"
+            >
+              <AudioLines size={18} />
+              {isEqEnabled && (
+                <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-spotify-green rounded-full shadow animate-pulse" />
+              )}
+            </button>
+
             {/* Botão Transmitir / Cast para outro dispositivo */}
             <button
               onClick={() => setShowCastModal(true)}
@@ -506,6 +532,12 @@ export function PlayerBar({ onExpandPlayer }: PlayerBarProps) {
       <CastDeviceModal
         isOpen={showCastModal}
         onClose={() => setShowCastModal(false)}
+      />
+
+      {/* Modal de Equalizador de Áudio */}
+      <EqualizerModal
+        isOpen={showEqualizerModal}
+        onClose={() => setShowEqualizerModal(false)}
       />
     </>
   )
