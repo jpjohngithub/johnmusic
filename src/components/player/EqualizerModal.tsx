@@ -263,7 +263,10 @@ export function EqualizerModal({ isOpen, onClose }: EqualizerModalProps) {
                 return (
                   <button
                     key={preset.id}
-                    onClick={() => applyPreset(preset.id)}
+                    onClick={() => {
+                      applyPreset(preset.id)
+                      equalizerAudioService.playPresetAcousticFeedback(preset.id)
+                    }}
                     className={cn(
                       'p-2.5 rounded-2xl border text-left transition-all flex flex-col items-center justify-center text-center gap-1 group',
                       isCurrent
