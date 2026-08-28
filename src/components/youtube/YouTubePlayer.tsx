@@ -324,19 +324,27 @@ export function YouTubePlayer() {
               }
               e.target.setVolume(initialVol)
             } catch {}
-            if (activeDeckRef.current === 'A' && queueVideoId) {
-              lastLoadedIdRef.current = queueVideoId
+
+            const s = usePlayerStore.getState()
+            const currentVid = s.youtubeVideo?.videoId || s.queue[s.queueIndex]?.videoId
+            if (activeDeckRef.current === 'A' && currentVid) {
+              lastLoadedIdRef.current = currentVid
               hasTriggeredTransitionRef.current = false
-              if (usePlayerStore.getState().isPlaying) {
-                e.target.loadVideoById(queueVideoId)
+              if (s.isPlaying) {
+                try {
+                  e.target.loadVideoById(currentVid)
+                  e.target.playVideo()
+                } catch {}
               } else {
-                e.target.cueVideoById(queueVideoId)
+                try {
+                  e.target.cueVideoById(currentVid)
+                } catch {}
               }
             }
           },
           onStateChange: (e: any) => {
             const YTState = window.YT?.PlayerState || {}
-            if (activeDeckRef.current === 'A' && e.data === YTState.PLAYING) {
+            if (e.data === YTState.PLAYING) {
               try {
                 const s = usePlayerStore.getState()
                 if (!s.isMuted && (s.volume ?? 50) > 0) {
@@ -348,6 +356,10 @@ export function YouTubePlayer() {
               } catch {}
               usePlayerStore.getState().setIsPlaying(true)
               startProgressLoop()
+            } else if (e.data === YTState.CUED) {
+              if (usePlayerStore.getState().isPlaying) {
+                try { e.target.playVideo() } catch {}
+              }
             } else if (activeDeckRef.current === 'A' && e.data === YTState.ENDED) {
               if (!isCrossfadingRef.current && !hasTriggeredTransitionRef.current) {
                 stopProgressLoop()
@@ -384,7 +396,7 @@ export function YouTubePlayer() {
           },
           onStateChange: (e: any) => {
             const YTState = window.YT?.PlayerState || {}
-            if (activeDeckRef.current === 'B' && e.data === YTState.PLAYING) {
+            if (e.data === YTState.PLAYING && activeDeckRef.current === 'B') {
               try {
                 const s = usePlayerStore.getState()
                 if (!s.isMuted && (s.volume ?? 50) > 0) {
@@ -422,40 +434,49 @@ export function YouTubePlayer() {
     }
   }, [ready])
 
-  // ─── Carrega novo vídeo quando o usuário seleciona manualmente ──
+  // ─── Carrega novo vídeo ou atualiza estado Play/Pause ────────────
   useEffect(() => {
     if (!queueVideoId) return
-    if (lastLoadedIdRef.current === queueVideoId) return
-
-    stopCrossfade()
-    lastLoadedIdRef.current = queueVideoId
-    hasTriggeredTransitionRef.current = false
 
     const active = getActivePlayer()
     const standby = getStandbyPlayer()
+    if (!active) return
 
-    if (active?.loadVideoById) {
-      try {
-        standby?.pauseVideo()
-        standby?.setVolume(0)
+    const currentStore = usePlayerStore.getState()
+    const baseVol = currentStore.isMuted ? 0 : (currentStore.volume ?? 50)
 
-        const currentStore = usePlayerStore.getState()
-        const baseVol = currentStore.isMuted ? 0 : (currentStore.volume ?? 50)
-        if (!currentStore.isMuted && baseVol > 0) {
-          active.unMute()
-        }
-        active.setVolume(baseVol)
+    try {
+      if (!currentStore.isMuted && baseVol > 0) {
+        active.unMute?.()
+      }
+      active.setVolume?.(baseVol)
+
+      if (lastLoadedIdRef.current !== queueVideoId) {
+        stopCrossfade()
+        lastLoadedIdRef.current = queueVideoId
+        hasTriggeredTransitionRef.current = false
+
+        standby?.pauseVideo?.()
+        standby?.setVolume?.(0)
 
         if (isPlaying) {
-          active.loadVideoById(queueVideoId)
-          active.playVideo()
+          active.loadVideoById?.(queueVideoId)
+          active.playVideo?.()
         } else {
-          active.cueVideoById(queueVideoId)
+          active.cueVideoById?.(queueVideoId)
         }
         startProgressLoop()
-      } catch {}
-    }
-  }, [queueVideoId, isPlaying])
+      } else {
+        if (isPlaying) {
+          active.playVideo?.()
+          startProgressLoop()
+        } else {
+          active.pauseVideo?.()
+          stopProgressLoop()
+        }
+      }
+    } catch {}
+  }, [queueVideoId, isPlaying, ready])
 
   // ─── Transição Mágica Disparada Manualmente pelos Botões ─────────
   useEffect(() => {
@@ -489,28 +510,6 @@ export function YouTubePlayer() {
       window.removeEventListener('yt-player-crossfade-prev', handleManualPrev)
     }
   }, [])
-
-  // ─── Sincronização Play / Pause ───────────────────────────────────
-  useEffect(() => {
-    if (usePlayerStore.getState().source !== 'youtube') return
-    const active = getActivePlayer()
-    if (!active?.playVideo) return
-
-    try {
-      if (isPlaying) {
-        const s = usePlayerStore.getState()
-        if (!s.isMuted && (s.volume ?? 50) > 0) {
-          active.unMute()
-          active.setVolume(s.volume ?? 50)
-        }
-        active.playVideo()
-        startProgressLoop()
-      } else {
-        active.pauseVideo()
-        stopProgressLoop()
-      }
-    } catch {}
-  }, [isPlaying])
 
   const eqIsEnabled = useEqualizerStore((s) => s.isEnabled)
   const eqPreAmpGain = useEqualizerStore((s) => s.preAmpGain)
