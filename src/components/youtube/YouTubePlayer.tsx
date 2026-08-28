@@ -318,7 +318,12 @@ export function YouTubePlayer() {
         },
         events: {
           onReady: (e: any) => {
-            try { e.target.setVolume(initialVol) } catch {}
+            try {
+              if (!store.isMuted && initialVol > 0) {
+                e.target.unMute()
+              }
+              e.target.setVolume(initialVol)
+            } catch {}
             if (activeDeckRef.current === 'A' && queueVideoId) {
               lastLoadedIdRef.current = queueVideoId
               hasTriggeredTransitionRef.current = false
@@ -333,6 +338,11 @@ export function YouTubePlayer() {
             const YTState = window.YT?.PlayerState || {}
             if (activeDeckRef.current === 'A' && e.data === YTState.PLAYING) {
               try {
+                const s = usePlayerStore.getState()
+                if (!s.isMuted && (s.volume ?? 50) > 0) {
+                  e.target.unMute()
+                  e.target.setVolume(s.volume ?? 50)
+                }
                 const dur = e.target.getDuration()
                 if (dur > 0) usePlayerStore.getState().setDuration(dur)
               } catch {}
@@ -376,6 +386,11 @@ export function YouTubePlayer() {
             const YTState = window.YT?.PlayerState || {}
             if (activeDeckRef.current === 'B' && e.data === YTState.PLAYING) {
               try {
+                const s = usePlayerStore.getState()
+                if (!s.isMuted && (s.volume ?? 50) > 0) {
+                  e.target.unMute()
+                  e.target.setVolume(s.volume ?? 50)
+                }
                 const dur = e.target.getDuration()
                 if (dur > 0) usePlayerStore.getState().setDuration(dur)
               } catch {}
@@ -424,7 +439,11 @@ export function YouTubePlayer() {
         standby?.pauseVideo()
         standby?.setVolume(0)
 
-        const baseVol = usePlayerStore.getState().isMuted ? 0 : (usePlayerStore.getState().volume ?? 50)
+        const currentStore = usePlayerStore.getState()
+        const baseVol = currentStore.isMuted ? 0 : (currentStore.volume ?? 50)
+        if (!currentStore.isMuted && baseVol > 0) {
+          active.unMute()
+        }
         active.setVolume(baseVol)
 
         if (isPlaying) {
@@ -479,6 +498,11 @@ export function YouTubePlayer() {
 
     try {
       if (isPlaying) {
+        const s = usePlayerStore.getState()
+        if (!s.isMuted && (s.volume ?? 50) > 0) {
+          active.unMute()
+          active.setVolume(s.volume ?? 50)
+        }
         active.playVideo()
         startProgressLoop()
       } else {
@@ -502,11 +526,15 @@ export function YouTubePlayer() {
     try {
       let effectiveVol = isMuted ? 0 : (volume ?? 50)
       if (eqIsEnabled && effectiveVol > 0) {
-        // Pre-amp gain calculation (-12dB to +12dB) e média das bandas de frequência
         const avgGain = eqGains.reduce((a, b) => a + b, 0) / eqGains.length
         const totalGainDb = eqPreAmpGain + (avgGain * 0.45) + ((eqBassBoost / 100) * 3) + ((eqVocalClarity / 100) * 2)
         const multiplier = Math.pow(10, totalGainDb / 20)
         effectiveVol = Math.max(1, Math.min(100, Math.round(effectiveVol * multiplier)))
+      }
+      if (!isMuted && effectiveVol > 0) {
+        active.unMute()
+      } else {
+        active.mute()
       }
       active.setVolume(effectiveVol)
     } catch {}
@@ -531,12 +559,12 @@ export function YouTubePlayer() {
       aria-hidden
       style={{
         position: 'fixed',
-        bottom: '96px',
-        right: '16px',
-        width: '320px',
-        height: '180px',
-        zIndex: 30,
-        opacity: 0.001,
+        bottom: '0px',
+        right: '0px',
+        width: '200px',
+        height: '120px',
+        zIndex: -10,
+        opacity: 0.02,
         pointerEvents: 'none',
       }}
     >

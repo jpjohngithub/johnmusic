@@ -32,13 +32,10 @@ import {
   GripVertical,
   Share2,
   Link2,
-  Download,
 } from 'lucide-react'
 import { useLibraryStore } from '@/store/libraryStore'
 import { usePlayerStore } from '@/store/playerStore'
 import { AddToPlaylistModal } from '@/components/playlist/AddToPlaylistModal'
-import { DownloadModal } from '@/components/player/DownloadModal'
-import { downloadTrackInstant } from '@/api/downloadService'
 import { generatePlaylistShareUrl } from '@/api/playlistShareService'
 import { createSpotifyItemFromUrl, isValidSpotifyUrl } from '@/api/spotifyUrlService'
 import { createYouTubeVideoFromUrl, isValidYouTubeUrl } from '@/api/youtubeService'
@@ -96,7 +93,6 @@ export function CustomPlaylistDetail() {
 
   // Estado para Salvar Música em Outra Playlist
   const [selectedTrackForSave, setSelectedTrackForSave] = useState<PlaylistItem | null>(null)
-  const [downloadTrackItem, setDownloadTrackItem] = useState<PlaylistItem | null>(null)
 
   // Estados para Drag and Drop (Arrastar Músicas)
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null)
@@ -783,16 +779,6 @@ export function CustomPlaylistDetail() {
                     <button
                       onClick={(e) => {
                         e.stopPropagation()
-                        setDownloadTrackItem(item)
-                      }}
-                      className="p-2 rounded-xl text-white/30 hover:text-spotify-green hover:bg-white/10 transition-all opacity-0 group-hover:opacity-100"
-                      title="Baixar Música em MP3"
-                    >
-                      <Download size={15} />
-                    </button>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation()
                         setSelectedTrackForSave(item)
                       }}
                       className="p-2 rounded-xl text-white/30 hover:text-spotify-green hover:bg-white/10 transition-all opacity-0 group-hover:opacity-100"
@@ -923,13 +909,6 @@ export function CustomPlaylistDetail() {
         isOpen={Boolean(selectedTrackForSave)}
         onClose={() => setSelectedTrackForSave(null)}
         item={selectedTrackForSave}
-      />
-
-      {/* Modal de Download de Música em MP3 */}
-      <DownloadModal
-        isOpen={Boolean(downloadTrackItem)}
-        onClose={() => setDownloadTrackItem(null)}
-        item={downloadTrackItem}
       />
     </div>
   )

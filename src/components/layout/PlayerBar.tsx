@@ -25,19 +25,15 @@ import {
   ListMusic,
   Cast,
   AudioLines,
-  Download,
-  Check,
 } from 'lucide-react'
 import { usePlayerStore } from '@/store/playerStore'
 import { useEqualizerStore } from '@/store/equalizerStore'
 import { equalizerAudioService } from '@/api/equalizerAudioService'
-import { downloadTrackInstant } from '@/api/downloadService'
 import { formatSeconds, cn } from '@/lib/utils'
 import { YouTubePlayer } from '@/components/youtube/YouTubePlayer'
 import { QueueDrawer } from '@/components/player/QueueDrawer'
 import { CastDeviceModal } from '@/components/player/CastDeviceModal'
 import { EqualizerModal } from '@/components/player/EqualizerModal'
-import { DownloadModal } from '@/components/player/DownloadModal'
 
 // TikTok mini icon
 const TikTokIcon = () => (
@@ -90,9 +86,6 @@ export function PlayerBar({ onExpandPlayer }: PlayerBarProps) {
   const [showQueueDrawer, setShowQueueDrawer] = useState(false)
   const [showCastModal, setShowCastModal] = useState(false)
   const [showEqualizerModal, setShowEqualizerModal] = useState(false)
-  const [showDownloadModal, setShowDownloadModal] = useState(false)
-  const [isDownloadingTrack, setIsDownloadingTrack] = useState(false)
-  const [downloadDone, setDownloadDone] = useState(false)
   const isEqEnabled = useEqualizerStore((s) => s.isEnabled)
   const audioElementRef = useRef<HTMLAudioElement | null>(null)
 
@@ -262,30 +255,6 @@ export function PlayerBar({ onExpandPlayer }: PlayerBarProps) {
       : 'text-spotify-green'
 
   const RepeatIcon = repeatMode === 'one' ? Repeat1 : Repeat
-
-  const handleDirectDownload = useCallback(async (e: React.MouseEvent) => {
-    e.stopPropagation()
-    if (isDownloadingTrack) return
-    setIsDownloadingTrack(true)
-    setDownloadDone(false)
-    try {
-      await downloadTrackInstant({
-        title: currentTitle,
-        subtitle: currentSubtitle,
-        imageUrl: currentImage,
-        videoId: currentQueueItem?.videoId || youtubeVideo?.videoId,
-        audioUrl: currentQueueItem?.audioUrl || audioTrack?.audioUrl,
-        source: effectiveSource || undefined,
-        uri: currentQueueItem?.uri,
-      })
-      setDownloadDone(true)
-      setTimeout(() => setDownloadDone(false), 3000)
-    } catch {
-      setShowDownloadModal(true)
-    } finally {
-      setIsDownloadingTrack(false)
-    }
-  }, [isDownloadingTrack, currentTitle, currentSubtitle, currentImage, currentQueueItem, youtubeVideo, audioTrack, effectiveSource])
 
   return (
     <>
@@ -491,22 +460,8 @@ export function PlayerBar({ onExpandPlayer }: PlayerBarProps) {
             </div>
           </div>
 
-          {/* Right: Volume & Queue & Cast & Equalizer & Download */}
-          <div className="flex items-center gap-2 w-72 flex-shrink-0 justify-end">
-            {/* Botão Baixar MP3 */}
-            <button
-              onClick={() => setShowDownloadModal(true)}
-              className={cn(
-                'p-2 rounded-lg transition-all flex items-center justify-center relative',
-                showDownloadModal
-                  ? 'bg-spotify-green/20 text-spotify-green border border-spotify-green/40 shadow-sm shadow-spotify-green/20'
-                  : 'text-white/50 hover:text-white hover:bg-white/5'
-              )}
-              title="Baixar Música em MP3 (Alta Qualidade 320kbps)"
-            >
-              <Download size={18} />
-            </button>
-
+          {/* Right: Volume & Queue & Cast & Equalizer */}
+          <div className="flex items-center gap-2 w-64 flex-shrink-0 justify-end">
             {/* Botão Equalizador */}
             <button
               onClick={() => setShowEqualizerModal(true)}
@@ -595,21 +550,6 @@ export function PlayerBar({ onExpandPlayer }: PlayerBarProps) {
       <EqualizerModal
         isOpen={showEqualizerModal}
         onClose={() => setShowEqualizerModal(false)}
-      />
-
-      {/* Modal de Download de Música em MP3 */}
-      <DownloadModal
-        isOpen={showDownloadModal}
-        onClose={() => setShowDownloadModal(false)}
-        item={{
-          title: currentTitle,
-          subtitle: currentSubtitle,
-          imageUrl: currentImage,
-          videoId: currentQueueItem?.videoId || youtubeVideo?.videoId,
-          audioUrl: currentQueueItem?.audioUrl || audioTrack?.audioUrl,
-          source: effectiveSource || undefined,
-          uri: currentQueueItem?.uri,
-        }}
       />
     </>
   )
