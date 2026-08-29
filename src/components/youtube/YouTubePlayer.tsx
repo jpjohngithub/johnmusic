@@ -67,6 +67,7 @@ export function YouTubePlayer() {
   }
 
   // ─── Loop de Monitoramento de Progresso de Alta Precisão (70ms) ───
+  // Quando a aba está em segundo plano, o browser throttlea o intervalo para ~1s
   function startProgressLoop() {
     stopProgressLoop()
     progressTimerRef.current = window.setInterval(() => {
@@ -83,6 +84,17 @@ export function YouTubePlayer() {
           store.setDuration(duration)
           store.setProgress((current / duration) * 100)
 
+          const remaining = duration - current
+
+          // ─── Failsafe: se a música acabou mas crossfade não completou (aba em BG) ───
+          if (remaining <= 0.3 && (isCrossfadingRef.current || hasTriggeredTransitionRef.current)) {
+            stopCrossfade()
+            hasTriggeredTransitionRef.current = false
+            stopProgressLoop()
+            store.playNext()
+            return
+          }
+
           // ─── Automação de Transição Mágica a 8.5s (Antes do Silêncio Final) ───
           if (
             store.perfectTransition &&
@@ -90,20 +102,24 @@ export function YouTubePlayer() {
             !isCrossfadingRef.current &&
             !hasTriggeredTransitionRef.current
           ) {
-            const remaining = duration - current
-
             // Pré-busca em nuvem da próxima faixa a 20s do fim
             if (remaining <= 20 && remaining > 14) {
               store.preResolveNextTrack()
             }
 
-            // Dispara o Crossfade Mágico enquanto a música A ainda está com energia musical total (8.5s)
+            // Se a aba está em segundo plano, pula o crossfade e faz transição simples
             if (remaining <= 8.5 && remaining > 0.5) {
               hasTriggeredTransitionRef.current = true
               const nextTrack = store.getNextTrack()
               const nextIndex = store.getNextTrackIndex()
               if (nextTrack && nextIndex !== null) {
-                performHandshakeCrossfade(nextTrack, nextIndex, 6500)
+                if (document.hidden) {
+                  // Aba em segundo plano: transição instantânea sem crossfade
+                  stopProgressLoop()
+                  store.playNext()
+                } else {
+                  performHandshakeCrossfade(nextTrack, nextIndex, 6500)
+                }
               }
             }
           }
@@ -366,14 +382,20 @@ export function YouTubePlayer() {
                 try { e.target.playVideo() } catch {}
               }
             } else if (activeDeckRef.current === 'A' && e.data === YTState.ENDED) {
-              if (!isCrossfadingRef.current && !hasTriggeredTransitionRef.current) {
-                stopProgressLoop()
-                usePlayerStore.getState().playNext()
+              // Sempre avança para próxima música quando a aba está em segundo plano
+              // O crossfade pode ter ficado preso pelo throttling do browser
+              if (document.hidden || isCrossfadingRef.current || hasTriggeredTransitionRef.current) {
+                stopCrossfade()
+                hasTriggeredTransitionRef.current = false
               }
+              stopProgressLoop()
+              usePlayerStore.getState().playNext()
             }
           },
           onError: () => {
-            if (activeDeckRef.current === 'A' && !isCrossfadingRef.current) {
+            if (activeDeckRef.current === 'A') {
+              stopCrossfade()
+              hasTriggeredTransitionRef.current = false
               usePlayerStore.getState().playNext()
             }
           },
@@ -414,14 +436,19 @@ export function YouTubePlayer() {
               usePlayerStore.getState().setIsPlaying(true)
               startProgressLoop()
             } else if (activeDeckRef.current === 'B' && e.data === YTState.ENDED) {
-              if (!isCrossfadingRef.current && !hasTriggeredTransitionRef.current) {
-                stopProgressLoop()
-                usePlayerStore.getState().playNext()
+              // Sempre avança mesmo em segundo plano
+              if (document.hidden || isCrossfadingRef.current || hasTriggeredTransitionRef.current) {
+                stopCrossfade()
+                hasTriggeredTransitionRef.current = false
               }
+              stopProgressLoop()
+              usePlayerStore.getState().playNext()
             }
           },
           onError: () => {
-            if (activeDeckRef.current === 'B' && !isCrossfadingRef.current) {
+            if (activeDeckRef.current === 'B') {
+              stopCrossfade()
+              hasTriggeredTransitionRef.current = false
               usePlayerStore.getState().playNext()
             }
           },
