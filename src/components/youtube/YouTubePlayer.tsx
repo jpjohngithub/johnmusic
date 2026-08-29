@@ -55,7 +55,7 @@ export function YouTubePlayer() {
 
   function stopCrossfade() {
     if (crossfadeRafRef.current !== null) {
-      cancelAnimationFrame(crossfadeRafRef.current)
+      clearInterval(crossfadeRafRef.current as any)
       crossfadeRafRef.current = null
     }
     if (handshakeTimerRef.current !== null) {
@@ -202,6 +202,7 @@ export function YouTubePlayer() {
   }
 
   // ─── Rampa Acústica de Alta Energia (Potência Estendida) ───────────
+  // Usa setInterval em vez de requestAnimationFrame para funcionar em abas em segundo plano
   function startEqualPowerRamp(
     activePlayer: any,
     standbyPlayer: any,
@@ -212,21 +213,18 @@ export function YouTubePlayer() {
     durationMs: number
   ) {
     if (crossfadeRafRef.current !== null) {
-      cancelAnimationFrame(crossfadeRafRef.current)
+      clearInterval(crossfadeRafRef.current as any)
       crossfadeRafRef.current = null
     }
 
-    const startTime = performance.now()
+    const startTime = Date.now()
     let lastActiveVol = masterVol
     let lastStandbyVol = 0
 
-    function rampStep(currentTime: number) {
-      const elapsed = currentTime - startTime
+    crossfadeRafRef.current = window.setInterval(() => {
+      const elapsed = Date.now() - startTime
       const progress = Math.min(1.0, elapsed / durationMs)
 
-      // Curva Musical de Alta Energia:
-      // A música que entra (in) sobe rápido e presente (sin^0.65)
-      // A música que sai (out) mantém a base rítmica até o meio (cos^1.25)
       const angle = (progress * Math.PI) / 2
       const outRatio = Math.pow(Math.cos(angle), 1.25)
       const inRatio = Math.pow(Math.sin(angle), 0.65)
@@ -243,16 +241,25 @@ export function YouTubePlayer() {
         try { standbyPlayer?.setVolume(inVol) } catch {}
       }
 
-      if (progress < 1.0) {
-        crossfadeRafRef.current = requestAnimationFrame(rampStep)
-      } else {
+      // Garante que o deck entrante continua tocando mesmo em segundo plano
+      try {
+        const standbyState = standbyPlayer?.getPlayerState?.()
+        if (standbyState === 2 || standbyState === 5) {
+          // Pausado ou buffering — força play
+          standbyPlayer?.playVideo?.()
+        }
+      } catch {}
+
+      if (progress >= 1.0) {
         // Conclusão da Transição Mágica
+        clearInterval(crossfadeRafRef.current as any)
         crossfadeRafRef.current = null
 
         try {
           activePlayer?.pauseVideo()
           activePlayer?.setVolume(0)
           standbyPlayer?.setVolume(masterVol)
+          standbyPlayer?.playVideo()
         } catch {}
 
         activeDeckRef.current = incomingDeck
@@ -290,9 +297,7 @@ export function YouTubePlayer() {
 
         startProgressLoop()
       }
-    }
-
-    crossfadeRafRef.current = requestAnimationFrame(rampStep)
+    }, 50) as any
   }
 
   // ─── Inicialização dos dois Players do YouTube ───────────────────
@@ -552,6 +557,78 @@ export function YouTubePlayer() {
     window.addEventListener('yt-player-seek', handler)
     return () => window.removeEventListener('yt-player-seek', handler)
   }, [])
+
+  // ─── Suporte a Reprodução em Segundo Plano (Page Visibility API) ───
+  // Retoma automaticamente o áudio quando o usuário volta à aba ou janela
+  useEffect(() => {
+    let keepAliveTimer: any = null
+
+    const resumePlayback = () => {
+      const store = usePlayerStore.getState()
+      if (store.source !== 'youtube' || !store.isPlaying) return
+
+      const active = getActivePlayer()
+      if (!active) return
+
+      try {
+        const state = active.getPlayerState?.()
+        // Estados: 1=tocando, 2=pausado, 3=buffering, 5=cued, -1=não iniciado
+        if (state === 2 || state === 5 || state === -1) {
+          // Player parou em segundo plano — retoma com volume
+          const s = usePlayerStore.getState()
+          const vol = s.isMuted ? 0 : (s.volume ?? 50)
+          if (!s.isMuted && vol > 0) {
+            active.unMute?.()
+          }
+          active.setVolume?.(vol)
+          active.playVideo?.()
+        }
+      } catch {}
+    }
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        // Usuário voltou à aba — pequeno delay para dar tempo ao browser
+        setTimeout(resumePlayback, 300)
+        setTimeout(resumePlayback, 1000)
+      }
+    }
+
+    const handleWindowFocus = () => {
+      setTimeout(resumePlayback, 200)
+    }
+
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    window.addEventListener('focus', handleWindowFocus)
+
+    // Keep-alive: a cada 15s verifica se o player ainda está rodando
+    // Isso garante continuidade mesmo quando o browser throttle a aba
+    keepAliveTimer = window.setInterval(() => {
+      const store = usePlayerStore.getState()
+      if (store.source !== 'youtube' || !store.isPlaying || isCrossfadingRef.current) return
+
+      const active = getActivePlayer()
+      if (!active) return
+
+      try {
+        const state = active.getPlayerState?.()
+        if (state === 2 || state === 5 || state === -1) {
+          const vol = store.isMuted ? 0 : (store.volume ?? 50)
+          if (!store.isMuted && vol > 0) {
+            active.unMute?.()
+          }
+          active.setVolume?.(vol)
+          active.playVideo?.()
+        }
+      } catch {}
+    }, 15000)
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+      window.removeEventListener('focus', handleWindowFocus)
+      if (keepAliveTimer !== null) clearInterval(keepAliveTimer)
+    }
+  }, [ready])
 
   return (
     <div

@@ -123,6 +123,38 @@ export function PlayerBar({ onExpandPlayer }: PlayerBarProps) {
     }
   }, [volume, isMuted])
 
+  // ─── Suporte a Reprodução em Segundo Plano (HTML5 Audio) ────────
+  // Retoma automaticamente quando o usuário volta à aba
+  useEffect(() => {
+    const resumeAudio = () => {
+      const store = usePlayerStore.getState()
+      if (store.source !== 'audio' || !store.isPlaying) return
+      const audio = audioElementRef.current
+      if (!audio) return
+      if (audio.paused) {
+        audio.play().catch(() => {})
+      }
+    }
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        setTimeout(resumeAudio, 300)
+      }
+    }
+
+    const handleWindowFocus = () => {
+      setTimeout(resumeAudio, 200)
+    }
+
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    window.addEventListener('focus', handleWindowFocus)
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+      window.removeEventListener('focus', handleWindowFocus)
+    }
+  }, [])
+
   const handleTimeUpdate = () => {
     const audio = audioElementRef.current
     if (!audio || !audio.duration) return
