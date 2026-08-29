@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect, useCallback, useRef } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import {
   Music2,
@@ -17,13 +17,16 @@ import {
   Shuffle,
   Heart,
   TrendingUp,
+  RefreshCw,
+  Check,
+  Plus,
 } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import { isValidSpotifyUrl, createSpotifyItemFromUrl } from '@/api/spotifyUrlService'
 import { isValidYouTubeUrl, createYouTubeVideoFromUrl } from '@/api/youtubeService'
 import { isValidTikTokUrl, createTikTokVideoFromUrl } from '@/api/tiktokService'
 import { importSpotifyPlaylist } from '@/api/playlistImportService'
-import { getPersonalizedRecommendations } from '@/api/recommendationService'
+import { getPersonalizedRecommendations, getSimilarTracksForPlaylist, extractPlaylistArtists, type SimilarTrack } from '@/api/recommendationService'
 import { usePlayerStore } from '@/store/playerStore'
 import { useLibraryStore } from '@/store/libraryStore'
 import { useHistoryStore } from '@/store/historyStore'
@@ -55,6 +58,7 @@ export function Home() {
     addYouTubeVideo,
     addTikTokVideo,
     addCustomPlaylist,
+    addItemToCustomPlaylist,
   } = useLibraryStore()
 
   const { history, recentSearches, getTopArtists, getTopKeywords } = useHistoryStore()
@@ -77,6 +81,83 @@ export function Home() {
     queryFn: getPersonalizedRecommendations,
     staleTime: 10 * 60 * 1000, // 10 minutos de cache
   })
+
+  // ─── MÚSICAS SIMILARES ÀS PLAYLISTS SALVAS ────────────────────────
+  const [homeSimilarTracks, setHomeSimilarTracks] = useState<SimilarTrack[]>([])
+  const [isHomeSimilarLoading, setIsHomeSimilarLoading] = useState(false)
+  const [addedHomeSimilarIds, setAddedHomeSimilarIds] = useState<Set<string>>(new Set())
+  const [selectedPlaylistTargetId, setSelectedPlaylistTargetId] = useState<string>('all')
+  const homeSimilarSeedRef = useRef(Date.now())
+
+  // Itens da playlist alvo ou de todas as playlists salvas
+  const allSavedPlaylistItems = useMemo(() => {
+    if (selectedPlaylistTargetId && selectedPlaylistTargetId !== 'all') {
+      const found = customPlaylists.find((p) => p.id === selectedPlaylistTargetId)
+      return found ? found.items : []
+    }
+    return customPlaylists.flatMap((p) => p.items)
+  }, [customPlaylists, selectedPlaylistTargetId])
+
+  // Artistas detectados para exibir como estilo musical identificado
+  const detectedArtists = useMemo(() => {
+    return extractPlaylistArtists(allSavedPlaylistItems)
+  }, [allSavedPlaylistItems])
+
+  const loadHomeSimilarTracks = useCallback(
+    async (items = allSavedPlaylistItems, seed?: number) => {
+      if (items.length === 0) {
+        setHomeSimilarTracks([])
+        return
+      }
+      setIsHomeSimilarLoading(true)
+      const s = seed ?? homeSimilarSeedRef.current
+      homeSimilarSeedRef.current = s
+      const existingIds = new Set(
+        customPlaylists.flatMap((p) => p.items.map((i) => i.videoId || '')).filter(Boolean)
+      )
+      try {
+        const tracks = await getSimilarTracksForPlaylist(items, existingIds, s)
+        setHomeSimilarTracks(tracks)
+      } catch {
+        // ignore
+      } finally {
+        setIsHomeSimilarLoading(false)
+      }
+    },
+    [allSavedPlaylistItems, customPlaylists]
+  )
+
+  useEffect(() => {
+    if (allSavedPlaylistItems.length > 0 && homeSimilarTracks.length === 0 && !isHomeSimilarLoading) {
+      loadHomeSimilarTracks(allSavedPlaylistItems)
+    }
+  }, [allSavedPlaylistItems.length])
+
+  const handleReloadHomeSimilar = () => {
+    const newSeed = Date.now()
+    loadHomeSimilarTracks(allSavedPlaylistItems, newSeed)
+  }
+
+  const handleAddHomeSimilarTrack = (track: SimilarTrack) => {
+    const targetPlId =
+      selectedPlaylistTargetId !== 'all'
+        ? selectedPlaylistTargetId
+        : customPlaylists[0]?.id
+
+    if (!targetPlId) return
+
+    const item: PlaylistItem = {
+      id: track.videoId,
+      source: 'youtube',
+      title: track.title,
+      subtitle: track.channelTitle,
+      imageUrl: track.thumbnailUrl,
+      videoId: track.videoId,
+      addedAt: new Date().toISOString(),
+    }
+    addItemToCustomPlaylist(targetPlId, item)
+    setAddedHomeSimilarIds((prev) => new Set([...prev, track.videoId]))
+  }
 
   // Processa URL ou redireciona busca universal
   const handleUniversalSubmit = async (e: React.FormEvent) => {
@@ -611,16 +692,16 @@ export function Home() {
         </section>
       )}
 
-      {/* 📁 SEÇÃO 5: SUAS PLAYLISTS MULTIPLATAFORMA */}
+      {/* 📁 SEÇÃO 5: PLAYLISTS SALVAS */}
       {customPlaylists.length > 0 && (
         <section className="space-y-4">
           <div className="flex items-center justify-between">
             <div>
               <h2 className="text-xl font-bold text-white tracking-tight flex items-center gap-2">
                 <Layers size={20} className="text-spotify-green" />
-                <span>Suas Playlists Multiplataforma ({customPlaylists.length})</span>
+                <span>Playlists Salvas ({customPlaylists.length})</span>
               </h2>
-              <p className="text-white/40 text-xs mt-0.5">Faixas de qualquer plataforma tocando em harmonia</p>
+              <p className="text-white/40 text-xs mt-0.5">Suas coleções salvas no JohnMusic</p>
             </div>
           </div>
 
@@ -629,7 +710,7 @@ export function Home() {
               <Link
                 key={pl.id}
                 to={`/playlist/${pl.id}`}
-                className="group p-3 rounded-2xl bg-white/[0.03] hover:bg-white/[0.08] transition-all border border-spotify-green/20 space-y-2 flex flex-col justify-between"
+                className="group p-3 rounded-2xl bg-white/[0.03] hover:bg-white/[0.08] transition-all border border-spotify-green/20 space-y-2 flex flex-col justify-between hover:scale-[1.02] duration-300"
               >
                 <div className="relative aspect-square rounded-xl overflow-hidden bg-black shadow-md flex items-center justify-center">
                   {pl.coverUrl ? (
@@ -651,6 +732,189 @@ export function Home() {
               </Link>
             ))}
           </div>
+        </section>
+      )}
+
+      {/* 🔮 MÚSICAS SIMILARES ÀS PLAYLISTS SALVAS */}
+      {customPlaylists.length > 0 && allSavedPlaylistItems.length > 0 && (
+        <section className="space-y-4 pt-1">
+          {/* Header */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-gradient-to-r from-purple-950/30 via-white/[0.02] to-transparent p-4 rounded-2xl border border-purple-500/10">
+            <div>
+              <h2 className="text-xl font-bold text-white tracking-tight flex items-center gap-2">
+                <Sparkles size={20} className="text-purple-400 animate-pulse" />
+                <span>Músicas Similares às suas Playlists</span>
+              </h2>
+              <div className="flex items-center gap-2 mt-1 flex-wrap">
+                <span className="text-white/40 text-xs">
+                  Estilo identificado:
+                </span>
+                {detectedArtists.length > 0 ? (
+                  detectedArtists.slice(0, 4).map((art) => (
+                    <span
+                      key={art}
+                      className="px-2 py-0.5 rounded-full bg-purple-500/15 border border-purple-500/30 text-purple-300 text-[10px] font-bold"
+                    >
+                      {art}
+                    </span>
+                  ))
+                ) : (
+                  <span className="text-white/40 text-xs">Mix do seu gosto musical</span>
+                )}
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 flex-wrap">
+              {/* Dropdown se houver mais de 1 playlist */}
+              {customPlaylists.length > 1 && (
+                <div className="flex items-center gap-1.5 bg-white/5 border border-white/10 rounded-xl px-2.5 py-1.5">
+                  <span className="text-white/40 text-[11px] font-medium">Basear em:</span>
+                  <select
+                    value={selectedPlaylistTargetId}
+                    onChange={(e) => {
+                      const newTarget = e.target.value
+                      setSelectedPlaylistTargetId(newTarget)
+                      let targetItems = customPlaylists.flatMap((p) => p.items)
+                      if (newTarget !== 'all') {
+                        const found = customPlaylists.find((p) => p.id === newTarget)
+                        if (found) targetItems = found.items
+                      }
+                      loadHomeSimilarTracks(targetItems, Date.now())
+                    }}
+                    className="bg-transparent text-white text-xs font-semibold focus:outline-none cursor-pointer"
+                  >
+                    <option value="all" className="bg-[#181818] text-white">
+                      Todas as Playlists
+                    </option>
+                    {customPlaylists.map((pl) => (
+                      <option key={pl.id} value={pl.id} className="bg-[#181818] text-white">
+                        {pl.name} ({pl.items.length})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              <button
+                onClick={handleReloadHomeSimilar}
+                disabled={isHomeSimilarLoading}
+                className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-white/70 hover:text-white text-xs font-semibold transition-all disabled:opacity-40"
+                title="Recarregar sugestões similares"
+              >
+                <RefreshCw size={13} className={isHomeSimilarLoading ? 'animate-spin' : ''} />
+                <span>{isHomeSimilarLoading ? 'Buscando...' : 'Recarregar'}</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Loading Skeleton */}
+          {isHomeSimilarLoading && homeSimilarTracks.length === 0 && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+              {[...Array(8)].map((_, i) => (
+                <div key={i} className="flex items-center gap-3 p-3 rounded-2xl bg-white/[0.03] animate-pulse">
+                  <div className="w-12 h-12 rounded-xl bg-white/10 flex-shrink-0" />
+                  <div className="flex-1 space-y-1.5 min-w-0">
+                    <div className="h-3.5 bg-white/10 rounded w-3/4" />
+                    <div className="h-2.5 bg-white/5 rounded w-1/2" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Grid de Músicas Similares */}
+          {(!isHomeSimilarLoading || homeSimilarTracks.length > 0) && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+              {homeSimilarTracks.map((track) => {
+                const isAdded = addedHomeSimilarIds.has(track.videoId)
+                const alreadyInTarget = customPlaylists.some(
+                  (pl) =>
+                    (selectedPlaylistTargetId === 'all' || pl.id === selectedPlaylistTargetId) &&
+                    pl.items.some((i) => i.videoId === track.videoId)
+                )
+
+                return (
+                  <div
+                    key={track.videoId}
+                    className="group p-3 rounded-2xl bg-white/[0.03] hover:bg-white/[0.08] transition-all border border-white/5 hover:border-purple-500/30 flex items-center gap-3 shadow-md"
+                  >
+                    {/* Capa + Botão Play para ouvir */}
+                    <div
+                      onClick={() => {
+                        const qi: QueueItem = {
+                          id: track.videoId,
+                          source: 'youtube',
+                          title: track.title,
+                          subtitle: track.channelTitle,
+                          imageUrl: track.thumbnailUrl,
+                          videoId: track.videoId,
+                        }
+                        playUniversal([qi], 0)
+                      }}
+                      className="w-12 h-12 rounded-xl overflow-hidden bg-black flex-shrink-0 relative cursor-pointer shadow-md"
+                      title="Ouvir agora"
+                    >
+                      <img
+                        src={track.thumbnailUrl || `https://i.ytimg.com/vi/${track.videoId}/mqdefault.jpg`}
+                        alt={track.title}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                        onError={(e) => {
+                          e.currentTarget.src = `https://i.ytimg.com/vi/${track.videoId}/mqdefault.jpg`
+                        }}
+                      />
+                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                        <Play size={16} className="text-white fill-white ml-0.5" />
+                      </div>
+                    </div>
+
+                    {/* Título & Canal */}
+                    <div className="min-w-0 flex-1">
+                      <p className="text-white text-xs font-bold truncate leading-tight group-hover:text-purple-300 transition-colors">
+                        {track.title}
+                      </p>
+                      <p className="text-white/40 text-[11px] truncate mt-0.5">
+                        {track.channelTitle}
+                      </p>
+                    </div>
+
+                    {/* Botão Adicionar à Playlist em 1 Clique */}
+                    <button
+                      onClick={() => !isAdded && !alreadyInTarget && handleAddHomeSimilarTrack(track)}
+                      disabled={isAdded || alreadyInTarget}
+                      className={cn(
+                        'flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all flex-shrink-0',
+                        isAdded || alreadyInTarget
+                          ? 'bg-spotify-green/20 text-spotify-green cursor-default'
+                          : 'bg-white/5 hover:bg-spotify-green hover:text-black text-white/70 hover:shadow-lg hover:shadow-spotify-green/20 active:scale-95'
+                      )}
+                      title={
+                        alreadyInTarget
+                          ? 'Já está na playlist'
+                          : isAdded
+                          ? 'Adicionada!'
+                          : 'Adicionar à playlist com 1 clique'
+                      }
+                    >
+                      {isAdded || alreadyInTarget ? (
+                        <Check size={13} />
+                      ) : (
+                        <Plus size={13} />
+                      )}
+                      <span className="text-[11px]">
+                        {isAdded || alreadyInTarget ? 'Adicionada' : 'Adicionar'}
+                      </span>
+                    </button>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+
+          {!isHomeSimilarLoading && homeSimilarTracks.length === 0 && (
+            <p className="text-white/30 text-xs text-center py-4">
+              Nenhuma recomendação encontrada. Clique em "Recarregar" para tentar novamente.
+            </p>
+          )}
         </section>
       )}
 

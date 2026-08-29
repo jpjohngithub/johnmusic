@@ -231,6 +231,26 @@ export interface SimilarTrack {
 }
 
 /**
+ * Extrai artistas únicos das faixas da playlist para identificação de estilo
+ */
+export function extractPlaylistArtists(items: Array<{ subtitle?: string; title?: string }>): string[] {
+  const artists: string[] = []
+  for (const item of items) {
+    if (item.subtitle) {
+      const clean = item.subtitle
+        .replace(/ - Topic/i, '')
+        .replace(/VEVO/i, '')
+        .replace(/Official\s*(Audio|Video|Music\s*Video)?/gi, '')
+        .trim()
+      if (clean && clean.length > 1 && !artists.includes(clean) && !clean.startsWith('http')) {
+        artists.push(clean)
+      }
+    }
+  }
+  return artists.slice(0, 6)
+}
+
+/**
  * Analisa os artistas/títulos de uma playlist personalizada e retorna
  * músicas similares do YouTube. Retorna até 20 resultados misturados.
  */
@@ -242,14 +262,10 @@ export async function getSimilarTracksForPlaylist(
   if (playlistItems.length === 0) return []
 
   // Extrai artistas únicos das músicas da playlist
-  const artists: string[] = []
+  const artists = extractPlaylistArtists(playlistItems)
   const titles: string[] = []
 
   for (const item of playlistItems) {
-    if (item.subtitle) {
-      const clean = item.subtitle.replace(/ - Topic/i, '').replace(/VEVO/i, '').trim()
-      if (clean && !artists.includes(clean)) artists.push(clean)
-    }
     if (item.title) {
       titles.push(item.title)
     }
