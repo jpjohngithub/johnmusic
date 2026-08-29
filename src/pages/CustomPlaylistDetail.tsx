@@ -4,7 +4,7 @@
 // Ordenação Automática (A-Z/Artista), Duplicação e Adição Rápida
 // ============================================================
 
-import { useState } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import {
   Music2,
@@ -32,6 +32,7 @@ import {
   GripVertical,
   Share2,
   Link2,
+  RefreshCw,
 } from 'lucide-react'
 import { useLibraryStore } from '@/store/libraryStore'
 import { usePlayerStore } from '@/store/playerStore'
@@ -40,6 +41,7 @@ import { generatePlaylistShareUrl } from '@/api/playlistShareService'
 import { createSpotifyItemFromUrl, isValidSpotifyUrl } from '@/api/spotifyUrlService'
 import { createYouTubeVideoFromUrl, isValidYouTubeUrl } from '@/api/youtubeService'
 import { createTikTokVideoFromUrl, isValidTikTokUrl } from '@/api/tiktokService'
+import { getSimilarTracksForPlaylist, type SimilarTrack } from '@/api/recommendationService'
 import { formatMs, cn } from '@/lib/utils'
 import type { PlaylistItem, QueueItem } from '@/types'
 
@@ -101,6 +103,12 @@ export function CustomPlaylistDetail() {
   // Feedback de Compartilhamento
   const [shareFeedback, setShareFeedback] = useState<string | null>(null)
 
+  // ─── Estado de Músicas Similares ─────────────────────────────────
+  const [similarTracks, setSimilarTracks] = useState<SimilarTrack[]>([])
+  const [isSimilarLoading, setIsSimilarLoading] = useState(false)
+  const [addedSimilarIds, setAddedSimilarIds] = useState<Set<string>>(new Set())
+  const similarSeedRef = useRef(Date.now())
+
   const playlist = customPlaylists.find((p) => p.id === id)
 
   if (!playlist) {
@@ -122,6 +130,49 @@ export function CustomPlaylistDetail() {
     setEditDesc(playlist.description || '')
     setEditCover(playlist.coverUrl || '')
     setIsEditingModalOpen(true)
+  }
+
+  // ─── Carrega Músicas Similares ────────────────────────────────────
+  const loadSimilarTracks = useCallback(async (newSeed?: number) => {
+    if (playlist.items.length === 0) return
+    setIsSimilarLoading(true)
+    const seed = newSeed ?? similarSeedRef.current
+    similarSeedRef.current = seed
+    const existingIds = new Set(playlist.items.map((i) => i.videoId || '').filter(Boolean))
+    try {
+      const tracks = await getSimilarTracksForPlaylist(playlist.items, existingIds, seed)
+      setSimilarTracks(tracks)
+      setAddedSimilarIds(new Set())
+    } catch {
+      // silently ignore
+    } finally {
+      setIsSimilarLoading(false)
+    }
+  }, [playlist.id, playlist.items])
+
+  useEffect(() => {
+    if (playlist.items.length > 0 && similarTracks.length === 0 && !isSimilarLoading) {
+      loadSimilarTracks()
+    }
+  }, [playlist.id])
+
+  const handleReloadSimilar = () => {
+    const newSeed = Date.now()
+    loadSimilarTracks(newSeed)
+  }
+
+  const handleAddSimilarTrack = (track: SimilarTrack) => {
+    const item: PlaylistItem = {
+      id: track.videoId,
+      source: 'youtube',
+      title: track.title,
+      subtitle: track.channelTitle,
+      imageUrl: track.thumbnailUrl,
+      videoId: track.videoId,
+      addedAt: new Date().toISOString(),
+    }
+    addItemToCustomPlaylist(playlist.id, item)
+    setAddedSimilarIds((prev) => new Set([...prev, track.videoId]))
   }
 
   const handleSaveEdit = (e: React.FormEvent) => {
@@ -813,6 +864,124 @@ export function CustomPlaylistDetail() {
             <Plus size={14} />
             <span>Adicionar Músicas por Link</span>
           </button>
+        </div>
+      )}
+
+      {/* ─── MÚSICAS SIMILARES ─────────────────────────────────────── */}
+      {playlist.items.length > 0 && (
+        <div className="mt-8 space-y-4">
+          {/* Header */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Sparkles size={16} className="text-purple-400" />
+              <h3 className="text-white font-bold text-base">Músicas Similares</h3>
+              <span className="text-white/30 text-xs">
+                • baseado no estilo desta playlist
+              </span>
+            </div>
+            <button
+              onClick={handleReloadSimilar}
+              disabled={isSimilarLoading}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-white/60 hover:text-white text-xs font-semibold transition-all disabled:opacity-40"
+              title="Recarregar sugestões"
+            >
+              <RefreshCw size={13} className={isSimilarLoading ? 'animate-spin' : ''} />
+              <span>{isSimilarLoading ? 'Buscando...' : 'Recarregar'}</span>
+            </button>
+          </div>
+
+          {/* Loading skeleton */}
+          {isSimilarLoading && similarTracks.length === 0 && (
+            <div className="space-y-2">
+              {[...Array(6)].map((_, i) => (
+                <div key={i} className="flex items-center gap-3 px-4 py-3 rounded-xl bg-white/[0.03] animate-pulse">
+                  <div className="w-10 h-10 rounded-lg bg-white/10 flex-shrink-0" />
+                  <div className="flex-1 space-y-1.5 min-w-0">
+                    <div className="h-3 bg-white/10 rounded w-2/3" />
+                    <div className="h-2.5 bg-white/5 rounded w-1/3" />
+                  </div>
+                  <div className="w-8 h-8 rounded-xl bg-white/10 flex-shrink-0" />
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Similar tracks list */}
+          {!isSimilarLoading || similarTracks.length > 0 ? (
+            <div className="space-y-1">
+              {similarTracks.map((track) => {
+                const isAdded = addedSimilarIds.has(track.videoId)
+                const alreadyInPlaylist = playlist.items.some((i) => i.videoId === track.videoId)
+                return (
+                  <div
+                    key={track.videoId}
+                    className="group flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-white/[0.06] transition-all"
+                  >
+                    {/* Thumbnail */}
+                    <img
+                      src={track.thumbnailUrl || `https://i.ytimg.com/vi/${track.videoId}/mqdefault.jpg`}
+                      alt={track.title}
+                      className="w-10 h-10 rounded-lg object-cover flex-shrink-0 bg-white/5"
+                      onError={(e) => {
+                        e.currentTarget.src = `https://i.ytimg.com/vi/${track.videoId}/mqdefault.jpg`
+                      }}
+                    />
+
+                    {/* Info */}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-white text-sm font-medium truncate leading-tight">{track.title}</p>
+                      <p className="text-white/40 text-xs truncate mt-0.5">{track.channelTitle}</p>
+                    </div>
+
+                    {/* Play button */}
+                    <button
+                      onClick={() => {
+                        const qi: QueueItem = {
+                          id: track.videoId,
+                          source: 'youtube',
+                          title: track.title,
+                          subtitle: track.channelTitle,
+                          imageUrl: track.thumbnailUrl,
+                          videoId: track.videoId,
+                        }
+                        playUniversal(qi)
+                      }}
+                      className="p-2 rounded-xl text-white/30 hover:text-white hover:bg-white/10 transition-all opacity-0 group-hover:opacity-100 flex-shrink-0"
+                      title="Ouvir"
+                    >
+                      <Play size={14} />
+                    </button>
+
+                    {/* Add button */}
+                    <button
+                      onClick={() => !isAdded && !alreadyInPlaylist && handleAddSimilarTrack(track)}
+                      disabled={isAdded || alreadyInPlaylist}
+                      className={cn(
+                        'flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex-shrink-0',
+                        isAdded || alreadyInPlaylist
+                          ? 'bg-spotify-green/20 text-spotify-green cursor-default'
+                          : 'bg-white/5 hover:bg-spotify-green hover:text-black text-white/60 hover:shadow-lg hover:shadow-spotify-green/20'
+                      )}
+                      title={alreadyInPlaylist ? 'Já está na playlist' : isAdded ? 'Adicionada!' : 'Adicionar à playlist'}
+                    >
+                      {isAdded || alreadyInPlaylist ? (
+                        <Check size={12} />
+                      ) : (
+                        <Plus size={12} />
+                      )}
+                      <span>{isAdded || alreadyInPlaylist ? 'Adicionada' : 'Adicionar'}</span>
+                    </button>
+                  </div>
+                )
+              })}
+            </div>
+          ) : null}
+
+          {!isSimilarLoading && similarTracks.length === 0 && playlist.items.length > 0 && (
+            <p className="text-white/30 text-sm text-center py-6">
+              Não foi possível encontrar sugestões. Tente recarregar.
+            </p>
+          )}
         </div>
       )}
 

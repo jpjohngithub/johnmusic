@@ -222,3 +222,92 @@ export async function getPersonalizedRecommendations(): Promise<RecommendationFe
     }
   }
 }
+export interface SimilarTrack {
+  videoId: string
+  title: string
+  channelTitle: string
+  thumbnailUrl: string
+  queryUsed: string
+}
+
+/**
+ * Analisa os artistas/títulos de uma playlist personalizada e retorna
+ * músicas similares do YouTube. Retorna até 20 resultados misturados.
+ */
+export async function getSimilarTracksForPlaylist(
+  playlistItems: Array<{ title: string; subtitle?: string; videoId?: string }>,
+  existingVideoIds: Set<string> = new Set(),
+  seed?: number
+): Promise<SimilarTrack[]> {
+  if (playlistItems.length === 0) return []
+
+  // Extrai artistas únicos das músicas da playlist
+  const artists: string[] = []
+  const titles: string[] = []
+
+  for (const item of playlistItems) {
+    if (item.subtitle) {
+      const clean = item.subtitle.replace(/ - Topic/i, '').replace(/VEVO/i, '').trim()
+      if (clean && !artists.includes(clean)) artists.push(clean)
+    }
+    if (item.title) {
+      titles.push(item.title)
+    }
+  }
+
+  // Determina o estilo usando os artistas mais frequentes
+  const topArtists = artists.slice(0, 5)
+
+  // Queries de busca variadas para gerar diversidade
+  const querySeed = seed ?? Date.now()
+  const queryVariants = [
+    `${topArtists[0] || titles[0]} similar artists mix`,
+    `if you like ${topArtists[0] || ''} you'll love`,
+    `${topArtists.slice(0, 2).join(' ')} vibe playlist`,
+    `${topArtists[1] || topArtists[0] || ''} related music`,
+    `${topArtists.slice(0, 3).join(' ')} genre mix`,
+    `songs like ${titles[0] || ''}`,
+    `${topArtists[0] || ''} style recommendation`,
+    `${topArtists.slice(0, 2).join(' ')} best tracks`,
+  ]
+
+  // Seleciona 3 queries baseadas no seed (para variar ao recarregar)
+  const selectedQueries: string[] = []
+  const numQueries = Math.min(3, queryVariants.length)
+  for (let i = 0; i < numQueries; i++) {
+    const idx = (querySeed + i * 3) % queryVariants.length
+    const q = queryVariants[idx]
+    if (q.trim() && !selectedQueries.includes(q)) selectedQueries.push(q)
+  }
+  if (selectedQueries.length === 0) selectedQueries.push(`${topArtists[0] || 'music'} mix`)
+
+  // Busca paralela para as queries selecionadas
+  const results = await Promise.allSettled(
+    selectedQueries.map((q) => searchYouTubeKeyless(q, 8))
+  )
+
+  const allTracks: SimilarTrack[] = []
+  results.forEach((result, i) => {
+    if (result.status === 'fulfilled') {
+      for (const r of result.value) {
+        if (!existingVideoIds.has(r.videoId) && !allTracks.find((t) => t.videoId === r.videoId)) {
+          allTracks.push({
+            videoId: r.videoId,
+            title: r.title,
+            channelTitle: r.channelTitle,
+            thumbnailUrl: r.thumbnailUrl,
+            queryUsed: selectedQueries[i] || '',
+          })
+        }
+      }
+    }
+  })
+
+  // Embaralha com base no seed para variar ao recarregar
+  for (let i = allTracks.length - 1; i > 0; i--) {
+    const j = Math.floor((((querySeed + i * 7) % 97) / 97) * (i + 1))
+    ;[allTracks[i], allTracks[j]] = [allTracks[j], allTracks[i]]
+  }
+
+  return allTracks.slice(0, 20)
+}
