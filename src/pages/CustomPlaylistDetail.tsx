@@ -33,6 +33,7 @@ import {
   Share2,
   Link2,
   RefreshCw,
+  ExternalLink,
 } from 'lucide-react'
 import { useLibraryStore } from '@/store/libraryStore'
 import { usePlayerStore } from '@/store/playerStore'
@@ -42,7 +43,7 @@ import { createSpotifyItemFromUrl, isValidSpotifyUrl } from '@/api/spotifyUrlSer
 import { createYouTubeVideoFromUrl, isValidYouTubeUrl } from '@/api/youtubeService'
 import { createTikTokVideoFromUrl, isValidTikTokUrl } from '@/api/tiktokService'
 import { getSimilarTracksForPlaylist, type SimilarTrack } from '@/api/recommendationService'
-import { formatMs, cn } from '@/lib/utils'
+import { formatMs, cn, copyToClipboard, getOfficialMediaLink } from '@/lib/utils'
 import type { PlaylistItem, QueueItem } from '@/types'
 
 const TikTokIcon = () => (
@@ -108,6 +109,17 @@ export function CustomPlaylistDetail() {
   const [isSimilarLoading, setIsSimilarLoading] = useState(false)
   const [addedSimilarIds, setAddedSimilarIds] = useState<Set<string>>(new Set())
   const similarSeedRef = useRef(Date.now())
+  const [copiedTrackId, setCopiedTrackId] = useState<string | null>(null)
+
+  const handleCopyTrackInfo = useCallback(async (item: PlaylistItem, e?: React.MouseEvent) => {
+    e?.stopPropagation()
+    const textToCopy = item.subtitle ? `${item.title} - ${item.subtitle}` : item.title
+    const ok = await copyToClipboard(textToCopy)
+    if (ok) {
+      setCopiedTrackId(item.id)
+      setTimeout(() => setCopiedTrackId(null), 2000)
+    }
+  }, [])
 
   const playlist = customPlaylists.find((p) => p.id === id)
 
@@ -827,6 +839,37 @@ export function CustomPlaylistDetail() {
                         {formatMs(item.durationMs)}
                       </span>
                     ) : null}
+                    {/* Botão Copiar Nome */}
+                    <button
+                      onClick={(e) => handleCopyTrackInfo(item, e)}
+                      className={cn(
+                        'p-2 rounded-xl transition-all',
+                        copiedTrackId === item.id
+                          ? 'text-spotify-green bg-spotify-green/10 opacity-100'
+                          : 'text-white/30 hover:text-white hover:bg-white/10 opacity-0 group-hover:opacity-100'
+                      )}
+                      title={copiedTrackId === item.id ? 'Nome copiado!' : 'Copiar nome da música'}
+                    >
+                      {copiedTrackId === item.id ? <Check size={14} className="text-spotify-green" /> : <Copy size={14} />}
+                    </button>
+
+                    {/* Botão Link Oficial */}
+                    {(() => {
+                      const link = getOfficialMediaLink(item)
+                      return link.url ? (
+                        <a
+                          href={link.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          className="p-2 rounded-xl text-white/30 hover:text-spotify-green hover:bg-white/10 transition-all opacity-0 group-hover:opacity-100 flex items-center justify-center"
+                          title={`Abrir link oficial no ${link.label}`}
+                        >
+                          <ExternalLink size={14} />
+                        </a>
+                      ) : null
+                    })()}
+
                     <button
                       onClick={(e) => {
                         e.stopPropagation()

@@ -25,11 +25,13 @@ import {
   ListMusic,
   Cast,
   AudioLines,
+  Copy,
+  Check,
 } from 'lucide-react'
 import { usePlayerStore } from '@/store/playerStore'
 import { useEqualizerStore } from '@/store/equalizerStore'
 import { equalizerAudioService } from '@/api/equalizerAudioService'
-import { formatSeconds, cn } from '@/lib/utils'
+import { formatSeconds, cn, copyToClipboard, getOfficialMediaLink } from '@/lib/utils'
 import { YouTubePlayer } from '@/components/youtube/YouTubePlayer'
 import { QueueDrawer } from '@/components/player/QueueDrawer'
 import { CastDeviceModal } from '@/components/player/CastDeviceModal'
@@ -288,6 +290,32 @@ export function PlayerBar({ onExpandPlayer }: PlayerBarProps) {
 
   const RepeatIcon = repeatMode === 'one' ? Repeat1 : Repeat
 
+  const [copiedTitle, setCopiedTitle] = useState(false)
+
+  const officialMedia = getOfficialMediaLink({
+    source: effectiveSource,
+    currentQueueItem,
+    youtubeVideo,
+    spotifySavedItem,
+    tiktokVideo,
+    audioTrack,
+    title: currentTitle,
+    subtitle: currentSubtitle,
+  })
+
+  const handleCopyTrackName = useCallback(async (e?: React.MouseEvent) => {
+    e?.stopPropagation()
+    if (!currentTitle || currentTitle === 'Nenhuma música tocando') return
+    const textToCopy = currentSubtitle && !currentSubtitle.includes('Escolha')
+      ? `${currentTitle} - ${currentSubtitle}`
+      : currentTitle
+    const ok = await copyToClipboard(textToCopy)
+    if (ok) {
+      setCopiedTitle(true)
+      setTimeout(() => setCopiedTitle(false), 2000)
+    }
+  }, [currentTitle, currentSubtitle])
+
   return (
     <>
       {/* Hidden HTML5 Audio Element */}
@@ -310,7 +338,7 @@ export function PlayerBar({ onExpandPlayer }: PlayerBarProps) {
         <div className="max-w-screen-xl mx-auto flex items-center gap-4">
 
           {/* Left: Track Info & Platform Badge */}
-          <div className="flex items-center gap-3 w-64 flex-shrink-0 min-w-0">
+          <div className="flex items-center gap-3 w-72 md:w-80 flex-shrink-0 min-w-0">
             <div className="relative flex-shrink-0">
               {currentImage ? (
                 <img
@@ -372,10 +400,52 @@ export function PlayerBar({ onExpandPlayer }: PlayerBarProps) {
                 </span>
               )}
 
+              {/* Botões de Ação: Copiar Nome e Link Oficial */}
+              {hasMedia && currentTitle && currentTitle !== 'Nenhuma música tocando' && (
+                <div className="flex items-center gap-1.5 mt-1">
+                  <button
+                    onClick={handleCopyTrackName}
+                    className={cn(
+                      'flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold transition-all border select-none',
+                      copiedTitle
+                        ? 'bg-spotify-green/20 text-spotify-green border-spotify-green/40 shadow-sm shadow-spotify-green/20'
+                        : 'bg-white/5 hover:bg-white/10 text-white/60 hover:text-white border-white/10 active:scale-95'
+                    )}
+                    title={copiedTitle ? 'Nome copiado!' : 'Copiar nome da música'}
+                  >
+                    {copiedTitle ? (
+                      <>
+                        <Check size={10} className="text-spotify-green" />
+                        <span>Copiado!</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy size={10} />
+                        <span>Copiar nome</span>
+                      </>
+                    )}
+                  </button>
+
+                  {officialMedia.url && (
+                    <a
+                      href={officialMedia.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold bg-white/5 hover:bg-white/10 text-white/60 hover:text-spotify-green transition-all border border-white/10 active:scale-95 select-none"
+                      title={`Abrir link oficial no ${officialMedia.label}`}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <ExternalLink size={10} />
+                      <span>{officialMedia.label}</span>
+                    </a>
+                  )}
+                </div>
+              )}
+
               {nextTrack && (
                 <button
                   onClick={() => setShowQueueDrawer(true)}
-                  className="flex items-center gap-1 mt-0.5 text-[11px] text-white/40 hover:text-purple-300 transition-colors truncate max-w-[280px] group text-left"
+                  className="flex items-center gap-1 mt-1 text-[11px] text-white/40 hover:text-purple-300 transition-colors truncate max-w-[280px] group text-left"
                   title={`Próxima: ${nextTrack.title} — ${nextTrack.subtitle} (Clique para ver a fila completa)`}
                 >
                   <span className="font-bold text-purple-400 group-hover:underline flex items-center gap-0.5 flex-shrink-0">
