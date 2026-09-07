@@ -204,27 +204,27 @@ export function PlayerBar({ onExpandPlayer }: PlayerBarProps) {
     console.warn('PlayerBar: Erro ao reproduzir elemento de áudio HTML5', e)
     const store = usePlayerStore.getState()
     if (store.currentQueueItem) {
-      // Se for item do TikTok, tenta renovar o link direto do áudio primeiro
+      // Se for item do TikTok, tenta renovar o link direto e NUNCA substitui por vídeo do YouTube
       if (store.currentQueueItem.source === 'tiktok') {
         const item = store.currentQueueItem
-        const urlToUse = (item as any).tiktokUrl || (item as any).url || (item.tiktokPostId ? `https://www.tiktok.com/video/${item.tiktokPostId}` : null)
+        const urlToUse = (item as any).tiktokUrl || (item as any).url || (item.tiktokPostId ? `https://www.tiktok.com/@a/video/${item.tiktokPostId}` : null)
         if (urlToUse) {
           try {
             const { extractTikTokAudioAndMetadata } = await import('@/api/tiktokService')
             const refreshed = await extractTikTokAudioAndMetadata(urlToUse)
-            if (refreshed.audioUrl && refreshed.audioUrl !== store.audioTrack?.audioUrl) {
+            if (refreshed.audioUrl) {
               const audio = audioElementRef.current
-              if (audio) {
+              if (audio && audio.src !== refreshed.audioUrl) {
                 audio.src = refreshed.audioUrl
                 audio.load()
                 audio.play().catch(() => {})
-                return
               }
             }
           } catch (refreshErr) {
             console.warn('PlayerBar: Falha ao renovar áudio do TikTok:', refreshErr)
           }
         }
+        return
       }
       await store.fallbackCurrentTrackToYouTube()
     }

@@ -138,6 +138,12 @@ export function YouTubePlayer() {
 
     const store = usePlayerStore.getState()
 
+    // Se for faixa do TikTok ou de áudio nativo, toca diretamente pelo motor de áudio
+    if (targetTrack.source === 'tiktok' || targetTrack.audioUrl) {
+      await store.playQueueIndex(targetIndex)
+      return
+    }
+
     // 1. Garante que a faixa alvo possui videoId do YouTube
     let playableTrack = { ...targetTrack }
     if (!playableTrack.videoId) {

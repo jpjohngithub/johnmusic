@@ -192,49 +192,9 @@ export async function resolvePlayable(
       channelTitle = match.channelTitle || item.subtitle
     }
   } else if (item.source === 'tiktok') {
-    const { buildTikTokSearchQuery, extractTikTokAudioAndMetadata } = await import('./tiktokService')
-    let soundTitle = (item as any).soundTitle || ''
-    let soundAuthor = (item as any).soundAuthor || ''
-    let targetDuration: number | undefined = (item as any).durationSeconds || ((item as any).durationMs ? (item as any).durationMs / 1000 : undefined)
-
-    // Se subtitle contiver "Som: Nome • @autor", extrai
-    if (!soundTitle && item.subtitle) {
-      const match = item.subtitle.match(/Som:\s*([^•]+)(?:•\s*@?(.+))?/i)
-      if (match) {
-        soundTitle = match[1].trim()
-        if (match[2]) soundAuthor = match[2].trim()
-      }
-    }
-
-    // Se ainda não temos soundTitle ou se for genérico, tenta extrair metadados atualizados via URL
-    const url = (item as PlaylistItem).url || (item as QueueItem).tiktokUrl
-    if (url && (!soundTitle || soundTitle === 'Som Original' || !item.title || item.title.includes('TikTok') || item.title.includes('Vídeo'))) {
-      try {
-        const data = await extractTikTokAudioAndMetadata(url)
-        if (data.soundTitle && data.soundTitle !== 'Som Original') {
-          soundTitle = data.soundTitle
-          soundAuthor = data.soundAuthor || soundAuthor
-          targetDuration = data.durationSeconds || targetDuration
-        }
-      } catch {}
-    }
-
-    const query = buildTikTokSearchQuery(soundTitle, soundAuthor, item.title, item.subtitle)
-
-    let match = await findYouTubeMatch(query, targetDuration, soundTitle || item.title, soundAuthor)
-    // Se não encontrou, tenta apenas com o soundTitle ou título
-    if (!match && soundTitle && soundTitle !== query) {
-      match = await findYouTubeMatch(soundTitle, targetDuration)
-    }
-    if (!match && item.title && item.title !== query) {
-      match = await findYouTubeMatch(item.title, targetDuration)
-    }
-
-    if (match) {
-      videoId = match.videoId
-      title = soundTitle || item.title
-      channelTitle = soundAuthor || match.channelTitle || item.subtitle
-    }
+    // Faixas do TikTok NUNCA devem ser convertidas para vídeos do YouTube.
+    // O áudio original do TikTok é tocado diretamente pelo motor de áudio HTML5.
+    return null
   }
 
   if (!videoId) return null
@@ -242,25 +202,25 @@ export async function resolvePlayable(
   const resolved = { videoId, title, channelTitle, thumbnailUrl }
   cacheSet(key, resolved)
 
-  // Persiste videoId nos itens da biblioteca se fizer parte de uma playlist
+  // Persiste videoId nos itens da biblioteca se fizer parte de uma playlist (exceto TikTok)
   try {
-    const store = useLibraryStore.getState()
-    const playlists = store.customPlaylists
-    let found = false
-    const updated = playlists.map((p) => {
-      const idx = p.items.findIndex((i) => i.id === item.id || (i.uri && i.uri === (item as any).uri))
-      if (idx !== -1) {
-        found = true
-        const newItems = [...p.items]
-        newItems[idx] = { ...newItems[idx], videoId: videoId! }
-        return { ...p, items: newItems }
+      const store = useLibraryStore.getState()
+      const playlists = store.customPlaylists
+      let found = false
+      const updated = playlists.map((p) => {
+        const idx = p.items.findIndex((i) => i.id === item.id || (i.uri && i.uri === (item as any).uri))
+        if (idx !== -1 && p.items[idx].source !== 'tiktok') {
+          found = true
+          const newItems = [...p.items]
+          newItems[idx] = { ...newItems[idx], videoId: videoId! }
+          return { ...p, items: newItems }
+        }
+        return p
+      })
+      if (found) {
+        useLibraryStore.setState({ customPlaylists: updated })
       }
-      return p
-    })
-    if (found) {
-      useLibraryStore.setState({ customPlaylists: updated })
-    }
-  } catch {}
+    } catch {}
 
   return resolved
 }

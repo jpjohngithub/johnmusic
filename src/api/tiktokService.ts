@@ -110,11 +110,21 @@ export async function extractTikTokAudioAndMetadata(url: string): Promise<TikTok
   const trimmed = url.trim()
   const postId = extractTikTokPostId(trimmed)
 
-  // 1. TikWM API: tenta primeiro com a URL canônica por ID (formato que tem 100% de compatibilidade)
+  // 1. TikWM API: gera candidatos de URL otimizados
   const urlCandidates: string[] = []
-  if (postId) {
-    urlCandidates.push(`https://www.tiktok.com/video/${postId}`)
+
+  // Se já tiver query string, gera versão limpa
+  const cleanUrl = trimmed.split('?')[0]
+  if (cleanUrl !== trimmed) {
+    urlCandidates.push(cleanUrl)
   }
+
+  // Se tiver ID numérico puro, o formato com @a/video/ID é aceito pelo TikWM com 100% de precisão
+  if (postId && /^\d+$/.test(postId)) {
+    urlCandidates.push(`https://www.tiktok.com/@a/video/${postId}`)
+  }
+
+  // URL original do usuário
   if (!urlCandidates.includes(trimmed)) {
     urlCandidates.push(trimmed)
   }
@@ -144,7 +154,7 @@ export async function extractTikTokAudioAndMetadata(url: string): Promise<TikTok
           const id = d.id || postId || crypto.randomUUID()
           const coverUrl = d.cover || d.origin_cover || d.dynamic_cover || ''
 
-          let audioUrl: string | undefined = d.music || d.music_info?.play || d.play || undefined
+          let audioUrl: string | undefined = d.music || d.music_info?.play || d.play || d.wmplay || undefined
           if (audioUrl && audioUrl.startsWith('/')) {
             audioUrl = `https://www.tikwm.com${audioUrl}`
           }
@@ -237,31 +247,6 @@ export async function createTikTokVideoFromUrl(url: string): Promise<TikTokVideo
 
   const result = await extractTikTokAudioAndMetadata(url)
 
-  // Se o áudio direto não veio na primeira tentativa, busca uma correspondência como fallback
-  let videoId: string | undefined
-  if (!result.audioUrl) {
-    try {
-      const { findYouTubeMatch } = await import('./crossPlatformService')
-      const query = buildTikTokSearchQuery(
-        result.soundTitle,
-        result.soundAuthor,
-        result.title,
-        result.authorName
-      )
-      const match = await findYouTubeMatch(
-        query,
-        result.durationSeconds,
-        result.soundTitle,
-        result.soundAuthor
-      )
-      if (match) {
-        videoId = match.videoId
-      }
-    } catch (err) {
-      console.warn('Fallback YouTube match error:', err)
-    }
-  }
-
   return {
     id: result.id,
     postId: result.postId,
@@ -272,7 +257,7 @@ export async function createTikTokVideoFromUrl(url: string): Promise<TikTokVideo
     thumbnailUrl: result.thumbnailUrl, // Capa oficial do Vídeo
     url: result.url,
     audioUrl: result.audioUrl,
-    videoId,
+    videoId: undefined, // NUNCA atribuir videoId do YouTube a uma música do TikTok!
     durationSeconds: result.durationSeconds,
     embedHtml: `<iframe src="${buildTikTokEmbedUrl(result.postId)}" width="325" height="580" frameborder="0" allow="encrypted-media; autoplay" allowfullscreen></iframe>`,
     addedAt: new Date().toISOString(),
