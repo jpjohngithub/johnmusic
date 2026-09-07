@@ -255,6 +255,7 @@ export interface TikTokVideo {
   embedHtml: string
   addedAt: string
   playlistId?: string
+  videoId?: string
 }
 
 export interface TikTokPlaylist {

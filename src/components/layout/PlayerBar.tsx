@@ -198,6 +198,14 @@ export function PlayerBar({ onExpandPlayer }: PlayerBarProps) {
     }
   }
 
+  const handleAudioError = useCallback(async (e: any) => {
+    console.warn('PlayerBar: Erro ao reproduzir elemento de áudio HTML5, ativando fallback inteligente para YouTube...', e)
+    const store = usePlayerStore.getState()
+    if (store.currentQueueItem) {
+      await store.fallbackCurrentTrackToYouTube()
+    }
+  }, [])
+
   // ─── Controls ─────────────────────────────────────────────
   const handlePlayPause = useCallback(() => {
     const store = usePlayerStore.getState()
@@ -324,9 +332,11 @@ export function PlayerBar({ onExpandPlayer }: PlayerBarProps) {
       {/* Hidden HTML5 Audio Element */}
       <audio
         ref={audioElementRef}
+        crossOrigin="anonymous"
         onTimeUpdate={handleTimeUpdate}
         onLoadedMetadata={handleLoadedMetadata}
         onEnded={handleAudioEnded}
+        onError={handleAudioError}
       />
 
       {/* Main Persistent Universal Bar */}

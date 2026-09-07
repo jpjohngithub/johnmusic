@@ -86,6 +86,7 @@ export interface PlayerActions {
 
   // Universal playback across all platforms
   playUniversal: (items: QueueItem[], startIndex?: number, isExplicitClick?: boolean) => Promise<void>
+  fallbackCurrentTrackToYouTube: () => Promise<void>
 
   // Reset
   reset: () => void
@@ -280,9 +281,10 @@ export const usePlayerStore = create<ExtendedPlayerState & PlayerActions>()(
           id: video.id,
           source: 'tiktok',
           title: video.soundTitle || video.title || 'TikTok Music',
-          subtitle: video.soundAuthor || `@${video.authorName}`,
+          subtitle: video.soundAuthor ? `${video.soundAuthor} • @${video.authorName}` : (video.soundTitle ? `Som: ${video.soundTitle} • @${video.authorName}` : `@${video.authorName}`),
           imageUrl: video.thumbnailUrl,
           audioUrl: video.audioUrl,
+          videoId: video.videoId,
           tiktokPostId: video.postId,
           tiktokUrl: video.url,
           durationMs: (video.durationSeconds || 30) * 1000,
@@ -370,68 +372,7 @@ export const usePlayerStore = create<ExtendedPlayerState & PlayerActions>()(
           useHistoryStore.getState().recordPlay(targetItem)
         } catch {}
 
-        // 1. Se já possui áudio direto (ex: MP3 extraído do TikTok ou áudio preview)
-        if (targetItem.audioUrl) {
-          set({
-            source: 'audio',
-            currentQueueItem: targetItem,
-            audioTrack: {
-              id: targetItem.id,
-              title: targetItem.title,
-              artist: targetItem.subtitle,
-              artworkUrl: targetItem.imageUrl,
-              audioUrl: targetItem.audioUrl,
-              durationMs: targetItem.durationMs,
-            },
-            youtubeVideo: null,
-            spotifySavedItem: null,
-            tiktokVideo: null,
-            isPlaying: true,
-            isResolving: false,
-          })
-          return
-        }
-
-        // 2. Se for um link do TikTok sem áudio direto ainda, tenta extrair o MP3 na hora
-        if (targetItem.source === 'tiktok' && (targetItem.tiktokUrl || targetItem.tiktokPostId)) {
-          try {
-            const { extractTikTokAudioAndMetadata } = await import('@/api/tiktokService')
-            const urlToUse = targetItem.tiktokUrl || `https://www.tiktok.com/@user/video/${targetItem.tiktokPostId}`
-            const data = await extractTikTokAudioAndMetadata(urlToUse)
-            if (data.audioUrl) {
-              const updatedQueue = [...queue]
-              updatedQueue[index] = {
-                ...targetItem,
-                title: data.soundTitle || targetItem.title,
-                subtitle: data.soundAuthor || targetItem.subtitle,
-                audioUrl: data.audioUrl,
-                imageUrl: data.thumbnailUrl || targetItem.imageUrl,
-                durationMs: data.durationSeconds * 1000,
-              }
-              set({
-                queue: updatedQueue,
-                source: 'audio',
-                currentQueueItem: updatedQueue[index],
-                audioTrack: {
-                  id: targetItem.id,
-                  title: data.soundTitle || targetItem.title,
-                  artist: data.soundAuthor || targetItem.subtitle,
-                  artworkUrl: data.thumbnailUrl || targetItem.imageUrl,
-                  audioUrl: data.audioUrl,
-                  durationMs: data.durationSeconds * 1000,
-                },
-                youtubeVideo: null,
-                isPlaying: true,
-                isResolving: false,
-              })
-              return
-            }
-          } catch {
-            // segue para conversão via busca
-          }
-        }
-
-        // 3. Se já possui videoId do YouTube
+        // 1. Se já possui videoId do YouTube (inclusive TikTok pré-resolvido ou YouTube direto)
         if (targetItem.videoId) {
           set({
             source: 'youtube',
@@ -446,6 +387,66 @@ export const usePlayerStore = create<ExtendedPlayerState & PlayerActions>()(
               addedAt: new Date().toISOString(),
             },
             audioTrack: null,
+            spotifySavedItem: null,
+            tiktokVideo: null,
+            isPlaying: true,
+            isResolving: false,
+          })
+          return
+        }
+
+        // 2. Se for item do TikTok sem videoId, resolve diretamente via crossPlatformService
+        if (targetItem.source === 'tiktok') {
+          try {
+            const { resolvePlayable } = await import('@/api/crossPlatformService')
+            const resolved = await resolvePlayable(targetItem)
+            if (resolved?.videoId) {
+              const updatedQueue = [...queue]
+              updatedQueue[index] = {
+                ...targetItem,
+                videoId: resolved.videoId,
+                imageUrl: targetItem.imageUrl || resolved.thumbnailUrl,
+              }
+              set({
+                queue: updatedQueue,
+                source: 'youtube',
+                currentQueueItem: updatedQueue[index],
+                youtubeVideo: {
+                  id: targetItem.id,
+                  videoId: resolved.videoId,
+                  title: targetItem.title,
+                  channelTitle: targetItem.subtitle,
+                  thumbnailUrl: targetItem.imageUrl || resolved.thumbnailUrl,
+                  url: `https://www.youtube.com/watch?v=${resolved.videoId}`,
+                  addedAt: new Date().toISOString(),
+                },
+                audioTrack: null,
+                tiktokVideo: null,
+                isPlaying: true,
+                isResolving: false,
+              })
+              get().preResolveNextTrack()
+              return
+            }
+          } catch (err) {
+            console.warn('Erro ao resolver faixa do TikTok para YouTube:', err)
+          }
+        }
+
+        // 3. Se possui áudio direto (ex: MP3 de preview ou áudio próprio)
+        if (targetItem.audioUrl) {
+          set({
+            source: 'audio',
+            currentQueueItem: targetItem,
+            audioTrack: {
+              id: targetItem.id,
+              title: targetItem.title,
+              artist: targetItem.subtitle,
+              artworkUrl: targetItem.imageUrl,
+              audioUrl: targetItem.audioUrl,
+              durationMs: targetItem.durationMs,
+            },
+            youtubeVideo: null,
             spotifySavedItem: null,
             tiktokVideo: null,
             isPlaying: true,
@@ -645,6 +646,53 @@ export const usePlayerStore = create<ExtendedPlayerState & PlayerActions>()(
         })
 
         await get().playQueueIndex(actualIndex)
+      },
+
+      fallbackCurrentTrackToYouTube: async () => {
+        const { currentQueueItem, queue, queueIndex } = get()
+        if (!currentQueueItem) return
+
+        set({ isResolving: true })
+        try {
+          const { resolvePlayable } = await import('@/api/crossPlatformService')
+          const resolved = await resolvePlayable({
+            ...currentQueueItem,
+            source: 'tiktok',
+          })
+
+          if (resolved?.videoId) {
+            const updatedQueue = [...queue]
+            if (queueIndex >= 0 && queueIndex < updatedQueue.length) {
+              updatedQueue[queueIndex] = {
+                ...updatedQueue[queueIndex],
+                videoId: resolved.videoId,
+                imageUrl: updatedQueue[queueIndex].imageUrl || resolved.thumbnailUrl,
+              }
+            }
+
+            set({
+              queue: updatedQueue,
+              source: 'youtube',
+              audioTrack: null,
+              youtubeVideo: {
+                id: currentQueueItem.id,
+                videoId: resolved.videoId,
+                title: currentQueueItem.title,
+                channelTitle: currentQueueItem.subtitle,
+                thumbnailUrl: currentQueueItem.imageUrl || resolved.thumbnailUrl,
+                url: `https://www.youtube.com/watch?v=${resolved.videoId}`,
+                addedAt: new Date().toISOString(),
+              },
+              isPlaying: true,
+              isResolving: false,
+            })
+          } else {
+            set({ isResolving: false })
+          }
+        } catch (err) {
+          console.warn('fallbackCurrentTrackToYouTube error:', err)
+          set({ isResolving: false })
+        }
       },
 
       reset: () => set(initialState),

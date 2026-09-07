@@ -1,6 +1,6 @@
 // ============================================================
 // TIKTOK SERVICE — Extração Direta de Capa, Nome do Vídeo,
-// Nome do Áudio e Stream MP3 (Zero Login)
+// Nome do Áudio e Resolução Automática para YouTube
 // ============================================================
 
 import type { TikTokVideo } from '@/types'
@@ -8,23 +8,29 @@ import type { TikTokVideo } from '@/types'
 export interface TikTokAudioResult {
   id: string
   postId: string
-  title: string // Nome do Vídeo
+  title: string // Nome do Vídeo / Legenda
   soundTitle: string // Nome do Áudio / Som
   authorName: string // Nome do Criador do Vídeo
   soundAuthor: string // Autor da Música
-  audioUrl?: string // Stream direto do MP3
+  audioUrl?: string // Stream direto do MP3 (quando disponível)
   thumbnailUrl: string // Capa oficial do Vídeo
   url: string
   durationSeconds: number
+  videoId?: string
 }
 
 // ─── URL Validation & ID Extraction ───────────────────────────
 
 export function extractTikTokPostId(url: string): string | null {
   const patterns = [
-    /tiktok\.com\/@[\w.-]+\/video\/(\d+)/,
-    /tiktok\.com\/v\/(\d+)/,
-    /video\/(\d+)/,
+    /tiktok\.com\/@[\w.-]+\/video\/(\d+)/i,
+    /tiktok\.com\/v\/(\d+)/i,
+    /video\/(\d+)/i,
+    /\/music\/[\w-]+-(\d+)/i,
+    /tiktok\.com\/t\/([\w-]+)/i,
+    /vm\.tiktok\.com\/([\w-]+)/i,
+    /vt\.tiktok\.com\/([\w-]+)/i,
+    /(\d{15,22})/,
   ]
   for (const p of patterns) {
     const m = url.match(p)
@@ -34,17 +40,68 @@ export function extractTikTokPostId(url: string): string | null {
 }
 
 export function isValidTikTokUrl(url: string): boolean {
-  const trimmed = url.trim()
+  const trimmed = url.trim().toLowerCase()
   return (
     trimmed.includes('tiktok.com') ||
     trimmed.includes('vm.tiktok.com') ||
     trimmed.includes('vt.tiktok.com') ||
-    trimmed.includes('tiktok.com/t/')
+    trimmed.includes('tiktok.com/t/') ||
+    trimmed.includes('tiktok.com/@')
   )
 }
 
 export function buildTikTokEmbedUrl(postId: string): string {
   return `https://www.tiktok.com/player/v1/${postId}?music_info=1&description=1&autoplay=1`
+}
+
+// ─── Construtor Inteligente de Termo de Busca (YouTube Match) ───
+
+export function buildTikTokSearchQuery(
+  soundTitle?: string,
+  soundAuthor?: string,
+  videoTitle?: string,
+  authorName?: string
+): string {
+  const isGeneric = (str?: string) => {
+    if (!str) return true
+    const l = str.toLowerCase().trim()
+    return (
+      l.includes('som original') ||
+      l.includes('original sound') ||
+      l.includes('som do tiktok') ||
+      l.includes('música do tiktok') ||
+      l.includes('musica do tiktok') ||
+      l.includes('vídeo do tiktok') ||
+      l.includes('video do tiktok') ||
+      l === 'tiktok' ||
+      l === 'tiktok user' ||
+      l === 'tiktok music'
+    )
+  }
+
+  // 1. Se tem o nome do som/música real (ex: "Flowers", "M to the B", "Montagem Funk")
+  if (soundTitle && !isGeneric(soundTitle)) {
+    const author = soundAuthor && !isGeneric(soundAuthor) ? soundAuthor : ''
+    return `${soundTitle} ${author}`.trim()
+  }
+
+  // 2. Limpa hashtags, menções e links da legenda do vídeo
+  let cleanTitle = (videoTitle || '')
+    .replace(/#[\w\u00C0-\u017F]+/g, '')
+    .replace(/@[\w.-]+/g, '')
+    .replace(/https?:\/\/\S+/g, '')
+    .replace(/[^\w\s\u00C0-\u017F]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+
+  if (cleanTitle.length > 5 && !isGeneric(cleanTitle)) {
+    const author = authorName && !isGeneric(authorName) ? authorName : ''
+    return `${cleanTitle} ${author}`.trim()
+  }
+
+  if (soundTitle) return soundTitle
+  if (authorName && !isGeneric(authorName)) return `${authorName} música tiktok`
+  return cleanTitle || 'TikTok Viral Music'
 }
 
 // ─── Extração Completa de Metadados e Áudio ──────────────────
@@ -93,30 +150,54 @@ export async function extractTikTokAudioAndMetadata(url: string): Promise<TikTok
     console.warn('TikWM extraction:', e)
   }
 
-  // 2. Fallback: Official oEmbed
+  // 2. Fallback: Official oEmbed da TikTok
   try {
     const oembedUrl = `https://www.tiktok.com/oembed?url=${encodeURIComponent(trimmed)}`
-    const oembedRes = await fetch(oembedUrl, { signal: AbortSignal.timeout(5000) })
+    const oembedRes = await fetch(oembedUrl, { signal: AbortSignal.timeout(6000) })
     if (oembedRes.ok) {
       const oembed = await oembedRes.json()
-      const postId = extractTikTokPostId(trimmed) || crypto.randomUUID()
+      const postId = extractTikTokPostId(trimmed) || oembed.embed_product_id || crypto.randomUUID()
+
+      // Extrai o nome do som/música real de dentro do HTML incorporado do oembed
+      // Ex: title="♬ Zach Kings Magic Broomstick - Zach King" ou >♬ Flowers - Miley Cyrus<
+      let soundTitle = ''
+      let soundAuthor = oembed.author_name || 'TikTok'
+
+      if (oembed.html) {
+        const match = oembed.html.match(/title="♬\s*([^"]+)"/) || oembed.html.match(/>♬\s*([^<]+)</)
+        if (match) {
+          const raw = match[1].trim()
+          const splitIdx = raw.lastIndexOf(' - ')
+          if (splitIdx !== -1) {
+            soundTitle = raw.substring(0, splitIdx).trim()
+            soundAuthor = raw.substring(splitIdx + 3).trim()
+          } else {
+            soundTitle = raw
+          }
+        }
+      }
+
+      if (!soundTitle) {
+        soundTitle = oembed.title || 'Som Original'
+      }
+
       return {
         id: crypto.randomUUID(),
         postId,
         title: oembed.title || 'Vídeo do TikTok',
-        soundTitle: oembed.title || 'Som do TikTok',
+        soundTitle,
         authorName: oembed.author_name || 'TikTok User',
-        soundAuthor: oembed.author_name || 'TikTok',
+        soundAuthor,
         thumbnailUrl: oembed.thumbnail_url || '',
         url: trimmed,
         durationSeconds: 30,
       }
     }
-  } catch {
-    // segue para fallback básico
+  } catch (e) {
+    console.warn('TikTok oEmbed extraction error:', e)
   }
 
-  // 3. Fallback genérico
+  // 3. Fallback genérico quando APIs externas estiverem inacessíveis
   const postId = extractTikTokPostId(trimmed) || crypto.randomUUID()
   return {
     id: crypto.randomUUID(),
@@ -131,7 +212,7 @@ export async function extractTikTokAudioAndMetadata(url: string): Promise<TikTok
   }
 }
 
-// ─── Create TikTokVideo from URL ─────────────────────────────
+// ─── Create TikTokVideo from URL (com Pré-Resolução do YouTube) ───
 
 export async function createTikTokVideoFromUrl(url: string): Promise<TikTokVideo> {
   if (!isValidTikTokUrl(url)) {
@@ -139,6 +220,29 @@ export async function createTikTokVideoFromUrl(url: string): Promise<TikTokVideo
   }
 
   const result = await extractTikTokAudioAndMetadata(url)
+
+  // Pré-resolve a música no motor do YouTube para garantir reprodução 100% contínua
+  let videoId: string | undefined
+  try {
+    const { findYouTubeMatch } = await import('./crossPlatformService')
+    const query = buildTikTokSearchQuery(
+      result.soundTitle,
+      result.soundAuthor,
+      result.title,
+      result.authorName
+    )
+    const match = await findYouTubeMatch(
+      query,
+      result.durationSeconds,
+      result.soundTitle,
+      result.soundAuthor
+    )
+    if (match) {
+      videoId = match.videoId
+    }
+  } catch (err) {
+    console.warn('Pre-resolving TikTok to YouTube video match:', err)
+  }
 
   return {
     id: result.id,
@@ -150,6 +254,7 @@ export async function createTikTokVideoFromUrl(url: string): Promise<TikTokVideo
     thumbnailUrl: result.thumbnailUrl, // Capa oficial do Vídeo
     url: result.url,
     audioUrl: result.audioUrl,
+    videoId,
     durationSeconds: result.durationSeconds,
     embedHtml: `<iframe src="${buildTikTokEmbedUrl(result.postId)}" width="325" height="580" frameborder="0" allow="encrypted-media; autoplay" allowfullscreen></iframe>`,
     addedAt: new Date().toISOString(),

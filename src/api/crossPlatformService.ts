@@ -192,31 +192,48 @@ export async function resolvePlayable(
       channelTitle = match.channelTitle || item.subtitle
     }
   } else if (item.source === 'tiktok') {
-    const cleanSub = item.subtitle
-      ? item.subtitle.replace(/TikTok\s*(?:Viral|Sound)?\s*•?\s*/gi, '').replace(/@/g, '').trim()
-      : ''
-    let query = `${item.title} ${cleanSub}`.trim()
-    let targetDuration: number | undefined
+    const { buildTikTokSearchQuery, extractTikTokAudioAndMetadata } = await import('./tiktokService')
+    let soundTitle = (item as any).soundTitle || ''
+    let soundAuthor = (item as any).soundAuthor || ''
+    let targetDuration: number | undefined = (item as any).durationSeconds || ((item as any).durationMs ? (item as any).durationMs / 1000 : undefined)
 
-    try {
-      const url = (item as PlaylistItem).url || (item as QueueItem).tiktokUrl
-      if (url && (!item.title || item.title === 'TikTok Video' || item.title === 'Música do TikTok')) {
-        const { extractTikTokAudioAndMetadata } = await import('./tiktokService')
-        const data = await extractTikTokAudioAndMetadata(url)
-        if (data.soundTitle) {
-          query = `${data.soundTitle} ${data.soundAuthor}`.trim()
-          targetDuration = data.durationSeconds
-        }
+    // Se subtitle contiver "Som: Nome • @autor", extrai
+    if (!soundTitle && item.subtitle) {
+      const match = item.subtitle.match(/Som:\s*([^•]+)(?:•\s*@?(.+))?/i)
+      if (match) {
+        soundTitle = match[1].trim()
+        if (match[2]) soundAuthor = match[2].trim()
       }
-    } catch {
-      // segue com o título do item
     }
 
-    const match = await findYouTubeMatch(query, targetDuration)
+    // Se ainda não temos soundTitle ou se for genérico, tenta extrair metadados atualizados via URL
+    const url = (item as PlaylistItem).url || (item as QueueItem).tiktokUrl
+    if (url && (!soundTitle || soundTitle === 'Som Original' || !item.title || item.title.includes('TikTok') || item.title.includes('Vídeo'))) {
+      try {
+        const data = await extractTikTokAudioAndMetadata(url)
+        if (data.soundTitle && data.soundTitle !== 'Som Original') {
+          soundTitle = data.soundTitle
+          soundAuthor = data.soundAuthor || soundAuthor
+          targetDuration = data.durationSeconds || targetDuration
+        }
+      } catch {}
+    }
+
+    const query = buildTikTokSearchQuery(soundTitle, soundAuthor, item.title, item.subtitle)
+
+    let match = await findYouTubeMatch(query, targetDuration, soundTitle || item.title, soundAuthor)
+    // Se não encontrou, tenta apenas com o soundTitle ou título
+    if (!match && soundTitle && soundTitle !== query) {
+      match = await findYouTubeMatch(soundTitle, targetDuration)
+    }
+    if (!match && item.title && item.title !== query) {
+      match = await findYouTubeMatch(item.title, targetDuration)
+    }
+
     if (match) {
       videoId = match.videoId
-      title = item.title
-      channelTitle = item.subtitle
+      title = soundTitle || item.title
+      channelTitle = soundAuthor || match.channelTitle || item.subtitle
     }
   }
 

@@ -290,14 +290,15 @@ export function Home() {
         const video = await createTikTokVideoFromUrl(val)
         addTikTokVideo(video)
         setUniversalInput('')
-        setInputFeedback(`Áudio extraído com sucesso: "${video.title}"!`)
+        setInputFeedback(`Música do TikTok adicionada: "${video.soundTitle || video.title}"!`)
         const queueItem: QueueItem = {
           id: video.id,
           source: 'tiktok',
           title: video.soundTitle || video.title,
-          subtitle: video.soundAuthor || `@${video.authorName}`,
+          subtitle: video.soundAuthor ? `${video.soundAuthor} • @${video.authorName}` : (video.soundTitle ? `Som: ${video.soundTitle} • @${video.authorName}` : `@${video.authorName}`),
           imageUrl: video.thumbnailUrl,
           audioUrl: video.audioUrl,
+          videoId: video.videoId,
           tiktokPostId: video.postId,
           tiktokUrl: video.url,
           durationMs: (video.durationSeconds || 30) * 1000,
