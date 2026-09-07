@@ -987,7 +987,7 @@ export function CustomPlaylistDetail() {
                           imageUrl: track.thumbnailUrl,
                           videoId: track.videoId,
                         }
-                        playUniversal(qi)
+                        playUniversal([qi], 0)
                       }}
                       className="p-2 rounded-xl text-white/30 hover:text-white hover:bg-white/10 transition-all opacity-0 group-hover:opacity-100 flex-shrink-0"
                       title="Ouvir"

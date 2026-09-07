@@ -67,7 +67,7 @@ export function getOfficialMediaLink(item: {
   videoId?: string
   url?: string
   uri?: string
-  source?: string
+  source?: string | null
   id?: string
   tiktokUrl?: string
   tiktokPostId?: string

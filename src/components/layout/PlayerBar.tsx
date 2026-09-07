@@ -293,14 +293,17 @@ export function PlayerBar({ onExpandPlayer }: PlayerBarProps) {
   const [copiedTitle, setCopiedTitle] = useState(false)
 
   const officialMedia = getOfficialMediaLink({
+    videoId: currentQueueItem?.videoId || youtubeVideo?.videoId,
+    uri: currentQueueItem?.uri || (spotifySavedItem?.spotifyId ? `spotify:${spotifySavedItem.type || 'track'}:${spotifySavedItem.spotifyId}` : undefined),
+    url: (currentQueueItem as any)?.url || youtubeVideo?.url || tiktokVideo?.url || audioTrack?.externalUrl,
+    tiktokUrl: currentQueueItem?.tiktokUrl || tiktokVideo?.url,
+    tiktokPostId: currentQueueItem?.tiktokPostId || tiktokVideo?.postId,
     source: effectiveSource,
-    currentQueueItem,
-    youtubeVideo,
-    spotifySavedItem,
-    tiktokVideo,
-    audioTrack,
+    id: currentQueueItem?.id || spotifySavedItem?.spotifyId || youtubeVideo?.id,
     title: currentTitle,
     subtitle: currentSubtitle,
+    channelTitle: youtubeVideo?.channelTitle,
+    authorName: tiktokVideo?.authorName,
   })
 
   const handleCopyTrackName = useCallback(async (e?: React.MouseEvent) => {
