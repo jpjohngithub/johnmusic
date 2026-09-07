@@ -108,46 +108,64 @@ export function buildTikTokSearchQuery(
 
 export async function extractTikTokAudioAndMetadata(url: string): Promise<TikTokAudioResult> {
   const trimmed = url.trim()
+  const postId = extractTikTokPostId(trimmed)
 
-  // 1. TikWM API via POST
-  try {
-    const formData = new FormData()
-    formData.append('url', trimmed)
-    formData.append('hd', '1')
+  // 1. TikWM API: tenta primeiro com a URL canônica por ID (formato que tem 100% de compatibilidade)
+  const urlCandidates: string[] = []
+  if (postId) {
+    urlCandidates.push(`https://www.tiktok.com/video/${postId}`)
+  }
+  if (!urlCandidates.includes(trimmed)) {
+    urlCandidates.push(trimmed)
+  }
 
-    const res = await fetch('https://www.tikwm.com/api/', {
-      method: 'POST',
-      body: formData,
-      signal: AbortSignal.timeout(8000),
-    })
+  for (const candidateUrl of urlCandidates) {
+    try {
+      const formData = new FormData()
+      formData.append('url', candidateUrl)
+      formData.append('hd', '1')
 
-    if (res.ok) {
-      const json = await res.json()
-      if (json.code === 0 && json.data) {
-        const d = json.data
-        const soundTitle = d.music_info?.title || d.music_info?.album || 'Som Original'
-        const soundAuthor = d.music_info?.author || d.author?.nickname || 'TikTok'
-        const videoTitle = d.title || soundTitle || 'Vídeo do TikTok'
-        const authorName = d.author?.nickname || d.author?.unique_id || 'TikTok User'
-        const postId = d.id || extractTikTokPostId(trimmed) || crypto.randomUUID()
-        const coverUrl = d.cover || d.origin_cover || d.dynamic_cover || ''
+      const res = await fetch('https://www.tikwm.com/api/', {
+        method: 'POST',
+        body: formData,
+        signal: AbortSignal.timeout(8000),
+      })
 
-        return {
-          id: crypto.randomUUID(),
-          postId,
-          title: videoTitle,
-          soundTitle,
-          authorName,
-          soundAuthor,
-          audioUrl: d.music || undefined,
-          thumbnailUrl: coverUrl,
-          url: trimmed,
-          durationSeconds: d.duration || 30,
+      if (res.ok) {
+        const json = await res.json()
+        if (json.code === 0 && json.data) {
+          const d = json.data
+          const rawMusicTitle = d.music_info?.title || d.music_info?.album || ''
+          const rawMusicAuthor = d.music_info?.author || ''
+          const soundTitle = rawMusicTitle || 'Som do TikTok'
+          const soundAuthor = rawMusicAuthor || d.author?.nickname || 'TikTok'
+          const videoTitle = d.title || soundTitle || 'Vídeo do TikTok'
+          const authorName = d.author?.nickname || d.author?.unique_id || 'TikTok User'
+          const id = d.id || postId || crypto.randomUUID()
+          const coverUrl = d.cover || d.origin_cover || d.dynamic_cover || ''
+
+          let audioUrl: string | undefined = d.music || d.music_info?.play || d.play || undefined
+          if (audioUrl && audioUrl.startsWith('/')) {
+            audioUrl = `https://www.tikwm.com${audioUrl}`
+          }
+
+          return {
+            id: crypto.randomUUID(),
+            postId: id,
+            title: videoTitle,
+            soundTitle,
+            authorName,
+            soundAuthor,
+            audioUrl,
+            thumbnailUrl: coverUrl,
+            url: trimmed,
+            durationSeconds: d.duration || 30,
+          }
         }
       }
+    } catch (e) {
+      console.warn('TikWM extraction candidate error:', candidateUrl, e)
     }
-  } catch (e) {
-    console.warn('TikWM extraction:', e)
   }
 
   // 2. Fallback: Official oEmbed da TikTok
@@ -156,10 +174,8 @@ export async function extractTikTokAudioAndMetadata(url: string): Promise<TikTok
     const oembedRes = await fetch(oembedUrl, { signal: AbortSignal.timeout(6000) })
     if (oembedRes.ok) {
       const oembed = await oembedRes.json()
-      const postId = extractTikTokPostId(trimmed) || oembed.embed_product_id || crypto.randomUUID()
+      const id = extractTikTokPostId(trimmed) || oembed.embed_product_id || crypto.randomUUID()
 
-      // Extrai o nome do som/música real de dentro do HTML incorporado do oembed
-      // Ex: title="♬ Zach Kings Magic Broomstick - Zach King" ou >♬ Flowers - Miley Cyrus<
       let soundTitle = ''
       let soundAuthor = oembed.author_name || 'TikTok'
 
@@ -178,12 +194,12 @@ export async function extractTikTokAudioAndMetadata(url: string): Promise<TikTok
       }
 
       if (!soundTitle) {
-        soundTitle = oembed.title || 'Som Original'
+        soundTitle = oembed.title || 'Som do TikTok'
       }
 
       return {
         id: crypto.randomUUID(),
-        postId,
+        postId: id,
         title: oembed.title || 'Vídeo do TikTok',
         soundTitle,
         authorName: oembed.author_name || 'TikTok User',
@@ -198,12 +214,12 @@ export async function extractTikTokAudioAndMetadata(url: string): Promise<TikTok
   }
 
   // 3. Fallback genérico quando APIs externas estiverem inacessíveis
-  const postId = extractTikTokPostId(trimmed) || crypto.randomUUID()
+  const finalId = postId || crypto.randomUUID()
   return {
     id: crypto.randomUUID(),
-    postId,
+    postId: finalId,
     title: 'Vídeo do TikTok',
-    soundTitle: 'Som Original',
+    soundTitle: 'Som do TikTok',
     authorName: 'TikTok',
     soundAuthor: 'TikTok',
     thumbnailUrl: '',
@@ -212,7 +228,7 @@ export async function extractTikTokAudioAndMetadata(url: string): Promise<TikTok
   }
 }
 
-// ─── Create TikTokVideo from URL (com Pré-Resolução do YouTube) ───
+// ─── Create TikTokVideo from URL ─────────────────────────────
 
 export async function createTikTokVideoFromUrl(url: string): Promise<TikTokVideo> {
   if (!isValidTikTokUrl(url)) {
@@ -221,27 +237,29 @@ export async function createTikTokVideoFromUrl(url: string): Promise<TikTokVideo
 
   const result = await extractTikTokAudioAndMetadata(url)
 
-  // Pré-resolve a música no motor do YouTube para garantir reprodução 100% contínua
+  // Se o áudio direto não veio na primeira tentativa, busca uma correspondência como fallback
   let videoId: string | undefined
-  try {
-    const { findYouTubeMatch } = await import('./crossPlatformService')
-    const query = buildTikTokSearchQuery(
-      result.soundTitle,
-      result.soundAuthor,
-      result.title,
-      result.authorName
-    )
-    const match = await findYouTubeMatch(
-      query,
-      result.durationSeconds,
-      result.soundTitle,
-      result.soundAuthor
-    )
-    if (match) {
-      videoId = match.videoId
+  if (!result.audioUrl) {
+    try {
+      const { findYouTubeMatch } = await import('./crossPlatformService')
+      const query = buildTikTokSearchQuery(
+        result.soundTitle,
+        result.soundAuthor,
+        result.title,
+        result.authorName
+      )
+      const match = await findYouTubeMatch(
+        query,
+        result.durationSeconds,
+        result.soundTitle,
+        result.soundAuthor
+      )
+      if (match) {
+        videoId = match.videoId
+      }
+    } catch (err) {
+      console.warn('Fallback YouTube match error:', err)
     }
-  } catch (err) {
-    console.warn('Pre-resolving TikTok to YouTube video match:', err)
   }
 
   return {

@@ -372,8 +372,30 @@ export const usePlayerStore = create<ExtendedPlayerState & PlayerActions>()(
           useHistoryStore.getState().recordPlay(targetItem)
         } catch {}
 
-        // 1. Se já possui videoId do YouTube (inclusive TikTok pré-resolvido ou YouTube direto)
-        if (targetItem.videoId) {
+        // 1. Se possui áudio direto (ex: MP3/MP4 original do TikTok ou áudio preview)
+        if (targetItem.audioUrl) {
+          set({
+            source: 'audio',
+            currentQueueItem: targetItem,
+            audioTrack: {
+              id: targetItem.id,
+              title: targetItem.title,
+              artist: targetItem.subtitle,
+              artworkUrl: targetItem.imageUrl,
+              audioUrl: targetItem.audioUrl,
+              durationMs: targetItem.durationMs,
+            },
+            youtubeVideo: null,
+            spotifySavedItem: null,
+            tiktokVideo: null,
+            isPlaying: true,
+            isResolving: false,
+          })
+          return
+        }
+
+        // 2. Se já possui videoId do YouTube (e NÃO for TikTok com áudio pendente)
+        if (targetItem.videoId && targetItem.source !== 'tiktok') {
           set({
             source: 'youtube',
             currentQueueItem: targetItem,
@@ -395,64 +417,45 @@ export const usePlayerStore = create<ExtendedPlayerState & PlayerActions>()(
           return
         }
 
-        // 2. Se for item do TikTok sem videoId, resolve diretamente via crossPlatformService
+        // 3. Se for TikTok sem audioUrl (ou link precisando de renovação): busca o áudio REAL do TikTok
         if (targetItem.source === 'tiktok') {
-          try {
-            const { resolvePlayable } = await import('@/api/crossPlatformService')
-            const resolved = await resolvePlayable(targetItem)
-            if (resolved?.videoId) {
-              const updatedQueue = [...queue]
-              updatedQueue[index] = {
-                ...targetItem,
-                videoId: resolved.videoId,
-                imageUrl: targetItem.imageUrl || resolved.thumbnailUrl,
+          const urlToUse = (targetItem as any).tiktokUrl || (targetItem as any).url || (targetItem.tiktokPostId ? `https://www.tiktok.com/video/${targetItem.tiktokPostId}` : null)
+          if (urlToUse) {
+            try {
+              const { extractTikTokAudioAndMetadata } = await import('@/api/tiktokService')
+              const data = await extractTikTokAudioAndMetadata(urlToUse)
+              if (data.audioUrl) {
+                const updatedQueue = [...queue]
+                updatedQueue[index] = {
+                  ...targetItem,
+                  title: data.soundTitle || targetItem.title,
+                  subtitle: data.soundAuthor ? `${data.soundAuthor} • @${data.authorName}` : targetItem.subtitle,
+                  audioUrl: data.audioUrl,
+                  imageUrl: data.thumbnailUrl || targetItem.imageUrl,
+                  durationMs: data.durationSeconds * 1000,
+                }
+                set({
+                  queue: updatedQueue,
+                  source: 'audio',
+                  currentQueueItem: updatedQueue[index],
+                  audioTrack: {
+                    id: targetItem.id,
+                    title: data.soundTitle || targetItem.title,
+                    artist: data.soundAuthor || targetItem.subtitle,
+                    artworkUrl: data.thumbnailUrl || targetItem.imageUrl,
+                    audioUrl: data.audioUrl,
+                    durationMs: data.durationSeconds * 1000,
+                  },
+                  youtubeVideo: null,
+                  isPlaying: true,
+                  isResolving: false,
+                })
+                return
               }
-              set({
-                queue: updatedQueue,
-                source: 'youtube',
-                currentQueueItem: updatedQueue[index],
-                youtubeVideo: {
-                  id: targetItem.id,
-                  videoId: resolved.videoId,
-                  title: targetItem.title,
-                  channelTitle: targetItem.subtitle,
-                  thumbnailUrl: targetItem.imageUrl || resolved.thumbnailUrl,
-                  url: `https://www.youtube.com/watch?v=${resolved.videoId}`,
-                  addedAt: new Date().toISOString(),
-                },
-                audioTrack: null,
-                tiktokVideo: null,
-                isPlaying: true,
-                isResolving: false,
-              })
-              get().preResolveNextTrack()
-              return
+            } catch (err) {
+              console.warn('Erro ao extrair áudio real do TikTok:', err)
             }
-          } catch (err) {
-            console.warn('Erro ao resolver faixa do TikTok para YouTube:', err)
           }
-        }
-
-        // 3. Se possui áudio direto (ex: MP3 de preview ou áudio próprio)
-        if (targetItem.audioUrl) {
-          set({
-            source: 'audio',
-            currentQueueItem: targetItem,
-            audioTrack: {
-              id: targetItem.id,
-              title: targetItem.title,
-              artist: targetItem.subtitle,
-              artworkUrl: targetItem.imageUrl,
-              audioUrl: targetItem.audioUrl,
-              durationMs: targetItem.durationMs,
-            },
-            youtubeVideo: null,
-            spotifySavedItem: null,
-            tiktokVideo: null,
-            isPlaying: true,
-            isResolving: false,
-          })
-          return
         }
 
         // 4. Resolver via motor de conversão cruzada para áudio do YouTube
