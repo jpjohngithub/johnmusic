@@ -41,6 +41,17 @@ interface LibraryActions {
   duplicateCustomPlaylist: (id: string) => CustomPlaylist | null
   addItemToCustomPlaylist: (playlistId: string, item: PlaylistItem) => void
   removeItemFromCustomPlaylist: (playlistId: string, itemId: string) => void
+  mergeCustomPlaylists: (
+    sourcePlaylistIds: string[],
+    newPlaylistName: string,
+    options?: {
+      description?: string
+      coverUrl?: string
+      removeDuplicates?: boolean
+      targetPlaylistId?: string
+      deleteSources?: boolean
+    }
+  ) => CustomPlaylist | null
   movePlaylistItem: (playlistId: string, itemId: string, direction: 'up' | 'down') => void
   reorderPlaylistItems: (playlistId: string, fromIndex: number, toIndex: number) => void
   reversePlaylistOrder: (playlistId: string) => void
@@ -184,6 +195,123 @@ export const useLibraryStore = create<LibraryState & LibraryActions>()(
               : p
           ),
         })),
+
+      mergeCustomPlaylists: (sourcePlaylistIds, newPlaylistName, options = {}) => {
+        const { customPlaylists } = get()
+        const sourcePlaylists = customPlaylists.filter((p) => sourcePlaylistIds.includes(p.id))
+        if (sourcePlaylists.length === 0) return null
+
+        // Combina todos os itens das playlists selecionadas
+        let combinedItems: PlaylistItem[] = []
+        for (const pl of sourcePlaylists) {
+          combinedItems = [...combinedItems, ...pl.items]
+        }
+
+        // Se a opção de remover duplicatas estiver ativa (padrão: true)
+        if (options.removeDuplicates !== false) {
+          const seen = new Set<string>()
+          const uniqueItems: PlaylistItem[] = []
+          for (const item of combinedItems) {
+            const key = item.videoId
+              ? `yt:${item.videoId}`
+              : item.uri
+              ? `uri:${item.uri}`
+              : `title:${item.title.toLowerCase().trim()}:${(item.subtitle || '').toLowerCase().trim()}`
+
+            if (!seen.has(key)) {
+              seen.add(key)
+              uniqueItems.push(item)
+            }
+          }
+          combinedItems = uniqueItems
+        }
+
+        // Clona os itens com novos IDs únicos
+        const clonedItems: PlaylistItem[] = combinedItems.map((item) => ({
+          ...item,
+          id: crypto.randomUUID(),
+          addedAt: new Date().toISOString(),
+        }))
+
+        let finalPlaylist: CustomPlaylist
+
+        // Caso 1: Mesclar dentro de uma playlist existente
+        if (options.targetPlaylistId) {
+          const target = customPlaylists.find((p) => p.id === options.targetPlaylistId)
+          if (!target) return null
+
+          let existingItems = target.items
+          let itemsToAdd = clonedItems
+
+          if (options.removeDuplicates !== false) {
+            const targetKeys = new Set(
+              existingItems.map((item) =>
+                item.videoId
+                  ? `yt:${item.videoId}`
+                  : item.uri
+                  ? `uri:${item.uri}`
+                  : `title:${item.title.toLowerCase().trim()}:${(item.subtitle || '').toLowerCase().trim()}`
+              )
+            )
+            itemsToAdd = clonedItems.filter((item) => {
+              const k = item.videoId
+                ? `yt:${item.videoId}`
+                : item.uri
+                ? `uri:${item.uri}`
+                : `title:${item.title.toLowerCase().trim()}:${(item.subtitle || '').toLowerCase().trim()}`
+              return !targetKeys.has(k)
+            })
+          }
+
+          finalPlaylist = {
+            ...target,
+            items: [...existingItems, ...itemsToAdd],
+            coverUrl: target.coverUrl || itemsToAdd[0]?.imageUrl || '',
+            updatedAt: new Date().toISOString(),
+          }
+
+          set((s) => ({
+            customPlaylists: s.customPlaylists.map((p) =>
+              p.id === options.targetPlaylistId ? finalPlaylist : p
+            ),
+          }))
+        } else {
+          // Caso 2: Criar uma nova playlist combinada
+          const coverUrl =
+            options.coverUrl ||
+            sourcePlaylists.find((p) => p.coverUrl)?.coverUrl ||
+            clonedItems[0]?.imageUrl ||
+            ''
+
+          finalPlaylist = {
+            id: crypto.randomUUID(),
+            name: newPlaylistName.trim() || `Mix: ${sourcePlaylists.map((p) => p.name).join(' + ')}`,
+            description:
+              options.description ||
+              `Combinação de ${sourcePlaylists.length} playlists: ${sourcePlaylists.map((p) => p.name).join(', ')}`,
+            coverUrl,
+            importedFrom: 'manual',
+            items: clonedItems,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          }
+
+          set((s) => ({
+            customPlaylists: [finalPlaylist, ...s.customPlaylists],
+          }))
+        }
+
+        // Se o usuário solicitou excluir as playlists de origem
+        if (options.deleteSources) {
+          set((s) => ({
+            customPlaylists: s.customPlaylists.filter(
+              (p) => !sourcePlaylistIds.includes(p.id) || p.id === finalPlaylist.id
+            ),
+          }))
+        }
+
+        return finalPlaylist
+      },
 
       movePlaylistItem: (playlistId, itemId, direction) =>
         set((s) => ({

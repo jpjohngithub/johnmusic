@@ -34,10 +34,12 @@ import {
   Link2,
   RefreshCw,
   ExternalLink,
+  GitMerge,
 } from 'lucide-react'
 import { useLibraryStore } from '@/store/libraryStore'
 import { usePlayerStore } from '@/store/playerStore'
 import { AddToPlaylistModal } from '@/components/playlist/AddToPlaylistModal'
+import { MergePlaylistsModal } from '@/components/playlist/MergePlaylistsModal'
 import { generatePlaylistShareUrl } from '@/api/playlistShareService'
 import { createSpotifyItemFromUrl, isValidSpotifyUrl } from '@/api/spotifyUrlService'
 import { createYouTubeVideoFromUrl, isValidYouTubeUrl } from '@/api/youtubeService'
@@ -96,6 +98,9 @@ export function CustomPlaylistDetail() {
 
   // Estado para Salvar Música em Outra Playlist
   const [selectedTrackForSave, setSelectedTrackForSave] = useState<PlaylistItem | null>(null)
+
+  // Estado para Modal de Juntar Playlists
+  const [isMergeModalOpen, setIsMergeModalOpen] = useState(false)
 
   // Estados para Drag and Drop (Arrastar Músicas)
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null)
@@ -537,6 +542,17 @@ export function CustomPlaylistDetail() {
           >
             <Copy size={16} />
           </button>
+
+          {customPlaylists.length >= 2 && (
+            <button
+              onClick={() => setIsMergeModalOpen(true)}
+              className="flex items-center gap-1.5 px-4 py-2.5 rounded-full bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 hover:text-white font-bold text-xs transition-all border border-purple-500/40 active:scale-95 shadow-sm"
+              title="Juntar esta playlist com outras"
+            >
+              <GitMerge size={14} />
+              <span>Juntar Playlists</span>
+            </button>
+          )}
 
           <button
             onClick={handleDeletePlaylist}
@@ -1121,6 +1137,13 @@ export function CustomPlaylistDetail() {
         isOpen={Boolean(selectedTrackForSave)}
         onClose={() => setSelectedTrackForSave(null)}
         item={selectedTrackForSave}
+      />
+
+      {/* Modal para Juntar Playlists */}
+      <MergePlaylistsModal
+        isOpen={isMergeModalOpen}
+        onClose={() => setIsMergeModalOpen(false)}
+        initialSelectedPlaylistId={playlist.id}
       />
     </div>
   )

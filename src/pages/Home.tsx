@@ -20,6 +20,7 @@ import {
   RefreshCw,
   Check,
   Plus,
+  GitMerge,
 } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import { isValidSpotifyUrl, createSpotifyItemFromUrl } from '@/api/spotifyUrlService'
@@ -31,6 +32,7 @@ import { usePlayerStore } from '@/store/playerStore'
 import { useLibraryStore } from '@/store/libraryStore'
 import { useHistoryStore } from '@/store/historyStore'
 import { AddToPlaylistModal } from '@/components/playlist/AddToPlaylistModal'
+import { MergePlaylistsModal } from '@/components/playlist/MergePlaylistsModal'
 import { formatMs, cn } from '@/lib/utils'
 import type { PlaylistItem, QueueItem, YouTubeVideo, TikTokVideo, PersonalizedMix, RecommendedPlaylist } from '@/types'
 import type { SearchTrackItem } from '@/api/universalSearchService'
@@ -47,6 +49,7 @@ export function Home() {
   const [isProcessing, setIsProcessing] = useState(false)
   const [inputFeedback, setInputFeedback] = useState<string | null>(null)
   const [modalItem, setModalItem] = useState<PlaylistItem | null>(null)
+  const [isMergeModalOpen, setIsMergeModalOpen] = useState(false)
 
   const { playUniversal, isPlaying, currentQueueItem } = usePlayerStore()
   const {
@@ -703,6 +706,17 @@ export function Home() {
               </h2>
               <p className="text-white/40 text-xs mt-0.5">Suas coleções salvas no JohnMusic</p>
             </div>
+
+            {customPlaylists.length >= 2 && (
+              <button
+                onClick={() => setIsMergeModalOpen(true)}
+                className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 hover:text-white border border-purple-500/30 font-semibold text-xs transition-all shadow-sm active:scale-95"
+                title="Combinar músicas de várias playlists em uma só"
+              >
+                <GitMerge size={14} />
+                <span>Juntar Playlists</span>
+              </button>
+            )}
           </div>
 
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
@@ -971,6 +985,19 @@ export function Home() {
           </div>
         </section>
       )}
+
+      {/* Modal para Adicionar Faixa a Playlist */}
+      <AddToPlaylistModal
+        isOpen={Boolean(modalItem)}
+        onClose={() => setModalItem(null)}
+        item={modalItem}
+      />
+
+      {/* Modal para Juntar Playlists */}
+      <MergePlaylistsModal
+        isOpen={isMergeModalOpen}
+        onClose={() => setIsMergeModalOpen(false)}
+      />
     </div>
   )
 }
