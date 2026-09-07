@@ -90,6 +90,7 @@ export function PlayerBar({ onExpandPlayer }: PlayerBarProps) {
   const [showEqualizerModal, setShowEqualizerModal] = useState(false)
   const isEqEnabled = useEqualizerStore((s) => s.isEnabled)
   const audioElementRef = useRef<HTMLAudioElement | null>(null)
+  const hasTriggeredAudioTransitionRef = useRef<boolean>(false)
 
   const nextTrack = getNextTrack()
 
@@ -100,7 +101,9 @@ export function PlayerBar({ onExpandPlayer }: PlayerBarProps) {
 
     if (source === 'audio' && audioTrack?.audioUrl) {
       if (audio.src !== audioTrack.audioUrl) {
+        hasTriggeredAudioTransitionRef.current = false
         audio.src = audioTrack.audioUrl
+        audio.volume = isMuted ? 0 : volume / 100
         audio.load()
       }
 
@@ -173,10 +176,11 @@ export function PlayerBar({ onExpandPlayer }: PlayerBarProps) {
       }
       if (remaining <= 3.5 && remaining > 0.6) {
         const baseVol = isMuted ? 0 : volume / 100
-        const fadeRatio = Math.max(0.08, (remaining - 0.6) / 2.9)
+        const fadeRatio = Math.max(0.1, (remaining - 0.6) / 2.9)
         audio.volume = baseVol * fadeRatio
       }
-      if (remaining <= 0.6) {
+      if (remaining <= 0.6 && !hasTriggeredAudioTransitionRef.current) {
+        hasTriggeredAudioTransitionRef.current = true
         playNext()
       }
     }

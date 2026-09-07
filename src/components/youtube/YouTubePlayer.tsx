@@ -86,15 +86,6 @@ export function YouTubePlayer() {
 
           const remaining = duration - current
 
-          // ─── Failsafe: se a música acabou mas crossfade não completou (aba em BG) ───
-          if (remaining <= 0.3 && (isCrossfadingRef.current || hasTriggeredTransitionRef.current)) {
-            stopCrossfade()
-            hasTriggeredTransitionRef.current = false
-            stopProgressLoop()
-            store.playNext()
-            return
-          }
-
           // ─── Automação de Transição Mágica a 8.5s (Antes do Silêncio Final) ───
           if (
             store.perfectTransition &&
@@ -107,19 +98,13 @@ export function YouTubePlayer() {
               store.preResolveNextTrack()
             }
 
-            // Se a aba está em segundo plano, pula o crossfade e faz transição simples
+            // Inicia o crossfade antecipado
             if (remaining <= 8.5 && remaining > 0.5) {
               hasTriggeredTransitionRef.current = true
               const nextTrack = store.getNextTrack()
               const nextIndex = store.getNextTrackIndex()
               if (nextTrack && nextIndex !== null) {
-                if (document.hidden) {
-                  // Aba em segundo plano: transição instantânea sem crossfade
-                  stopProgressLoop()
-                  store.playNext()
-                } else {
-                  performHandshakeCrossfade(nextTrack, nextIndex, 6500)
-                }
+                performHandshakeCrossfade(nextTrack, nextIndex, 6500)
               }
             }
           }
@@ -185,6 +170,7 @@ export function YouTubePlayer() {
 
     // Inicia o carregamento da próxima música no deck de espera a volume 0
     try {
+      standbyPlayer.unMute?.()
       standbyPlayer.setVolume(0)
       standbyPlayer.loadVideoById(playableTrack.videoId)
       standbyPlayer.playVideo()
@@ -197,7 +183,7 @@ export function YouTubePlayer() {
 
     // ─── Handshake: Aguarda o Deck B realmente começar a reproduzir som ───
     let waitAttempts = 0
-    const maxWaitAttempts = 28
+    const maxWaitAttempts = 60
 
     handshakeTimerRef.current = window.setInterval(() => {
       waitAttempts++
@@ -206,7 +192,9 @@ export function YouTubePlayer() {
       try {
         const standbyState = standbyPlayer.getPlayerState?.()
         const standbyTime = standbyPlayer.getCurrentTime?.() || 0
-        if (standbyState === 1 || standbyTime > 0.05 || waitAttempts >= maxWaitAttempts) {
+        if (standbyState === 1 && standbyTime > 0.05) {
+          isReadyToCrossfade = true
+        } else if (waitAttempts >= maxWaitAttempts) {
           isReadyToCrossfade = true
         }
       } catch {
@@ -372,28 +360,30 @@ export function YouTubePlayer() {
           onStateChange: (e: any) => {
             const YTState = window.YT?.PlayerState || {}
             if (e.data === YTState.PLAYING) {
-              try {
-                const s = usePlayerStore.getState()
-                if (!s.isMuted && (s.volume ?? 50) > 0) {
-                  e.target.unMute()
-                  e.target.setVolume(s.volume ?? 50)
-                }
-                const dur = e.target.getDuration()
-                if (dur > 0) usePlayerStore.getState().setDuration(dur)
-              } catch {}
-              usePlayerStore.getState().setIsPlaying(true)
-              startProgressLoop()
+              if (activeDeckRef.current === 'A') {
+                try {
+                  const s = usePlayerStore.getState()
+                  if (!s.isMuted && (s.volume ?? 50) > 0) {
+                    e.target.unMute()
+                    e.target.setVolume(s.volume ?? 50)
+                  }
+                  const dur = e.target.getDuration()
+                  if (dur > 0) usePlayerStore.getState().setDuration(dur)
+                } catch {}
+                usePlayerStore.getState().setIsPlaying(true)
+                startProgressLoop()
+              }
             } else if (e.data === YTState.CUED) {
-              if (usePlayerStore.getState().isPlaying) {
+              if (activeDeckRef.current === 'A' && usePlayerStore.getState().isPlaying) {
                 try { e.target.playVideo() } catch {}
               }
             } else if (activeDeckRef.current === 'A' && e.data === YTState.ENDED) {
-              // Sempre avança para próxima música quando a aba está em segundo plano
-              // O crossfade pode ter ficado preso pelo throttling do browser
-              if (document.hidden || isCrossfadingRef.current || hasTriggeredTransitionRef.current) {
-                stopCrossfade()
-                hasTriggeredTransitionRef.current = false
+              if (isCrossfadingRef.current) {
+                try { e.target.setVolume(0); e.target.pauseVideo() } catch {}
+                return
               }
+              stopCrossfade()
+              hasTriggeredTransitionRef.current = false
               stopProgressLoop()
               usePlayerStore.getState().playNext()
             }
@@ -429,24 +419,31 @@ export function YouTubePlayer() {
           },
           onStateChange: (e: any) => {
             const YTState = window.YT?.PlayerState || {}
-            if (e.data === YTState.PLAYING && activeDeckRef.current === 'B') {
-              try {
-                const s = usePlayerStore.getState()
-                if (!s.isMuted && (s.volume ?? 50) > 0) {
-                  e.target.unMute()
-                  e.target.setVolume(s.volume ?? 50)
-                }
-                const dur = e.target.getDuration()
-                if (dur > 0) usePlayerStore.getState().setDuration(dur)
-              } catch {}
-              usePlayerStore.getState().setIsPlaying(true)
-              startProgressLoop()
-            } else if (activeDeckRef.current === 'B' && e.data === YTState.ENDED) {
-              // Sempre avança mesmo em segundo plano
-              if (document.hidden || isCrossfadingRef.current || hasTriggeredTransitionRef.current) {
-                stopCrossfade()
-                hasTriggeredTransitionRef.current = false
+            if (e.data === YTState.PLAYING) {
+              if (activeDeckRef.current === 'B') {
+                try {
+                  const s = usePlayerStore.getState()
+                  if (!s.isMuted && (s.volume ?? 50) > 0) {
+                    e.target.unMute()
+                    e.target.setVolume(s.volume ?? 50)
+                  }
+                  const dur = e.target.getDuration()
+                  if (dur > 0) usePlayerStore.getState().setDuration(dur)
+                } catch {}
+                usePlayerStore.getState().setIsPlaying(true)
+                startProgressLoop()
               }
+            } else if (e.data === YTState.CUED) {
+              if (activeDeckRef.current === 'B' && usePlayerStore.getState().isPlaying) {
+                try { e.target.playVideo() } catch {}
+              }
+            } else if (activeDeckRef.current === 'B' && e.data === YTState.ENDED) {
+              if (isCrossfadingRef.current) {
+                try { e.target.setVolume(0); e.target.pauseVideo() } catch {}
+                return
+              }
+              stopCrossfade()
+              hasTriggeredTransitionRef.current = false
               stopProgressLoop()
               usePlayerStore.getState().playNext()
             }
@@ -475,6 +472,7 @@ export function YouTubePlayer() {
   // ─── Carrega novo vídeo ou atualiza estado Play/Pause ────────────
   useEffect(() => {
     if (!queueVideoId) return
+    if (isCrossfadingRef.current) return
 
     const active = getActivePlayer()
     const standby = getStandbyPlayer()
