@@ -102,17 +102,15 @@ export function PlayerBar({ onExpandPlayer }: PlayerBarProps) {
     if (!audio) return
 
     if (source === 'audio' && audioTrack?.audioUrl) {
+      const currentVol = isMuted ? 0 : Math.max(0.05, (volume ?? 80) / 100)
+      audio.muted = isMuted
+      audio.volume = currentVol
+
       if (audio.src !== audioTrack.audioUrl) {
         hasTriggeredAudioTransitionRef.current = false
         audio.src = audioTrack.audioUrl
-        audio.volume = isMuted ? 0 : volume / 100
         audio.currentTime = 0
         audio.load()
-      }
-
-      // Conecta ao DSP do Equalizador apenas quando ativado (evita silenciamento por CORS em áudios externos)
-      if (isEqEnabled) {
-        equalizerAudioService.attachAudioElement(audio)
       }
 
       if (isPlaying) {
@@ -125,13 +123,14 @@ export function PlayerBar({ onExpandPlayer }: PlayerBarProps) {
     } else {
       audio.pause()
     }
-  }, [source, audioTrack, isPlaying])
+  }, [source, audioTrack, isPlaying, volume, isMuted])
 
   // Volume do áudio direto
   useEffect(() => {
     const audio = audioElementRef.current
     if (audio) {
-      audio.volume = isMuted ? 0 : volume / 100
+      audio.muted = isMuted
+      audio.volume = isMuted ? 0 : Math.max(0.05, (volume ?? 80) / 100)
     }
   }, [volume, isMuted])
 
@@ -393,6 +392,7 @@ export function PlayerBar({ onExpandPlayer }: PlayerBarProps) {
       {/* Hidden HTML5 Audio Element */}
       <audio
         ref={audioElementRef}
+        key="native-html5-audio-element"
         onTimeUpdate={handleTimeUpdate}
         onLoadedMetadata={handleLoadedMetadata}
         onEnded={handleAudioEnded}

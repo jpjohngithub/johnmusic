@@ -155,7 +155,7 @@ interface EqualizerState {
 export const useEqualizerStore = create<EqualizerState>()(
   persist(
     (set, get) => ({
-      isEnabled: true,
+      isEnabled: false,
       currentPreset: 'flat',
       gains: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
       bassBoost: 0,
