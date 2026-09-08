@@ -13,6 +13,7 @@ export interface TikTokAudioResult {
   authorName: string // Nome do Criador do Vídeo
   soundAuthor: string // Autor da Música
   audioUrl?: string // Stream direto do MP3 (quando disponível)
+  backupAudioUrl?: string // Stream de vídeo MP4 alternativo com áudio original
   thumbnailUrl: string // Capa oficial do Vídeo
   url: string
   durationSeconds: number
@@ -110,18 +111,18 @@ export async function extractTikTokAudioAndMetadata(url: string): Promise<TikTok
   const trimmed = url.trim()
   const postId = extractTikTokPostId(trimmed)
 
-  // 1. TikWM API: gera candidatos de URL otimizados
+  // 1. TikWM API: gera candidatos de URL otimizados (prioriza formato canônico @a/video/ID)
   const urlCandidates: string[] = []
+
+  // Se tiver ID numérico puro, o formato canônico com @a/video/ID é aceito pelo TikWM com 100% de sucesso
+  if (postId && /^\d+$/.test(postId)) {
+    urlCandidates.push(`https://www.tiktok.com/@a/video/${postId}`)
+  }
 
   // Se já tiver query string, gera versão limpa
   const cleanUrl = trimmed.split('?')[0]
-  if (cleanUrl !== trimmed) {
+  if (cleanUrl !== trimmed && !urlCandidates.includes(cleanUrl)) {
     urlCandidates.push(cleanUrl)
-  }
-
-  // Se tiver ID numérico puro, o formato com @a/video/ID é aceito pelo TikWM com 100% de precisão
-  if (postId && /^\d+$/.test(postId)) {
-    urlCandidates.push(`https://www.tiktok.com/@a/video/${postId}`)
   }
 
   // URL original do usuário
@@ -154,9 +155,19 @@ export async function extractTikTokAudioAndMetadata(url: string): Promise<TikTok
           const id = d.id || postId || crypto.randomUUID()
           const coverUrl = d.cover || d.origin_cover || d.dynamic_cover || ''
 
-          let audioUrl: string | undefined = d.music || d.music_info?.play || d.play || d.wmplay || undefined
+          let audioUrl: string | undefined = d.music || d.music_info?.play || undefined
           if (audioUrl && audioUrl.startsWith('/')) {
             audioUrl = `https://www.tikwm.com${audioUrl}`
+          }
+
+          let backupAudioUrl: string | undefined = d.play || d.wmplay || undefined
+          if (backupAudioUrl && backupAudioUrl.startsWith('/')) {
+            backupAudioUrl = `https://www.tikwm.com${backupAudioUrl}`
+          }
+
+          // Se áudio MP3 isolado não veio mas MP4 do vídeo com áudio original veio:
+          if (!audioUrl && backupAudioUrl) {
+            audioUrl = backupAudioUrl
           }
 
           return {
@@ -167,6 +178,7 @@ export async function extractTikTokAudioAndMetadata(url: string): Promise<TikTok
             authorName,
             soundAuthor,
             audioUrl,
+            backupAudioUrl,
             thumbnailUrl: coverUrl,
             url: trimmed,
             durationSeconds: d.duration || 30,
@@ -257,6 +269,7 @@ export async function createTikTokVideoFromUrl(url: string): Promise<TikTokVideo
     thumbnailUrl: result.thumbnailUrl, // Capa oficial do Vídeo
     url: result.url,
     audioUrl: result.audioUrl,
+    backupAudioUrl: result.backupAudioUrl,
     videoId: undefined, // NUNCA atribuir videoId do YouTube a uma música do TikTok!
     durationSeconds: result.durationSeconds,
     embedHtml: `<iframe src="${buildTikTokEmbedUrl(result.postId)}" width="325" height="580" frameborder="0" allow="encrypted-media; autoplay" allowfullscreen></iframe>`,

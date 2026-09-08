@@ -303,6 +303,7 @@ export function CustomPlaylistDetail() {
       subtitle: i.subtitle,
       imageUrl: i.imageUrl,
       audioUrl: i.audioUrl || (i.source === 'audio' ? i.url : undefined),
+      backupAudioUrl: i.backupAudioUrl,
       uri: i.uri,
       videoId: i.videoId,
       tiktokPostId: i.tiktokPostId,
@@ -315,6 +316,10 @@ export function CustomPlaylistDetail() {
 
   const isCurrentPlayingInPlaylist = (item: PlaylistItem) => {
     if (!isPlaying && !isResolving) return false
+    if (item.source === 'tiktok' && currentQueueItem?.source === 'tiktok') {
+      if (item.tiktokPostId && currentQueueItem.tiktokPostId === item.tiktokPostId) return true
+      if (item.id === currentQueueItem.id) return true
+    }
     if (currentQueueItem?.title.toLowerCase() === item.title.toLowerCase()) return true
     if (item.videoId && currentQueueItem?.videoId === item.videoId) return true
     if (item.uri && currentQueueItem?.uri === item.uri) return true

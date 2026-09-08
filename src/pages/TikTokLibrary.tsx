@@ -19,27 +19,30 @@ export function TikTokLibrary() {
   const { tiktokVideos, removeTikTokVideo } = useLibraryStore()
   const { currentQueueItem, isPlaying, isResolving, playUniversal } = usePlayerStore()
 
-  const handlePlayTikTok = async (video: TikTokVideo) => {
-    const queueItem: QueueItem = {
-      id: video.id,
-      source: 'tiktok',
-      title: video.soundTitle || video.title || 'Música do TikTok',
-      subtitle: video.soundAuthor ? `${video.soundAuthor} • @${video.authorName}` : (video.soundTitle ? `Som: ${video.soundTitle} • @${video.authorName}` : `@${video.authorName}`),
-      imageUrl: video.thumbnailUrl,
-      audioUrl: video.audioUrl,
-      videoId: video.videoId,
-      tiktokPostId: video.postId,
-      tiktokUrl: video.url,
-      durationMs: (video.durationSeconds || 30) * 1000,
-    }
-    await playUniversal([queueItem], 0)
-  }
-
   const filteredVideos = tiktokVideos.filter((v) =>
     (v.title || '').toLowerCase().includes(filter.toLowerCase()) ||
     (v.soundTitle || '').toLowerCase().includes(filter.toLowerCase()) ||
     (v.authorName || '').toLowerCase().includes(filter.toLowerCase())
   )
+
+  const handlePlayTikTok = async (video: TikTokVideo, index?: number) => {
+    const queueItems: QueueItem[] = filteredVideos.map((v) => ({
+      id: v.id,
+      source: 'tiktok',
+      title: v.soundTitle || v.title || 'Música do TikTok',
+      subtitle: v.soundAuthor ? `${v.soundAuthor} • @${v.authorName}` : (v.soundTitle ? `Som: ${v.soundTitle} • @${v.authorName}` : `@${v.authorName}`),
+      imageUrl: v.thumbnailUrl,
+      audioUrl: v.audioUrl,
+      backupAudioUrl: v.backupAudioUrl,
+      videoId: v.videoId,
+      tiktokPostId: v.postId,
+      tiktokUrl: v.url,
+      durationMs: (v.durationSeconds || 30) * 1000,
+    }))
+
+    const targetIndex = index !== undefined ? index : filteredVideos.findIndex((v) => v.id === video.id)
+    await playUniversal(queueItems, Math.max(0, targetIndex), true)
+  }
 
   return (
     <div className="space-y-8 max-w-7xl mx-auto select-none pb-16">
@@ -92,7 +95,7 @@ export function TikTokLibrary() {
       {/* Video Grid */}
       {filteredVideos.length > 0 ? (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
-          {filteredVideos.map((video) => {
+          {filteredVideos.map((video, idx) => {
             const isCurrentPlaying =
               currentQueueItem?.tiktokPostId === video.postId &&
               (isPlaying || isResolving)
@@ -107,7 +110,7 @@ export function TikTokLibrary() {
               >
                 {/* Vertical Thumbnail (Capa oficial do vídeo) */}
                 <div
-                  onClick={() => handlePlayTikTok(video)}
+                  onClick={() => handlePlayTikTok(video, idx)}
                   className="relative aspect-[9/16] rounded-xl overflow-hidden bg-black/60 cursor-pointer shadow-md flex items-center justify-center"
                 >
                   {video.thumbnailUrl ? (
@@ -132,7 +135,7 @@ export function TikTokLibrary() {
                 {/* Info (Nome do Vídeo + Nome do Áudio) */}
                 <div className="space-y-0.5">
                   <p
-                    onClick={() => handlePlayTikTok(video)}
+                    onClick={() => handlePlayTikTok(video, idx)}
                     className="text-white text-xs font-semibold truncate hover:underline cursor-pointer"
                     title={video.title}
                   >

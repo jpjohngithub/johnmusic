@@ -37,6 +37,7 @@ export function YouTubePlayer() {
   const isPlaying = usePlayerStore((s) => s.isPlaying)
   const volume = usePlayerStore((s) => s.volume)
   const isMuted = usePlayerStore((s) => s.isMuted)
+  const source = usePlayerStore((s) => s.source)
 
   function getActivePlayer() {
     return activeDeckRef.current === 'A' ? playerARef.current : playerBRef.current
@@ -71,6 +72,12 @@ export function YouTubePlayer() {
   function startProgressLoop() {
     stopProgressLoop()
     progressTimerRef.current = window.setInterval(() => {
+      // Se a fonte atual não for YouTube, cancela imediatamente
+      if (usePlayerStore.getState().source !== 'youtube') {
+        stopProgressLoop()
+        return
+      }
+
       const active = getActivePlayer()
       if (!active?.getCurrentTime) return
 
@@ -123,8 +130,19 @@ export function YouTubePlayer() {
 
     const store = usePlayerStore.getState()
 
-    // Se for faixa do TikTok ou de áudio nativo, toca diretamente pelo motor de áudio
+    // Se for faixa do TikTok ou de áudio nativo, encerra o YouTube imediatamente e toca pelo motor de áudio
     if (targetTrack.source === 'tiktok' || targetTrack.audioUrl) {
+      stopCrossfade()
+      stopProgressLoop()
+      hasTriggeredTransitionRef.current = false
+      try {
+        const active = getActivePlayer()
+        active?.pauseVideo?.()
+        active?.setVolume?.(0)
+        const standby = getStandbyPlayer()
+        standby?.pauseVideo?.()
+        standby?.setVolume?.(0)
+      } catch {}
       await store.playQueueIndex(targetIndex)
       return
     }
@@ -378,6 +396,7 @@ export function YouTubePlayer() {
                 try { e.target.playVideo() } catch {}
               }
             } else if (activeDeckRef.current === 'A' && e.data === YTState.ENDED) {
+              if (usePlayerStore.getState().source !== 'youtube') return
               if (isCrossfadingRef.current) {
                 try { e.target.setVolume(0); e.target.pauseVideo() } catch {}
                 return
@@ -438,6 +457,7 @@ export function YouTubePlayer() {
                 try { e.target.playVideo() } catch {}
               }
             } else if (activeDeckRef.current === 'B' && e.data === YTState.ENDED) {
+              if (usePlayerStore.getState().source !== 'youtube') return
               if (isCrossfadingRef.current) {
                 try { e.target.setVolume(0); e.target.pauseVideo() } catch {}
                 return
@@ -468,6 +488,32 @@ export function YouTubePlayer() {
       playerBRef.current = null
     }
   }, [ready])
+
+  // ─── Desativa YouTube imediatamente quando a fonte não for 'youtube' ─
+  useEffect(() => {
+    if (source !== 'youtube') {
+      stopProgressLoop()
+      stopCrossfade()
+      hasTriggeredTransitionRef.current = false
+      lastLoadedIdRef.current = null
+
+      try {
+        const pA = playerARef.current
+        if (pA?.pauseVideo) {
+          pA.pauseVideo()
+          pA.setVolume?.(0)
+        }
+      } catch {}
+
+      try {
+        const pB = playerBRef.current
+        if (pB?.pauseVideo) {
+          pB.pauseVideo()
+          pB.setVolume?.(0)
+        }
+      } catch {}
+    }
+  }, [source])
 
   // ─── Carrega novo vídeo ou atualiza estado Play/Pause ────────────
   useEffect(() => {

@@ -94,6 +94,8 @@ export function PlayerBar({ onExpandPlayer }: PlayerBarProps) {
 
   const nextTrack = getNextTrack()
 
+  const audioRetryCountRef = useRef<Record<string, number>>({})
+
   // ─── HTML5 Audio Engine ───────────────────────────────────
   useEffect(() => {
     const audio = audioElementRef.current
@@ -104,6 +106,7 @@ export function PlayerBar({ onExpandPlayer }: PlayerBarProps) {
         hasTriggeredAudioTransitionRef.current = false
         audio.src = audioTrack.audioUrl
         audio.volume = isMuted ? 0 : volume / 100
+        audio.currentTime = 0
         audio.load()
       }
 
@@ -113,7 +116,9 @@ export function PlayerBar({ onExpandPlayer }: PlayerBarProps) {
       }
 
       if (isPlaying) {
-        audio.play().catch(() => {})
+        audio.play().catch((err) => {
+          console.warn('PlayerBar: Erro ao reproduzir áudio HTML5:', err)
+        })
       } else {
         audio.pause()
       }
@@ -179,7 +184,7 @@ export function PlayerBar({ onExpandPlayer }: PlayerBarProps) {
         const fadeRatio = Math.max(0.1, (remaining - 0.6) / 2.9)
         audio.volume = baseVol * fadeRatio
       }
-      if (remaining <= 0.6 && !hasTriggeredAudioTransitionRef.current) {
+      if (remaining <= 0.6 && audio.currentTime > 3 && !hasTriggeredAudioTransitionRef.current) {
         hasTriggeredAudioTransitionRef.current = true
         playNext()
       }
@@ -207,31 +212,59 @@ export function PlayerBar({ onExpandPlayer }: PlayerBarProps) {
   const handleAudioError = useCallback(async (e: any) => {
     console.warn('PlayerBar: Erro ao reproduzir elemento de áudio HTML5', e)
     const store = usePlayerStore.getState()
-    if (store.currentQueueItem) {
-      // Se for item do TikTok, tenta renovar o link direto e NUNCA substitui por vídeo do YouTube
-      if (store.currentQueueItem.source === 'tiktok') {
-        const item = store.currentQueueItem
-        const urlToUse = (item as any).tiktokUrl || (item as any).url || (item.tiktokPostId ? `https://www.tiktok.com/@a/video/${item.tiktokPostId}` : null)
-        if (urlToUse) {
-          try {
-            const { extractTikTokAudioAndMetadata } = await import('@/api/tiktokService')
-            const refreshed = await extractTikTokAudioAndMetadata(urlToUse)
-            if (refreshed.audioUrl) {
-              const audio = audioElementRef.current
-              if (audio && audio.src !== refreshed.audioUrl) {
-                audio.src = refreshed.audioUrl
-                audio.load()
-                audio.play().catch(() => {})
-              }
-            }
-          } catch (refreshErr) {
-            console.warn('PlayerBar: Falha ao renovar áudio do TikTok:', refreshErr)
-          }
+    const item = store.currentQueueItem
+    if (!item) return
+
+    const key = item.id || item.title
+    const currentRetries = audioRetryCountRef.current[key] || 0
+    if (currentRetries >= 2) {
+      console.warn('PlayerBar: Limite de tentativas de áudio atingido para:', key)
+      return
+    }
+    audioRetryCountRef.current[key] = currentRetries + 1
+
+    // Se for item do TikTok:
+    if (item.source === 'tiktok') {
+      const audio = audioElementRef.current
+      // 1. Tenta stream alternativo MP4 (vídeo original com áudio embutido)
+      const backup = (item as any).backupAudioUrl
+      if (audio && backup && audio.src !== backup) {
+        hasTriggeredAudioTransitionRef.current = false
+        audio.src = backup
+        audio.volume = store.isMuted ? 0 : (store.volume ?? 50) / 100
+        audio.currentTime = 0
+        audio.load()
+        if (store.isPlaying) {
+          audio.play().catch(() => {})
         }
         return
       }
-      await store.fallbackCurrentTrackToYouTube()
+
+      // 2. Tenta renovar o link direto via TikWM
+      const urlToUse = (item as any).tiktokUrl || (item as any).url || (item.tiktokPostId ? `https://www.tiktok.com/@a/video/${item.tiktokPostId}` : null)
+      if (urlToUse) {
+        try {
+          const { extractTikTokAudioAndMetadata } = await import('@/api/tiktokService')
+          const refreshed = await extractTikTokAudioAndMetadata(urlToUse)
+          const newUrl = refreshed.audioUrl || refreshed.backupAudioUrl
+          if (newUrl && audio && audio.src !== newUrl) {
+            hasTriggeredAudioTransitionRef.current = false
+            audio.src = newUrl
+            audio.volume = store.isMuted ? 0 : (store.volume ?? 50) / 100
+            audio.currentTime = 0
+            audio.load()
+            if (store.isPlaying) {
+              audio.play().catch(() => {})
+            }
+          }
+        } catch (refreshErr) {
+          console.warn('PlayerBar: Falha ao renovar áudio do TikTok:', refreshErr)
+        }
+      }
+      return
     }
+
+    await store.fallbackCurrentTrackToYouTube()
   }, [])
 
   // ─── Controls ─────────────────────────────────────────────

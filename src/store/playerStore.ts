@@ -284,6 +284,7 @@ export const usePlayerStore = create<ExtendedPlayerState & PlayerActions>()(
           subtitle: video.soundAuthor ? `${video.soundAuthor} • @${video.authorName}` : (video.soundTitle ? `Som: ${video.soundTitle} • @${video.authorName}` : `@${video.authorName}`),
           imageUrl: video.thumbnailUrl,
           audioUrl: video.audioUrl,
+          backupAudioUrl: video.backupAudioUrl,
           videoId: video.videoId,
           tiktokPostId: video.postId,
           tiktokUrl: video.url,
@@ -374,8 +375,10 @@ export const usePlayerStore = create<ExtendedPlayerState & PlayerActions>()(
 
         // 1. Se for TikTok: garante reprodução EXCLUSIVA do áudio original (NUNCA toca YouTube)
         if (targetItem.source === 'tiktok') {
+          const rawAudioUrl = targetItem.audioUrl || (targetItem as any).backupAudioUrl
+
           // Se já possui áudio direto
-          if (targetItem.audioUrl) {
+          if (rawAudioUrl) {
             set({
               source: 'audio',
               currentQueueItem: { ...targetItem, videoId: undefined },
@@ -384,7 +387,8 @@ export const usePlayerStore = create<ExtendedPlayerState & PlayerActions>()(
                 title: targetItem.title,
                 artist: targetItem.subtitle,
                 artworkUrl: targetItem.imageUrl,
-                audioUrl: targetItem.audioUrl,
+                audioUrl: rawAudioUrl,
+                backupAudioUrl: (targetItem as any).backupAudioUrl,
                 durationMs: targetItem.durationMs,
               },
               youtubeVideo: null,
@@ -392,6 +396,9 @@ export const usePlayerStore = create<ExtendedPlayerState & PlayerActions>()(
               tiktokVideo: null,
               isPlaying: true,
               isResolving: false,
+              currentTime: 0,
+              progress: 0,
+              duration: targetItem.durationMs ? targetItem.durationMs / 1000 : 30,
             })
             return
           }
@@ -402,13 +409,15 @@ export const usePlayerStore = create<ExtendedPlayerState & PlayerActions>()(
             try {
               const { extractTikTokAudioAndMetadata } = await import('@/api/tiktokService')
               const data = await extractTikTokAudioAndMetadata(urlToUse)
-              if (data.audioUrl) {
+              const resolvedAudio = data.audioUrl || data.backupAudioUrl
+              if (resolvedAudio) {
                 const updatedQueue = [...queue]
                 updatedQueue[index] = {
                   ...targetItem,
                   title: data.soundTitle || targetItem.title,
                   subtitle: data.soundAuthor ? `${data.soundAuthor} • @${data.authorName}` : targetItem.subtitle,
-                  audioUrl: data.audioUrl,
+                  audioUrl: resolvedAudio,
+                  backupAudioUrl: data.backupAudioUrl,
                   imageUrl: data.thumbnailUrl || targetItem.imageUrl,
                   durationMs: data.durationSeconds * 1000,
                   videoId: undefined,
@@ -422,12 +431,18 @@ export const usePlayerStore = create<ExtendedPlayerState & PlayerActions>()(
                     title: data.soundTitle || targetItem.title,
                     artist: data.soundAuthor || targetItem.subtitle,
                     artworkUrl: data.thumbnailUrl || targetItem.imageUrl,
-                    audioUrl: data.audioUrl,
+                    audioUrl: resolvedAudio,
+                    backupAudioUrl: data.backupAudioUrl,
                     durationMs: data.durationSeconds * 1000,
                   },
                   youtubeVideo: null,
+                  spotifySavedItem: null,
+                  tiktokVideo: null,
                   isPlaying: true,
                   isResolving: false,
+                  currentTime: 0,
+                  progress: 0,
+                  duration: data.durationSeconds || 30,
                 })
                 return
               }
@@ -436,8 +451,17 @@ export const usePlayerStore = create<ExtendedPlayerState & PlayerActions>()(
             }
           }
 
-          // Se não conseguiu obter áudio do TikTok, cancela sem tocar música errada do YouTube
-          set({ isResolving: false, isPlaying: false })
+          // Se não conseguiu obter áudio do TikTok, cancela sem deixar YouTube tocando nem estado corrompido
+          set({
+            source: 'audio',
+            currentQueueItem: targetItem,
+            audioTrack: null,
+            youtubeVideo: null,
+            isPlaying: false,
+            isResolving: false,
+            currentTime: 0,
+            progress: 0,
+          })
           return
         }
 
@@ -452,6 +476,7 @@ export const usePlayerStore = create<ExtendedPlayerState & PlayerActions>()(
               artist: targetItem.subtitle,
               artworkUrl: targetItem.imageUrl,
               audioUrl: targetItem.audioUrl,
+              backupAudioUrl: (targetItem as any).backupAudioUrl,
               durationMs: targetItem.durationMs,
             },
             youtubeVideo: null,
@@ -459,6 +484,9 @@ export const usePlayerStore = create<ExtendedPlayerState & PlayerActions>()(
             tiktokVideo: null,
             isPlaying: true,
             isResolving: false,
+            currentTime: 0,
+            progress: 0,
+            duration: targetItem.durationMs ? targetItem.durationMs / 1000 : 30,
           })
           return
         }

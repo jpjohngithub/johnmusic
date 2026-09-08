@@ -136,6 +136,7 @@ export interface PlaylistItem {
   imageUrl: string
   url?: string
   audioUrl?: string
+  backupAudioUrl?: string
   uri?: string
   videoId?: string
   tiktokPostId?: string
@@ -164,6 +165,7 @@ export interface AudioTrack {
   album?: string
   artworkUrl: string
   audioUrl: string
+  backupAudioUrl?: string
   durationMs?: number
   externalUrl?: string
 }
@@ -249,6 +251,7 @@ export interface TikTokVideo {
   thumbnailUrl: string
   url: string
   audioUrl?: string
+  backupAudioUrl?: string
   soundTitle?: string
   soundAuthor?: string
   durationSeconds?: number
@@ -306,6 +309,7 @@ export interface QueueItem {
   subtitle: string
   imageUrl: string
   audioUrl?: string
+  backupAudioUrl?: string
   uri?: string          // Spotify URI
   videoId?: string      // YouTube video ID
   tiktokPostId?: string // TikTok post ID
