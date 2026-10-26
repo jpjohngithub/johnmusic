@@ -117,8 +117,7 @@ export function SpotifyLibrary() {
                     className="relative aspect-square rounded-xl overflow-hidden bg-black cursor-pointer shadow-md flex items-center justify-center"
                   >
                     {item.thumbnailUrl ? (
-                      <img
-                        src={item.thumbnailUrl}
+                      <img referrerPolicy="no-referrer" loading="lazy"                         src={item.thumbnailUrl}
                         alt={item.title}
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                       />

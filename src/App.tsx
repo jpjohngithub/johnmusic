@@ -8,6 +8,7 @@ import { Routes, Route, useNavigate, useLocation } from 'react-router-dom'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { MainContent } from '@/components/layout/MainContent'
 import { PlayerBar } from '@/components/layout/PlayerBar'
+import { BottomNav } from '@/components/layout/BottomNav'
 import { Home } from '@/pages/Home'
 import { YouTubePlayer } from '@/components/youtube/YouTubePlayer'
 import { useLibraryStore } from '@/store/libraryStore'
@@ -103,6 +104,7 @@ export function App() {
       <YouTubePlayer />
 
       <PlayerBar spotifyPlayer={null} />
+      <BottomNav />
     </div>
   )
 }

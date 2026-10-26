@@ -129,8 +129,7 @@ export function QueueDrawer({ isOpen, onClose }: QueueDrawerProps) {
               <div className="p-3.5 rounded-2xl bg-gradient-to-r from-spotify-green/15 via-white/5 to-transparent border border-spotify-green/30 flex items-center gap-3.5 shadow-lg">
                 <div className="w-14 h-14 rounded-xl overflow-hidden bg-white/10 flex-shrink-0 relative">
                   {currentQueueItem.imageUrl ? (
-                    <img
-                      src={currentQueueItem.imageUrl}
+                    <img referrerPolicy="no-referrer" loading="lazy"                       src={currentQueueItem.imageUrl}
                       alt={currentQueueItem.title}
                       className="w-full h-full object-cover"
                     />
@@ -191,8 +190,7 @@ export function QueueDrawer({ isOpen, onClose }: QueueDrawerProps) {
               >
                 <div className="w-12 h-12 rounded-xl overflow-hidden bg-white/10 flex-shrink-0 relative">
                   {nextTrack.imageUrl ? (
-                    <img
-                      src={nextTrack.imageUrl}
+                    <img referrerPolicy="no-referrer" loading="lazy"                       src={nextTrack.imageUrl}
                       alt={nextTrack.title}
                       className="w-full h-full object-cover"
                     />
@@ -266,8 +264,7 @@ export function QueueDrawer({ isOpen, onClose }: QueueDrawerProps) {
 
                       <div className="w-10 h-10 rounded-lg overflow-hidden bg-white/10 flex-shrink-0">
                         {track.imageUrl ? (
-                          <img
-                            src={track.imageUrl}
+                          <img referrerPolicy="no-referrer" loading="lazy"                             src={track.imageUrl}
                             alt={track.title}
                             className="w-full h-full object-cover"
                           />

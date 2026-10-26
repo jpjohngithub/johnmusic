@@ -367,8 +367,7 @@ export function CustomPlaylistDetail() {
           <div className="flex flex-col sm:flex-row items-center gap-6 relative z-10">
             <div className="relative w-28 h-28 sm:w-36 sm:h-36 rounded-2xl overflow-hidden shadow-2xl bg-black border border-white/10 flex-shrink-0 group">
               {currentActiveItem.imageUrl ? (
-                <img
-                  src={currentActiveItem.imageUrl}
+                <img referrerPolicy="no-referrer" loading="lazy"                   src={currentActiveItem.imageUrl}
                   alt={currentActiveItem.title}
                   className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                 />
@@ -459,7 +458,7 @@ export function CustomPlaylistDetail() {
         <div className="flex flex-col sm:flex-row items-center sm:items-end gap-6 flex-1 min-w-0">
           <div className="w-28 h-28 sm:w-32 sm:h-32 rounded-2xl overflow-hidden shadow-xl bg-white/5 flex-shrink-0 flex items-center justify-center border border-white/10">
             {playlist.coverUrl ? (
-              <img src={playlist.coverUrl} alt={playlist.name} className="w-full h-full object-cover" />
+              <img referrerPolicy="no-referrer" loading="lazy" src={playlist.coverUrl} alt={playlist.name} className="w-full h-full object-cover" />
             ) : (
               <div className="text-spotify-green">
                 <Music2 size={40} />
@@ -772,8 +771,7 @@ export function CustomPlaylistDetail() {
                     className="flex items-center gap-3 min-w-0 pr-4 cursor-pointer"
                   >
                     {item.imageUrl || item.videoId ? (
-                      <img
-                        src={
+                      <img referrerPolicy="no-referrer" loading="lazy"                         src={
                           item.imageUrl ||
                           (item.videoId ? `https://i.ytimg.com/vi/${item.videoId}/hqdefault.jpg` : '')
                         }
@@ -983,8 +981,7 @@ export function CustomPlaylistDetail() {
                     className="group flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-white/[0.06] transition-all"
                   >
                     {/* Thumbnail */}
-                    <img
-                      src={track.thumbnailUrl || `https://i.ytimg.com/vi/${track.videoId}/mqdefault.jpg`}
+                    <img referrerPolicy="no-referrer" loading="lazy"                       src={track.thumbnailUrl || `https://i.ytimg.com/vi/${track.videoId}/mqdefault.jpg`}
                       alt={track.title}
                       className="w-10 h-10 rounded-lg object-cover flex-shrink-0 bg-white/5"
                       onError={(e) => {

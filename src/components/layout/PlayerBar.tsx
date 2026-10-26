@@ -5,6 +5,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { SafeImage } from '@/components/common/SafeImage'
 import {
   Play,
   Pause,
@@ -402,32 +403,35 @@ export function PlayerBar({ onExpandPlayer }: PlayerBarProps) {
       {/* Main Persistent Universal Bar */}
       <div
         className={cn(
-          'fixed bottom-0 left-0 right-0 z-50 bg-black/95 backdrop-blur-md border-t px-4 py-3 select-none transition-all duration-500',
+          'fixed bottom-12 md:bottom-0 left-0 right-0 z-50 bg-black/95 backdrop-blur-md border-t px-3 md:px-4 py-2.5 md:py-3 select-none transition-all duration-500',
           isCrossfading
             ? 'border-purple-500/60 shadow-[0_-8px_30px_rgba(168,85,247,0.25)]'
             : 'border-white/10'
         )}
       >
+        {/* Mobile top mini progress line */}
+        <div className="md:hidden absolute top-0 left-0 right-0 h-0.5 bg-white/10">
+          <div
+            className="h-full bg-spotify-green transition-all duration-200"
+            style={{ width: `${progress || 0}%` }}
+          />
+        </div>
         <div className="max-w-screen-xl mx-auto flex items-center gap-4">
 
           {/* Left: Track Info & Platform Badge */}
-          <div className="flex items-center gap-3 w-72 md:w-80 flex-shrink-0 min-w-0">
+          <div className="flex items-center gap-2.5 md:gap-3 flex-1 md:w-80 md:flex-initial min-w-0">
             <div className="relative flex-shrink-0">
-              {currentImage ? (
-                <img
-                  src={currentImage}
-                  alt={currentTitle || ''}
-                  className={cn(
-                    'w-12 h-12 rounded-xl object-cover shadow-md',
-                    isPlaying && 'animate-spin-slow'
-                  )}
-                  style={isPlaying ? { borderRadius: '50%' } : {}}
-                />
-              ) : (
-                <div className="w-12 h-12 rounded-xl bg-white/10 flex items-center justify-center">
-                  <Music2 size={20} className="text-white/30" />
-                </div>
-              )}
+              <SafeImage
+                src={currentImage}
+                alt={currentTitle || ''}
+                videoId={youtubeVideo?.id}
+                className={cn(
+                  'w-11 h-11 md:w-12 md:h-12 rounded-xl object-cover shadow-md',
+                  isPlaying && 'animate-spin-slow'
+                )}
+                style={isPlaying ? { borderRadius: '50%' } : {}}
+                containerClassName="w-11 h-11 md:w-12 md:h-12 rounded-xl"
+              />
 
               {/* Source platform badge */}
               <div
@@ -540,12 +544,12 @@ export function PlayerBar({ onExpandPlayer }: PlayerBarProps) {
           </div>
 
           {/* Center: Universal Playback Controls */}
-          <div className="flex-1 flex flex-col items-center gap-2">
-            <div className="flex items-center gap-4">
+          <div className="flex-shrink-0 md:flex-1 flex flex-col items-center gap-1.5">
+            <div className="flex items-center gap-2 md:gap-4">
               <button
                 onClick={toggleShuffle}
                 className={cn(
-                  'transition-colors p-1',
+                  'hidden md:block transition-colors p-1',
                   isShuffled ? 'text-spotify-green' : 'text-white/40 hover:text-white'
                 )}
                 title="Aleatório"
@@ -558,21 +562,21 @@ export function PlayerBar({ onExpandPlayer }: PlayerBarProps) {
                 className="text-white/70 hover:text-white transition-colors p-1"
                 title="Faixa Anterior"
               >
-                <SkipBack size={22} className="fill-current" />
+                <SkipBack size={20} className="fill-current md:w-[22px] md:h-[22px]" />
               </button>
 
               <button
                 onClick={handlePlayPause}
                 disabled={isResolving}
-                className="w-10 h-10 rounded-full bg-white hover:bg-neutral-200 active:scale-95 flex items-center justify-center transition-all shadow-lg"
+                className="w-9 h-9 md:w-10 md:h-10 rounded-full bg-white hover:bg-neutral-200 active:scale-95 flex items-center justify-center transition-all shadow-lg"
                 title={isPlaying ? 'Pausar' : 'Tocar'}
               >
                 {isResolving ? (
-                  <Loader2 size={18} className="text-black animate-spin" />
+                  <Loader2 size={16} className="text-black animate-spin" />
                 ) : isPlaying ? (
-                  <Pause size={18} className="text-black fill-black" />
+                  <Pause size={16} className="text-black fill-black" />
                 ) : (
-                  <Play size={18} className="text-black fill-black ml-0.5" />
+                  <Play size={16} className="text-black fill-black ml-0.5" />
                 )}
               </button>
 
@@ -581,13 +585,13 @@ export function PlayerBar({ onExpandPlayer }: PlayerBarProps) {
                 className="text-white/70 hover:text-white transition-colors p-1"
                 title="Próxima Faixa (com Transição Mágica se ativa)"
               >
-                <SkipForward size={22} className="fill-current" />
+                <SkipForward size={20} className="fill-current md:w-[22px] md:h-[22px]" />
               </button>
 
               <button
                 onClick={cycleRepeat}
                 className={cn(
-                  'transition-colors p-1',
+                  'hidden md:block transition-colors p-1',
                   repeatMode !== 'none' ? 'text-spotify-green' : 'text-white/40 hover:text-white'
                 )}
                 title={repeatMode === 'one' ? 'Repetir uma' : repeatMode === 'all' ? 'Repetir tudo' : 'Não repetir'}
@@ -611,10 +615,19 @@ export function PlayerBar({ onExpandPlayer }: PlayerBarProps) {
               >
                 <Sparkles size={16} className={cn(perfectTransition && 'animate-pulse text-purple-400')} />
               </button>
+
+              {/* Botão Fila visível no mobile */}
+              <button
+                onClick={() => setShowQueueDrawer(true)}
+                className="md:hidden p-1.5 text-white/60 hover:text-white"
+                title="Fila de Reprodução"
+              >
+                <ListMusic size={18} />
+              </button>
             </div>
 
             {/* Progress bar — Sempre visível incondicionalmente com tempo decorrido e total */}
-            <div className="w-full max-w-md flex items-center gap-2">
+            <div className="w-full max-w-md hidden md:flex items-center gap-2">
               <span className="text-white/40 text-xs w-10 text-right font-mono">
                 {formatSeconds(currentTime)}
               </span>
@@ -636,7 +649,7 @@ export function PlayerBar({ onExpandPlayer }: PlayerBarProps) {
           </div>
 
           {/* Right: Volume & Queue & Cast & Equalizer */}
-          <div className="flex items-center gap-2 w-64 flex-shrink-0 justify-end">
+          <div className="hidden md:flex items-center gap-2 w-64 flex-shrink-0 justify-end">
             {/* Botão Equalizador */}
             <button
               onClick={() => setShowEqualizerModal(true)}

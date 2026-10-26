@@ -132,8 +132,7 @@ export function YouTubeLibrary() {
                     onClick={() => handlePlayResult(r)}
                     className="relative aspect-video rounded-xl overflow-hidden bg-black cursor-pointer shadow-md"
                   >
-                    <img
-                      src={r.thumbnailUrl}
+                    <img referrerPolicy="no-referrer" loading="lazy"                       src={r.thumbnailUrl}
                       alt={r.title}
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                     />
@@ -218,8 +217,7 @@ export function YouTubeLibrary() {
                   onClick={() => handlePlayVideo(video)}
                   className="relative aspect-video rounded-xl overflow-hidden bg-black cursor-pointer shadow-md"
                 >
-                  <img
-                    src={video.thumbnailUrl}
+                  <img referrerPolicy="no-referrer" loading="lazy"                     src={video.thumbnailUrl}
                     alt={video.title}
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                   />

@@ -211,7 +211,7 @@ export function MergePlaylistsModal({
                       {/* Capa */}
                       <div className="w-9 h-9 rounded-lg overflow-hidden bg-black flex-shrink-0 flex items-center justify-center border border-white/10">
                         {pl.coverUrl ? (
-                          <img src={pl.coverUrl} alt={pl.name} className="w-full h-full object-cover" />
+                          <img referrerPolicy="no-referrer" loading="lazy" src={pl.coverUrl} alt={pl.name} className="w-full h-full object-cover" />
                         ) : (
                           <Music2 size={16} className="text-white/30" />
                         )}

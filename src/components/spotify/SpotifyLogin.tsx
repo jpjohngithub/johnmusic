@@ -34,8 +34,7 @@ export function SpotifyLogin({
     return (
       <div className={cn('flex items-center gap-3 bg-white/5 border border-white/10 px-3 py-1.5 rounded-full', className)}>
         {user.images?.[0] ? (
-          <img
-            src={user.images[0].url}
+          <img referrerPolicy="no-referrer" loading="lazy"             src={user.images[0].url}
             alt={user.display_name}
             className="w-7 h-7 rounded-full object-cover"
           />

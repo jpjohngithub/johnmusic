@@ -43,7 +43,7 @@ export function MainContent({ children }: MainContentProps) {
       </header>
 
       {/* Main scrollable body */}
-      <main className="flex-1 overflow-y-auto p-6 pb-28">
+      <main className="flex-1 overflow-y-auto p-6 pb-44 md:pb-28 px-3 md:px-6 py-4">
         {children}
       </main>
     </div>

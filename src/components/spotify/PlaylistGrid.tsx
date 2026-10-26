@@ -50,8 +50,7 @@ export function PlaylistGrid({ items, title, onPlayDirect }: PlaylistGridProps) 
             >
               <div className="relative aspect-square rounded-lg overflow-hidden bg-white/5 mb-3 shadow-md">
                 {imageUrl ? (
-                  <img
-                    src={imageUrl}
+                  <img referrerPolicy="no-referrer" loading="lazy"                     src={imageUrl}
                     alt={name}
                     className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
                   />

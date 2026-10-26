@@ -121,7 +121,7 @@ export function AddToPlaylistModal({ isOpen, onClose, item }: AddToPlaylistModal
                   <div className="flex items-center gap-3 min-w-0">
                     <div className="w-10 h-10 rounded-xl overflow-hidden bg-black/40 border border-white/5 flex items-center justify-center flex-shrink-0">
                       {pl.coverUrl ? (
-                        <img src={pl.coverUrl} alt={pl.name} className="w-full h-full object-cover" />
+                        <img referrerPolicy="no-referrer" loading="lazy" src={pl.coverUrl} alt={pl.name} className="w-full h-full object-cover" />
                       ) : (
                         <Music2 size={18} className="text-spotify-green" />
                       )}

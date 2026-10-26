@@ -477,7 +477,7 @@ export function Home() {
                 {/* Capa com Gradiente Vibrante */}
                 <div className={cn('relative aspect-video rounded-xl overflow-hidden bg-gradient-to-br flex items-center justify-center shadow-md', mix.coverGradient)}>
                   {mix.coverUrl ? (
-                    <img src={mix.coverUrl} alt={mix.title} className="w-full h-full object-cover opacity-60 group-hover:scale-105 transition-transform duration-300 mix-blend-overlay" />
+                    <img referrerPolicy="no-referrer" loading="lazy" src={mix.coverUrl} alt={mix.title} className="w-full h-full object-cover opacity-60 group-hover:scale-105 transition-transform duration-300 mix-blend-overlay" />
                   ) : null}
                   <div className="absolute inset-0 bg-black/20" />
                   
@@ -551,7 +551,7 @@ export function Home() {
                 >
                   <div className="w-12 h-12 rounded-xl overflow-hidden bg-white/10 flex-shrink-0 relative">
                     {track.artworkUrl ? (
-                      <img src={track.artworkUrl} alt={track.title} className="w-full h-full object-cover" />
+                      <img referrerPolicy="no-referrer" loading="lazy" src={track.artworkUrl} alt={track.title} className="w-full h-full object-cover" />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center text-white/30"><Music2 size={20} /></div>
                     )}
@@ -618,7 +618,7 @@ export function Home() {
               >
                 <div className="relative aspect-square rounded-xl overflow-hidden bg-black shadow-md flex items-center justify-center">
                   {item.imageUrl ? (
-                    <img src={item.imageUrl} alt={item.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                    <img referrerPolicy="no-referrer" loading="lazy" src={item.imageUrl} alt={item.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
                   ) : (
                     <Music2 size={32} className="text-white/30" />
                   )}
@@ -669,7 +669,7 @@ export function Home() {
               >
                 <div className="w-16 h-16 rounded-xl overflow-hidden bg-black flex-shrink-0 relative shadow-md">
                   {pl.coverUrl ? (
-                    <img src={pl.coverUrl} alt={pl.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                    <img referrerPolicy="no-referrer" loading="lazy" src={pl.coverUrl} alt={pl.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center text-white/30"><Layers size={24} /></div>
                   )}
@@ -729,7 +729,7 @@ export function Home() {
               >
                 <div className="relative aspect-square rounded-xl overflow-hidden bg-black shadow-md flex items-center justify-center">
                   {pl.coverUrl ? (
-                    <img src={pl.coverUrl} alt={pl.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                    <img referrerPolicy="no-referrer" loading="lazy" src={pl.coverUrl} alt={pl.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
                   ) : (
                     <div className="text-spotify-green"><Music2 size={36} /></div>
                   )}
@@ -869,8 +869,7 @@ export function Home() {
                       className="w-12 h-12 rounded-xl overflow-hidden bg-black flex-shrink-0 relative cursor-pointer shadow-md"
                       title="Ouvir agora"
                     >
-                      <img
-                        src={track.thumbnailUrl || `https://i.ytimg.com/vi/${track.videoId}/mqdefault.jpg`}
+                      <img referrerPolicy="no-referrer" loading="lazy"                         src={track.thumbnailUrl || `https://i.ytimg.com/vi/${track.videoId}/mqdefault.jpg`}
                         alt={track.title}
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform"
                         onError={(e) => {
@@ -970,7 +969,7 @@ export function Home() {
                     playUniversal([queueItem], 0)
                   }}
                 >
-                  <img src={video.thumbnailUrl} alt={video.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                  <img referrerPolicy="no-referrer" loading="lazy" src={video.thumbnailUrl} alt={video.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
                   <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                     <div className="w-10 h-10 rounded-full bg-youtube-red flex items-center justify-center shadow-xl">
                       <Play size={16} className="text-white fill-white ml-0.5" />

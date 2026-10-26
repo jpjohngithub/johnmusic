@@ -43,7 +43,7 @@ export function Sidebar({ collapsed = false }: SidebarProps) {
     <>
       <aside
         className={cn(
-          'flex flex-col h-full bg-black border-r border-white/5 transition-all duration-300 select-none z-30',
+          'hidden md:flex flex-col h-full bg-black border-r border-white/5 transition-all duration-300 select-none z-30',
           collapsed ? 'w-16' : 'w-64'
         )}
       >
@@ -142,8 +142,7 @@ export function Sidebar({ collapsed = false }: SidebarProps) {
                     >
                       <div className="w-8 h-8 rounded-lg overflow-hidden bg-white/10 flex-shrink-0 flex items-center justify-center">
                         {playlist.coverUrl ? (
-                          <img
-                            src={playlist.coverUrl}
+                          <img referrerPolicy="no-referrer" loading="lazy"                             src={playlist.coverUrl}
                             alt=""
                             className="w-full h-full object-cover"
                           />

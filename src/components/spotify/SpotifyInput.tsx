@@ -113,8 +113,7 @@ export function SpotifyInput({ onItemAdded, autoPlay = true }: SpotifyInputProps
         <div className="flex items-center justify-between gap-3 bg-white/[0.04] border border-white/10 rounded-xl p-3">
           <div className="flex items-center gap-3 min-w-0">
             {lastAdded.thumbnailUrl ? (
-              <img
-                src={lastAdded.thumbnailUrl}
+              <img referrerPolicy="no-referrer" loading="lazy"                 src={lastAdded.thumbnailUrl}
                 alt={lastAdded.title}
                 className="w-12 h-12 object-cover rounded-lg flex-shrink-0 shadow-sm"
               />

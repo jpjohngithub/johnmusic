@@ -476,7 +476,7 @@ export function Search({ isAuthenticated = false }: SearchProps) {
                       >
                         <div className="relative aspect-square rounded-xl overflow-hidden bg-black shadow-md flex items-center justify-center">
                           {pl.coverUrl ? (
-                            <img src={pl.coverUrl} alt={pl.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                            <img referrerPolicy="no-referrer" loading="lazy" src={pl.coverUrl} alt={pl.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
                           ) : (
                             <div className="text-spotify-green"><Music2 size={36} /></div>
                           )}
@@ -560,7 +560,7 @@ export function Search({ isAuthenticated = false }: SearchProps) {
                               )}
                             >
                               <div className="relative aspect-video rounded-xl overflow-hidden bg-black shadow-md">
-                                <img src={video.artworkUrl} alt={video.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                                <img referrerPolicy="no-referrer" loading="lazy" src={video.artworkUrl} alt={video.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
                                 <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                                   <div className="w-10 h-10 rounded-full bg-youtube-red flex items-center justify-center shadow-lg">
                                     <Play size={18} className="text-white fill-white ml-0.5" />
@@ -641,7 +641,7 @@ export function Search({ isAuthenticated = false }: SearchProps) {
                             >
                               <div className="relative w-full aspect-square rounded-xl overflow-hidden bg-black/60 flex items-center justify-center border border-white/10 shadow-md">
                                 {video.artworkUrl ? (
-                                  <img src={video.artworkUrl} alt={video.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                                  <img referrerPolicy="no-referrer" loading="lazy" src={video.artworkUrl} alt={video.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
                                 ) : (
                                   <div className="text-tiktok-pink"><TikTokIcon /></div>
                                 )}
@@ -742,7 +742,7 @@ export function Search({ isAuthenticated = false }: SearchProps) {
                           )}
                         >
                           <div className="relative aspect-video rounded-xl overflow-hidden bg-black shadow-md">
-                            <img src={video.artworkUrl} alt={video.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                            <img referrerPolicy="no-referrer" loading="lazy" src={video.artworkUrl} alt={video.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
                             <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                               <div className="w-10 h-10 rounded-full bg-youtube-red flex items-center justify-center shadow-lg">
                                 <Play size={18} className="text-white fill-white ml-0.5" />
@@ -810,7 +810,7 @@ export function Search({ isAuthenticated = false }: SearchProps) {
                         >
                           <div className="relative w-full aspect-square rounded-xl overflow-hidden bg-black/60 flex items-center justify-center border border-white/10 shadow-md">
                             {video.artworkUrl ? (
-                              <img src={video.artworkUrl} alt={video.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                              <img referrerPolicy="no-referrer" loading="lazy" src={video.artworkUrl} alt={video.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
                             ) : (
                               <div className="text-tiktok-pink"><TikTokIcon /></div>
                             )}
@@ -888,7 +888,7 @@ export function Search({ isAuthenticated = false }: SearchProps) {
                       >
                         <div className="relative aspect-square rounded-xl overflow-hidden bg-black shadow-md flex items-center justify-center">
                           {pl.coverUrl ? (
-                            <img src={pl.coverUrl} alt={pl.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                            <img referrerPolicy="no-referrer" loading="lazy" src={pl.coverUrl} alt={pl.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
                           ) : (
                             <div className="text-purple-400"><Music2 size={40} /></div>
                           )}
@@ -935,7 +935,7 @@ export function Search({ isAuthenticated = false }: SearchProps) {
                         >
                           <div className="relative aspect-square rounded-xl overflow-hidden bg-black shadow-md flex items-center justify-center">
                             {pl.artworkUrl ? (
-                              <img src={pl.artworkUrl} alt={pl.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                              <img referrerPolicy="no-referrer" loading="lazy" src={pl.artworkUrl} alt={pl.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
                             ) : (
                               <div className="text-spotify-green"><Music2 size={40} /></div>
                             )}
@@ -993,7 +993,7 @@ export function Search({ isAuthenticated = false }: SearchProps) {
                         >
                           <div className="relative aspect-video rounded-xl overflow-hidden bg-black shadow-md flex items-center justify-center">
                             {pl.artworkUrl ? (
-                              <img src={pl.artworkUrl} alt={pl.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                              <img referrerPolicy="no-referrer" loading="lazy" src={pl.artworkUrl} alt={pl.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
                             ) : (
                               <div className="text-youtube-red"><Youtube size={40} /></div>
                             )}
@@ -1121,8 +1121,7 @@ function TrackListView({
 
               {/* Track Info */}
               <div className="flex items-center gap-3 min-w-0 pr-4">
-                <img
-                  src={track.artworkUrl}
+                <img referrerPolicy="no-referrer" loading="lazy"                   src={track.artworkUrl}
                   alt={track.title}
                   className="w-10 h-10 rounded-xl object-cover flex-shrink-0 shadow-md"
                 />
