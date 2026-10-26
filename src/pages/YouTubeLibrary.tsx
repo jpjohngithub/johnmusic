@@ -1,3 +1,4 @@
+import { SafeImage } from '@/components/common/SafeImage'
 import { useState } from 'react'
 import { Youtube, Trash2, Play, Plus, Search, ListPlus } from 'lucide-react'
 import { YouTubeInput } from '@/components/youtube/YouTubeInput'
@@ -132,7 +133,7 @@ export function YouTubeLibrary() {
                     onClick={() => handlePlayResult(r)}
                     className="relative aspect-video rounded-xl overflow-hidden bg-black cursor-pointer shadow-md"
                   >
-                    <img referrerPolicy="no-referrer" loading="lazy"                       src={r.thumbnailUrl}
+                    <SafeImage referrerPolicy="no-referrer" loading="lazy"                       src={r.thumbnailUrl}
                       alt={r.title}
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                     />
@@ -217,7 +218,7 @@ export function YouTubeLibrary() {
                   onClick={() => handlePlayVideo(video)}
                   className="relative aspect-video rounded-xl overflow-hidden bg-black cursor-pointer shadow-md"
                 >
-                  <img referrerPolicy="no-referrer" loading="lazy"                     src={video.thumbnailUrl}
+                  <SafeImage referrerPolicy="no-referrer" loading="lazy"                     src={video.thumbnailUrl}
                     alt={video.title}
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                   />

@@ -1,3 +1,4 @@
+import { SafeImage } from '@/components/common/SafeImage'
 // ============================================================
 // CUSTOM PLAYLIST DETAIL — Gerenciamento Completo de Playlist
 // Edição de Nome/Capa/Descrição, Drag-and-Drop (Arrastar para Reordenar),
@@ -367,7 +368,7 @@ export function CustomPlaylistDetail() {
           <div className="flex flex-col sm:flex-row items-center gap-6 relative z-10">
             <div className="relative w-28 h-28 sm:w-36 sm:h-36 rounded-2xl overflow-hidden shadow-2xl bg-black border border-white/10 flex-shrink-0 group">
               {currentActiveItem.imageUrl ? (
-                <img referrerPolicy="no-referrer" loading="lazy"                   src={currentActiveItem.imageUrl}
+                <SafeImage referrerPolicy="no-referrer" loading="lazy"                   src={currentActiveItem.imageUrl}
                   alt={currentActiveItem.title}
                   className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                 />
@@ -458,7 +459,7 @@ export function CustomPlaylistDetail() {
         <div className="flex flex-col sm:flex-row items-center sm:items-end gap-6 flex-1 min-w-0">
           <div className="w-28 h-28 sm:w-32 sm:h-32 rounded-2xl overflow-hidden shadow-xl bg-white/5 flex-shrink-0 flex items-center justify-center border border-white/10">
             {playlist.coverUrl ? (
-              <img referrerPolicy="no-referrer" loading="lazy" src={playlist.coverUrl} alt={playlist.name} className="w-full h-full object-cover" />
+              <SafeImage referrerPolicy="no-referrer" loading="lazy" src={playlist.coverUrl} alt={playlist.name} className="w-full h-full object-cover" />
             ) : (
               <div className="text-spotify-green">
                 <Music2 size={40} />

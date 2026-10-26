@@ -1,3 +1,4 @@
+import { SafeImage } from '@/components/common/SafeImage'
 import { useParams, Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { Disc3, ArrowLeft } from 'lucide-react'
@@ -66,7 +67,7 @@ export function SpotifyAlbumDetail({
       <div className="flex flex-col sm:flex-row items-center sm:items-end gap-6 bg-gradient-to-b from-white/10 to-transparent p-6 rounded-3xl border border-white/5 shadow-2xl">
         <div className="w-48 h-48 sm:w-56 sm:h-56 rounded-2xl overflow-hidden shadow-2xl bg-white/5 flex-shrink-0">
           {coverUrl ? (
-            <img referrerPolicy="no-referrer" loading="lazy" src={coverUrl} alt={album.name} className="w-full h-full object-cover" />
+            <SafeImage referrerPolicy="no-referrer" loading="lazy" src={coverUrl} alt={album.name} className="w-full h-full object-cover" />
           ) : (
             <div className="w-full h-full flex items-center justify-center bg-[#282828]">
               <Disc3 size={64} className="text-white/20" />

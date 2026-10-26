@@ -1,3 +1,4 @@
+import { SafeImage } from '@/components/common/SafeImage'
 import { useState } from 'react'
 import { Youtube, Plus, Loader2, AlertCircle, Sparkles } from 'lucide-react'
 import { createYouTubeVideoFromUrl, isValidYouTubeUrl } from '@/api/youtubeService'
@@ -87,7 +88,7 @@ export function YouTubeInput({ onVideoAdded, autoPlay = true }: YouTubeInputProp
       {lastAdded && (
         <div className="flex items-center justify-between gap-3 bg-white/[0.04] border border-white/10 rounded-xl p-3">
           <div className="flex items-center gap-3 min-w-0">
-            <img referrerPolicy="no-referrer" loading="lazy"               src={lastAdded.thumbnailUrl}
+            <SafeImage referrerPolicy="no-referrer" loading="lazy"               src={lastAdded.thumbnailUrl}
               alt={lastAdded.title}
               className="w-16 h-10 object-cover rounded-lg flex-shrink-0 shadow-sm"
             />

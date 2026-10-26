@@ -1,3 +1,4 @@
+import { SafeImage } from '@/components/common/SafeImage'
 import { useState } from 'react'
 import { Plus, Loader2, AlertCircle, Sparkles } from 'lucide-react'
 import { createTikTokVideoFromUrl, isValidTikTokUrl } from '@/api/tiktokService'
@@ -94,7 +95,7 @@ export function TikTokInput({ onVideoAdded, autoPlay = true }: TikTokInputProps)
         <div className="flex items-center justify-between gap-3 bg-white/[0.04] border border-white/10 rounded-xl p-3">
           <div className="flex items-center gap-3 min-w-0">
             {lastAdded.thumbnailUrl ? (
-              <img referrerPolicy="no-referrer" loading="lazy"                 src={lastAdded.thumbnailUrl}
+              <SafeImage referrerPolicy="no-referrer" loading="lazy"                 src={lastAdded.thumbnailUrl}
                 alt={lastAdded.title}
                 className="w-12 h-16 object-cover rounded-lg flex-shrink-0 shadow-sm"
               />

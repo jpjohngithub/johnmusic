@@ -1,3 +1,4 @@
+import { SafeImage } from '@/components/common/SafeImage'
 // ============================================================
 // SIDEBAR — Navegação Principal + Playlists Multiplataforma
 // 100% Sem Necessidade de Login
@@ -142,7 +143,7 @@ export function Sidebar({ collapsed = false }: SidebarProps) {
                     >
                       <div className="w-8 h-8 rounded-lg overflow-hidden bg-white/10 flex-shrink-0 flex items-center justify-center">
                         {playlist.coverUrl ? (
-                          <img referrerPolicy="no-referrer" loading="lazy"                             src={playlist.coverUrl}
+                          <SafeImage referrerPolicy="no-referrer" loading="lazy"                             src={playlist.coverUrl}
                             alt=""
                             className="w-full h-full object-cover"
                           />

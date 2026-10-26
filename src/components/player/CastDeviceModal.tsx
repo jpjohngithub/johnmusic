@@ -1,3 +1,4 @@
+import { SafeImage } from '@/components/common/SafeImage'
 // ============================================================
 // CAST DEVICE MODAL — TRANSMITIR PARA OUTRO DISPOSITIVO
 // Suporte a Google Cast, Smart TV, Spotify Connect, AirPlay, Bluetooth e QR Code Mobile
@@ -359,7 +360,7 @@ export function CastDeviceModal({ isOpen, onClose }: CastDeviceModalProps) {
             <div className="space-y-4 text-center">
               <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/5 flex flex-col items-center">
                 <div className="p-3 bg-black rounded-2xl border border-white/10 shadow-2xl mb-3">
-                  <img referrerPolicy="no-referrer" loading="lazy"                     src={qrCodeUrl}
+                  <SafeImage referrerPolicy="no-referrer" loading="lazy"                     src={qrCodeUrl}
                     alt="QR Code de Transmissão"
                     className="w-44 h-44 rounded-xl"
                   />
@@ -450,7 +451,7 @@ export function CastDeviceModal({ isOpen, onClose }: CastDeviceModalProps) {
           <div className="p-3 rounded-2xl bg-white/[0.02] border border-white/5 flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl bg-white/10 overflow-hidden flex-shrink-0 flex items-center justify-center">
               {currentQueueItem?.imageUrl || youtubeVideo?.thumbnailUrl || audioTrack?.artworkUrl ? (
-                <img referrerPolicy="no-referrer" loading="lazy"                   src={
+                <SafeImage referrerPolicy="no-referrer" loading="lazy"                   src={
                     currentQueueItem?.imageUrl ||
                     youtubeVideo?.thumbnailUrl ||
                     audioTrack?.artworkUrl

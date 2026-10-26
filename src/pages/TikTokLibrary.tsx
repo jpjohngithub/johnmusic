@@ -1,3 +1,4 @@
+import { SafeImage } from '@/components/common/SafeImage'
 import { useState } from 'react'
 import { Trash2, Play, Plus, Search, ListPlus, Music2, Sparkles } from 'lucide-react'
 import { TikTokInput } from '@/components/tiktok/TikTokInput'
@@ -114,7 +115,7 @@ export function TikTokLibrary() {
                   className="relative aspect-[9/16] rounded-xl overflow-hidden bg-black/60 cursor-pointer shadow-md flex items-center justify-center"
                 >
                   {video.thumbnailUrl ? (
-                    <img referrerPolicy="no-referrer" loading="lazy"                       src={video.thumbnailUrl}
+                    <SafeImage referrerPolicy="no-referrer" loading="lazy"                       src={video.thumbnailUrl}
                       alt={video.title}
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                     />
