@@ -93,25 +93,26 @@ export function YouTubePlayer() {
 
           const remaining = duration - current
 
-          // ─── Automação de Transição Mágica a 8.5s (Antes do Silêncio Final) ───
+          // ─── Automação de Transição Mágica (Dispara SEMPRE de uma música pra outra) ───
           if (
             store.perfectTransition &&
-            duration > 15 &&
+            duration > 6 &&
             !isCrossfadingRef.current &&
             !hasTriggeredTransitionRef.current
           ) {
-            // Pré-busca em nuvem da próxima faixa a 20s do fim
-            if (remaining <= 20 && remaining > 14) {
+            // Pré-busca em nuvem da próxima faixa
+            if (remaining <= 25 && remaining > 12) {
               store.preResolveNextTrack()
             }
 
-            // Inicia o crossfade antecipado
-            if (remaining <= 8.5 && remaining > 0.5) {
+            // Inicia o crossfade antecipado para eliminar 100% de silêncio e sobrepor
+            const triggerTime = Math.min(8.0, Math.max(3.0, duration * 0.15))
+            if (remaining <= triggerTime && remaining > 0.2) {
               hasTriggeredTransitionRef.current = true
               const nextTrack = store.getNextTrack()
               const nextIndex = store.getNextTrackIndex()
               if (nextTrack && nextIndex !== null) {
-                performHandshakeCrossfade(nextTrack, nextIndex, 6500)
+                performHandshakeCrossfade(nextTrack, nextIndex, Math.min(6500, Math.round(triggerTime * 900)))
               }
             }
           }
@@ -201,7 +202,7 @@ export function YouTubePlayer() {
 
     // ─── Handshake: Aguarda o Deck B realmente começar a reproduzir som ───
     let waitAttempts = 0
-    const maxWaitAttempts = 60
+    const maxWaitAttempts = 35 // máx ~2.8s
 
     handshakeTimerRef.current = window.setInterval(() => {
       waitAttempts++
@@ -210,7 +211,7 @@ export function YouTubePlayer() {
       try {
         const standbyState = standbyPlayer.getPlayerState?.()
         const standbyTime = standbyPlayer.getCurrentTime?.() || 0
-        if (standbyState === 1 && standbyTime > 0.05) {
+        if (standbyState === 1 && standbyTime > 0.02) {
           isReadyToCrossfade = true
         } else if (waitAttempts >= maxWaitAttempts) {
           isReadyToCrossfade = true
@@ -220,13 +221,15 @@ export function YouTubePlayer() {
       }
 
       if (isReadyToCrossfade) {
-        clearInterval(handshakeTimerRef.current)
-        handshakeTimerRef.current = null
+        if (handshakeTimerRef.current !== null) {
+          clearInterval(handshakeTimerRef.current)
+          handshakeTimerRef.current = null
+        }
 
         // Inicia a rampa de potência estendida
         startEqualPowerRamp(activePlayer, standbyPlayer, masterVol, incomingDeck, playableTrack, targetIndex, durationMs)
       }
-    }, 80)
+    }, 70)
   }
 
   // ─── Rampa Acústica de Alta Energia (Potência Estendida) ───────────
@@ -404,7 +407,14 @@ export function YouTubePlayer() {
               stopCrossfade()
               hasTriggeredTransitionRef.current = false
               stopProgressLoop()
-              usePlayerStore.getState().playNext()
+              const store = usePlayerStore.getState()
+              const nextTrack = store.getNextTrack()
+              const nextIndex = store.getNextTrackIndex()
+              if (store.perfectTransition && nextTrack && nextIndex !== null) {
+                performHandshakeCrossfade(nextTrack, nextIndex, 3000)
+              } else {
+                store.playNext()
+              }
             }
           },
           onError: () => {
@@ -465,7 +475,14 @@ export function YouTubePlayer() {
               stopCrossfade()
               hasTriggeredTransitionRef.current = false
               stopProgressLoop()
-              usePlayerStore.getState().playNext()
+              const store = usePlayerStore.getState()
+              const nextTrack = store.getNextTrack()
+              const nextIndex = store.getNextTrackIndex()
+              if (store.perfectTransition && nextTrack && nextIndex !== null) {
+                performHandshakeCrossfade(nextTrack, nextIndex, 3000)
+              } else {
+                store.playNext()
+              }
             }
           },
           onError: () => {
