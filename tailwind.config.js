@@ -7,38 +7,13 @@ export default {
   theme: {
     extend: {
       colors: {
-        spotify: {
-          green: '#A855F7', // Cor principal agora é Roxo Elétrico Vibrante (#A855F7)
-          purple: '#A855F7',
-          black: '#121212',
-          dark: '#181818',
-          gray: '#282828',
-          lightgray: '#B3B3B3',
-        },
-        youtube: {
-          red: '#FF0000',
-          dark: '#0F0F0F',
-        },
-        tiktok: {
-          pink: '#FF0050',
-          cyan: '#00F2EA',
-          dark: '#010101',
-        },
-      },
-      fontFamily: {
-        sans: ['Inter', 'system-ui', 'sans-serif'],
-      },
-      animation: {
-        'spin-slow': 'spin 3s linear infinite',
-        'pulse-subtle': 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite',
-        'slide-up': 'slideUp 0.3s ease-out',
-      },
-      keyframes: {
-        slideUp: {
-          '0%': { transform: 'translateY(100%)', opacity: '0' },
-          '100%': { transform: 'translateY(0)', opacity: '1' },
-        },
-      },
+        brand: {
+          spotify: '#1DB954',
+          youtube: '#FF0000',
+          tiktok: '#00F2FE',
+          accent: '#A855F7'
+        }
+      }
     },
   },
   plugins: [],

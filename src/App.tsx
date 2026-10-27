@@ -1,110 +1,155 @@
-// ============================================================
-// APP ROOT — Layout principal com persistência total de rotas no F5
-// Suporte a carregamento preguiçoso (Lazy), SPA redirects e Player unificado
-// ============================================================
+import React, { useState } from 'react';
+import { PlayerProvider } from './context/PlayerContext';
+import { PlaylistProvider } from './context/PlaylistContext';
+import { Sidebar } from './components/Navigation/Sidebar';
+import { BottomNav } from './components/Navigation/BottomNav';
+import { PlayerBar } from './components/Player/PlayerBar';
+import { HomeView } from './views/HomeView';
+import { SearchView } from './views/SearchView';
+import { LibraryView } from './views/LibraryView';
+import { PlaylistDetailView } from './views/PlaylistDetailView';
+import { MergePlaylistsModal } from './components/Modals/MergePlaylistsModal';
+import { AddToPlaylistModal } from './components/Modals/AddToPlaylistModal';
+import { CreatePlaylistModal } from './components/Modals/CreatePlaylistModal';
+import { Platform, Track } from './types';
+import { Headphones, Search } from 'lucide-react';
 
-import { lazy, Suspense, useEffect, useRef } from 'react'
-import { Routes, Route, useNavigate, useLocation } from 'react-router-dom'
-import { Sidebar } from '@/components/layout/Sidebar'
-import { MainContent } from '@/components/layout/MainContent'
-import { PlayerBar } from '@/components/layout/PlayerBar'
-import { BottomNav } from '@/components/layout/BottomNav'
-import { Home } from '@/pages/Home'
-import { YouTubePlayer } from '@/components/youtube/YouTubePlayer'
-import { useLibraryStore } from '@/store/libraryStore'
-import { isJohnMusicShareUrl, importPlaylistFromShareUrl } from '@/api/playlistShareService'
-import { Loader2 } from 'lucide-react'
+const MainApp: React.FC = () => {
+  const [currentView, setCurrentView] = useState<'home' | 'search' | 'library' | 'playlist'>('home');
+  const [activeFilter, setActiveFilter] = useState<Platform | 'all'>('all');
+  const [selectedPlaylistId, setSelectedPlaylistId] = useState<string | null>(null);
 
-// Lazy loaded routes for ultra-fast initial page load
-const SpotifyLibrary = lazy(() => import('@/pages/SpotifyLibrary').then((m) => ({ default: m.SpotifyLibrary })))
-const SpotifyPlaylistDetail = lazy(() => import('@/pages/SpotifyPlaylistDetail').then((m) => ({ default: m.SpotifyPlaylistDetail })))
-const SpotifyLiked = lazy(() => import('@/pages/SpotifyLiked').then((m) => ({ default: m.SpotifyLiked })))
-const SpotifyAlbumDetail = lazy(() => import('@/pages/SpotifyAlbumDetail').then((m) => ({ default: m.SpotifyAlbumDetail })))
-const CustomPlaylistDetail = lazy(() => import('@/pages/CustomPlaylistDetail').then((m) => ({ default: m.CustomPlaylistDetail })))
-const YouTubeLibrary = lazy(() => import('@/pages/YouTubeLibrary').then((m) => ({ default: m.YouTubeLibrary })))
-const TikTokLibrary = lazy(() => import('@/pages/TikTokLibrary').then((m) => ({ default: m.TikTokLibrary })))
-const Search = lazy(() => import('@/pages/Search').then((m) => ({ default: m.Search })))
+  // Modals
+  const [isMergeModalOpen, setIsMergeModalOpen] = useState(false);
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [trackToAddToPlaylist, setTrackToAddToPlaylist] = useState<Track | null>(null);
 
-function PageFallback() {
-  return (
-    <div className="flex items-center justify-center min-h-[50vh] text-spotify-green">
-      <Loader2 size={32} className="animate-spin" />
-    </div>
-  )
-}
+  const handleNavigate = (view: string, filter: Platform | 'all' = 'all') => {
+    setSelectedPlaylistId(null);
+    setCurrentView(view as any);
+    setActiveFilter(filter);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
-export function App() {
-  const navigate = useNavigate()
-  const location = useLocation()
-  const { addCustomPlaylist } = useLibraryStore()
-  const isInitialMount = useRef(true)
-
-  // 1. Restaura rota anterior ao recarregar a página (F5) ou trata redirecionamento de SPA
-  useEffect(() => {
-    // Trata SPA redirect query do GitHub Pages (?/... )
-    if (window.location.search.startsWith('?/')) {
-      const decoded = window.location.search
-        .slice(2)
-        .split('&')
-        .map((s) => s.replace(/~and~/g, '&'))
-        .join('?')
-      window.history.replaceState({}, document.title, window.location.pathname)
-      navigate('/' + decoded, { replace: true })
-      return
-    }
-
-    // Listener para URLs compartilhadas na inicialização (ex: ?playlist=... ou ?share=...)
-    const search = window.location.search
-    if (search && isJohnMusicShareUrl(search)) {
-      const pl = importPlaylistFromShareUrl(search)
-      if (pl && pl.items.length > 0) {
-        addCustomPlaylist(pl)
-        window.history.replaceState({}, document.title, window.location.pathname)
-        navigate(`/playlist/${pl.id}`, { replace: true })
-        return
-      }
-    }
-
-    // Se estiver na raiz e houver rota salva no sessionStorage (F5 em qualquer aba/playlist/busca)
-    if (isInitialMount.current) {
-      isInitialMount.current = false
-      const savedRoute = sessionStorage.getItem('jm_active_route')
-      if (savedRoute && location.pathname === '/' && savedRoute !== '/') {
-        navigate(savedRoute, { replace: true })
-      }
-    }
-  }, [addCustomPlaylist, navigate])
-
-  // 2. Salva a rota ativa sempre que o usuário navega
-  useEffect(() => {
-    const fullPath = location.pathname + location.search
-    sessionStorage.setItem('jm_active_route', fullPath)
-  }, [location])
+  const handleSelectPlaylist = (id: string) => {
+    setSelectedPlaylistId(id);
+    setCurrentView('playlist');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-black select-none">
-      <Sidebar />
-      <MainContent>
-        <Suspense fallback={<PageFallback />}>
-          <Routes>
-            <Route path="/" element={<Home />} />
-            <Route path="/spotify" element={<SpotifyLibrary />} />
-            <Route path="/spotify/playlist/:id" element={<SpotifyPlaylistDetail />} />
-            <Route path="/spotify/liked" element={<SpotifyLiked />} />
-            <Route path="/spotify/album/:id" element={<SpotifyAlbumDetail />} />
-            <Route path="/playlist/:id" element={<CustomPlaylistDetail />} />
-            <Route path="/youtube" element={<YouTubeLibrary />} />
-            <Route path="/tiktok" element={<TikTokLibrary />} />
-            <Route path="/search" element={<Search />} />
-          </Routes>
-        </Suspense>
-      </MainContent>
+    <div className="flex h-screen w-full bg-[#0b0c10] text-[#f1f5f9] overflow-hidden">
+      {/* Desktop Glassmorphic Sidebar */}
+      <Sidebar
+        currentView={currentView}
+        onNavigate={handleNavigate}
+        onOpenMergeModal={() => setIsMergeModalOpen(true)}
+        onOpenCreateModal={() => setIsCreateModalOpen(true)}
+        onSelectPlaylist={handleSelectPlaylist}
+        selectedPlaylistId={selectedPlaylistId}
+      />
 
-      {/* Global Persistent YouTube Engine */}
-      <YouTubePlayer />
+      {/* Main Content Area */}
+      <main className="flex-1 flex flex-col h-full overflow-hidden relative">
+        {/* Mobile Header Bar */}
+        <header className="md:hidden flex items-center justify-between px-4 py-3 bg-[#0d0e15]/90 border-b border-white/10 backdrop-blur-xl sticky top-0 z-30">
+          <div
+            onClick={() => handleNavigate('home')}
+            className="flex items-center gap-2 cursor-pointer"
+          >
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-purple-600 to-indigo-600 flex items-center justify-center shadow-md">
+              <Headphones className="w-4 h-4 text-white" />
+            </div>
+            <span className="font-extrabold text-base tracking-tight bg-gradient-to-r from-white to-purple-300 bg-clip-text text-transparent">
+              JohnMusic
+            </span>
+          </div>
 
-      <PlayerBar spotifyPlayer={null} />
-      <BottomNav />
+          <button
+            onClick={() => handleNavigate('search', 'all')}
+            className="p-2 rounded-xl bg-white/5 border border-white/10 text-slate-300 hover:text-white"
+          >
+            <Search className="w-4 h-4" />
+          </button>
+        </header>
+
+        {/* Scrollable View Container with pb-44 md:pb-28 for mobile and desktop players */}
+        <div className="flex-1 overflow-y-auto px-4 md:px-8 py-5 md:py-6 pb-44 md:pb-28 scroll-smooth">
+          {currentView === 'home' && (
+            <HomeView
+              onOpenMergeModal={() => setIsMergeModalOpen(true)}
+              onAddToPlaylist={(track) => setTrackToAddToPlaylist(track)}
+              onSelectPlaylist={handleSelectPlaylist}
+              onNavigateSearch={(filter) => handleNavigate('search', filter)}
+            />
+          )}
+
+          {currentView === 'search' && (
+            <SearchView
+              initialFilter={activeFilter}
+              onAddToPlaylist={(track) => setTrackToAddToPlaylist(track)}
+            />
+          )}
+
+          {currentView === 'library' && (
+            <LibraryView
+              onOpenCreateModal={() => setIsCreateModalOpen(true)}
+              onOpenMergeModal={() => setIsMergeModalOpen(true)}
+              onSelectPlaylist={handleSelectPlaylist}
+            />
+          )}
+
+          {currentView === 'playlist' && selectedPlaylistId && (
+            <PlaylistDetailView
+              playlistId={selectedPlaylistId}
+              onBack={() => handleNavigate('library')}
+              onOpenMergeModal={() => setIsMergeModalOpen(true)}
+              onAddToPlaylist={(track) => setTrackToAddToPlaylist(track)}
+            />
+          )}
+        </div>
+
+        {/* PlayerBar (Compact on mobile, full on desktop) */}
+        <PlayerBar />
+
+        {/* Mobile Bottom Navigation Bar (< 768px) */}
+        <BottomNav
+          currentView={currentView}
+          activeFilter={activeFilter}
+          onNavigate={handleNavigate}
+        />
+      </main>
+
+      {/* Global Modals */}
+      <MergePlaylistsModal
+        isOpen={isMergeModalOpen}
+        onClose={() => setIsMergeModalOpen(false)}
+        onPlaylistCreated={(id) => handleSelectPlaylist(id)}
+      />
+
+      <AddToPlaylistModal
+        isOpen={!!trackToAddToPlaylist}
+        track={trackToAddToPlaylist}
+        onClose={() => setTrackToAddToPlaylist(null)}
+      />
+
+      <CreatePlaylistModal
+        isOpen={isCreateModalOpen}
+        onClose={() => setIsCreateModalOpen(false)}
+        onCreated={(id) => handleSelectPlaylist(id)}
+      />
     </div>
-  )
-}
+  );
+};
+
+export const App: React.FC = () => {
+  return (
+    <PlaylistProvider>
+      <PlayerProvider>
+        <MainApp />
+      </PlayerProvider>
+    </PlaylistProvider>
+  );
+};
+
+export default App;

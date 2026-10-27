@@ -1,21 +1,7 @@
-# Dependencies
-node_modules/
-
-# Build output
-dist/
-
-# Environment
+node_modules
+dist
+dist-ssr
+*.local
+.netlify
 .env
-.env.local
-.env.*.local
-
-# Logs
-*.log
-
-# OS
 .DS_Store
-Thumbs.db
-
-# Editor
-.vscode/
-.idea/

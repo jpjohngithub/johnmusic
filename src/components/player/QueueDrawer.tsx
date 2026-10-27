@@ -1,312 +1,128 @@
-import { SafeImage } from '@/components/common/SafeImage'
-// ============================================================
-// QUEUE DRAWER — FILA DE REPRODUÇÃO & A SEGUIR (UP NEXT)
-// Visualização completa da faixa atual, próxima música e fila
-// ============================================================
-
-import { useEffect, useRef } from 'react'
-import {
-  ListMusic,
-  X,
-  Play,
-  Trash2,
-  Sparkles,
-  Music2,
-  Youtube,
-  Shuffle,
-  Volume2,
-} from 'lucide-react'
-import { usePlayerStore } from '@/store/playerStore'
-import { formatMs, cn } from '@/lib/utils'
+import React from 'react';
+import { usePlayer } from '../../context/PlayerContext';
+import { SafeImage } from '../SafeImage';
+import { PlatformBadge } from '../PlatformBadge';
+import { X, Trash2, Disc3, Volume2 } from 'lucide-react';
 
 interface QueueDrawerProps {
-  isOpen: boolean
-  onClose: () => void
+  isOpen: boolean;
+  onClose: () => void;
 }
 
-export function QueueDrawer({ isOpen, onClose }: QueueDrawerProps) {
+export const QueueDrawer: React.FC<QueueDrawerProps> = ({ isOpen, onClose }) => {
   const {
     queue,
     queueIndex,
-    currentQueueItem,
-    isPlaying,
-    isShuffled,
-    perfectTransition,
-    playQueueIndex,
-    playNext,
-    getUpcomingQueue,
+    currentTrack,
+    activeDeck,
+    isCrossfading,
     removeFromQueue,
     clearQueue,
-    toggleShuffle,
-  } = usePlayerStore()
+    playTrack
+  } = usePlayer();
 
-  const drawerRef = useRef<HTMLDivElement | null>(null)
-
-  // Fecha ao pressionar Escape ou clicar fora
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && isOpen) onClose()
-    }
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [isOpen, onClose])
-
-  if (!isOpen) return null
-
-  // Calcula faixas a seguir de forma sincronizada com o Shuffle
-  const upcomingTracks = getUpcomingQueue()
-  const nextTrack = upcomingTracks[0] || null
-  const restOfQueue = upcomingTracks.slice(1)
+  if (!isOpen) return null;
 
   return (
-    <>
-      {/* Backdrop */}
-      <div
-        className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 animate-fade-in"
-        onClick={onClose}
-      />
-
-      {/* Slide-over Drawer */}
-      <div
-        ref={drawerRef}
-        className="fixed top-0 right-0 bottom-24 w-full sm:w-[420px] bg-neutral-900/95 border-l border-white/10 backdrop-blur-xl shadow-2xl z-50 flex flex-col animate-slide-left text-white"
-      >
+    <div className="fixed inset-0 z-50 flex justify-end bg-black/60 backdrop-blur-sm transition-all duration-300">
+      <div className="w-full max-w-md h-full bg-[#12131a]/95 border-l border-white/10 p-5 flex flex-col shadow-2xl overflow-hidden backdrop-blur-xl">
         {/* Header */}
-        <div className="flex items-center justify-between p-5 border-b border-white/10">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-spotify-green/20 border border-spotify-green/40 flex items-center justify-center text-spotify-green">
-              <ListMusic size={18} />
-            </div>
-            <div>
-              <h2 className="font-bold text-base text-white">Fila de Reprodução</h2>
-              <p className="text-white/40 text-xs">
-                {queue.length} {queue.length === 1 ? 'música' : 'músicas'} na lista
-              </p>
-            </div>
-          </div>
-
+        <div className="flex items-center justify-between pb-4 border-b border-white/10">
           <div className="flex items-center gap-2">
-            <button
-              onClick={toggleShuffle}
-              className={cn(
-                'p-2 rounded-lg transition-colors text-xs flex items-center gap-1 border',
-                isShuffled
-                  ? 'bg-spotify-green/20 text-spotify-green border-spotify-green/40'
-                  : 'bg-white/5 text-white/50 border-white/5 hover:text-white'
-              )}
-              title={isShuffled ? 'Aleatório Ativado' : 'Ativar Aleatório'}
-            >
-              <Shuffle size={14} />
-            </button>
-
+            <Disc3 className="w-5 h-5 text-purple-400 animate-spin" />
+            <h3 className="font-bold text-lg text-white">Fila de Reprodução</h3>
+            <span className="text-xs bg-purple-500/20 text-purple-300 px-2 py-0.5 rounded-full font-mono">
+              Deck {activeDeck} {isCrossfading && '• Crossfade Ativo'}
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            {queue.length > 0 && (
+              <button
+                onClick={clearQueue}
+                title="Limpar Fila"
+                className="p-1.5 rounded-lg text-slate-400 hover:text-red-400 hover:bg-white/5 transition-colors"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            )}
             <button
               onClick={onClose}
-              className="p-2 rounded-lg bg-white/5 hover:bg-white/10 text-white/50 hover:text-white transition-colors"
-              title="Fechar Fila"
+              className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition-colors"
             >
-              <X size={18} />
+              <X className="w-5 h-5" />
             </button>
           </div>
         </div>
 
-        {/* Content Scrollable */}
-        <div className="flex-1 overflow-y-auto p-5 space-y-6 scrollbar-thin scrollbar-thumb-white/10">
-          {/* 1. TOCANDO AGORA */}
-          <div>
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-xs font-bold uppercase tracking-wider text-spotify-green flex items-center gap-1.5">
-                <Volume2 size={13} className="animate-pulse" />
-                Tocando Agora
-              </span>
-              {perfectTransition && (
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30 flex items-center gap-1">
-                  <Sparkles size={10} className="text-purple-400" />
-                  Transição Mágica
-                </span>
-              )}
+        {/* Content list */}
+        <div className="flex-1 overflow-y-auto py-4 space-y-2.5">
+          {queue.length === 0 ? (
+            <div className="text-center py-20 text-slate-500">
+              <Disc3 className="w-12 h-12 mx-auto mb-2 opacity-30" />
+              <p className="text-sm">Sua fila de reprodução está vazia.</p>
+              <p className="text-xs mt-1">Toque em qualquer música para começar!</p>
             </div>
-
-            {currentQueueItem ? (
-              <div className="p-3.5 rounded-2xl bg-gradient-to-r from-spotify-green/15 via-white/5 to-transparent border border-spotify-green/30 flex items-center gap-3.5 shadow-lg">
-                <div className="w-14 h-14 rounded-xl overflow-hidden bg-white/10 flex-shrink-0 relative">
-                  {currentQueueItem.imageUrl ? (
-                    <SafeImage referrerPolicy="no-referrer" loading="lazy"                       src={currentQueueItem.imageUrl}
-                      alt={currentQueueItem.title}
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center text-white/40">
-                      <Music2 size={24} />
+          ) : (
+            queue.map((track, idx) => {
+              const isCurrent = idx === queueIndex;
+              return (
+                <div
+                  key={`${track.id}-${idx}`}
+                  onClick={() => playTrack(track)}
+                  className={`group flex items-center justify-between p-2.5 rounded-xl border transition-all cursor-pointer ${
+                    isCurrent
+                      ? 'bg-purple-900/30 border-purple-500/50 shadow-md'
+                      : 'bg-white/[0.02] border-white/5 hover:bg-white/[0.06]'
+                  }`}
+                >
+                  <div className="flex items-center gap-3 min-w-0 flex-1">
+                    <div className="w-10 h-10 rounded-lg overflow-hidden flex-shrink-0 bg-slate-900">
+                      <SafeImage
+                        src={track.coverUrl}
+                        videoId={track.youtubeId}
+                        alt={track.title}
+                        fallbackText={track.title}
+                        className="w-full h-full object-cover"
+                      />
                     </div>
-                  )}
-                  {isPlaying && (
-                    <div className="absolute inset-0 bg-black/40 flex items-center justify-center gap-0.5">
-                      <span className="w-1 h-3 bg-spotify-green rounded-full animate-[bounce_0.6s_infinite]" />
-                      <span className="w-1 h-5 bg-spotify-green rounded-full animate-[bounce_0.8s_infinite]" />
-                      <span className="w-1 h-2 bg-spotify-green rounded-full animate-[bounce_0.5s_infinite]" />
+                    <div className="min-w-0 flex-1">
+                      <p
+                        className={`text-sm font-medium truncate ${
+                          isCurrent ? 'text-purple-300 font-bold' : 'text-slate-200'
+                        }`}
+                      >
+                        {track.title}
+                      </p>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <PlatformBadge platform={track.platform} size="sm" />
+                        <span className="text-xs text-slate-400 truncate">{track.artist}</span>
+                      </div>
                     </div>
-                  )}
-                </div>
+                  </div>
 
-                <div className="min-w-0 flex-1">
-                  <p className="text-white font-bold text-sm truncate">{currentQueueItem.title}</p>
-                  <p className="text-white/60 text-xs truncate mt-0.5">{currentQueueItem.subtitle}</p>
-                  <div className="flex items-center gap-2 mt-1">
-                    <span className="text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded bg-white/10 text-white/50">
-                      Faixa #{queueIndex + 1}
-                    </span>
-                    {currentQueueItem.durationMs && (
-                      <span className="text-white/40 text-[11px]">
-                        {formatMs(currentQueueItem.durationMs)}
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    {isCurrent && (
+                      <span className="flex items-center gap-1 text-[11px] text-purple-400 bg-purple-500/10 px-2 py-0.5 rounded-md font-mono">
+                        <Volume2 className="w-3 h-3 animate-pulse" />
+                        Tocando
                       </span>
                     )}
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div className="p-6 rounded-2xl bg-white/5 border border-white/5 text-center text-white/40 text-xs">
-                Nenhuma música tocando no momento.
-              </div>
-            )}
-          </div>
-
-          {/* 2. A SEGUIR (PRÓXIMA FAIXA) */}
-          <div>
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-xs font-bold uppercase tracking-wider text-purple-300 flex items-center gap-1.5">
-                <Sparkles size={13} className="text-purple-400" />
-                A Seguir (Próxima)
-              </span>
-              {nextTrack && (
-                <span className="text-white/40 text-xs">
-                  Faixa #{queueIndex + 2} de {queue.length}
-                </span>
-              )}
-            </div>
-
-            {nextTrack ? (
-              <div
-                onClick={() => playNext()}
-                className="group p-3.5 rounded-2xl bg-gradient-to-r from-purple-500/15 via-white/5 to-transparent border border-purple-500/30 hover:border-purple-400/60 cursor-pointer transition-all flex items-center gap-3.5 shadow-md hover:scale-[1.01]"
-              >
-                <div className="w-12 h-12 rounded-xl overflow-hidden bg-white/10 flex-shrink-0 relative">
-                  {nextTrack.imageUrl ? (
-                    <SafeImage referrerPolicy="no-referrer" loading="lazy"                       src={nextTrack.imageUrl}
-                      alt={nextTrack.title}
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center text-white/40">
-                      <Music2 size={20} />
-                    </div>
-                  )}
-                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                    <Play size={16} className="text-white fill-white ml-0.5" />
-                  </div>
-                </div>
-
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-[9px] font-black uppercase px-1.5 py-0.5 rounded-full bg-purple-500/30 text-purple-200 border border-purple-500/40">
-                      Próxima
-                    </span>
-                    <p className="text-white font-bold text-sm truncate group-hover:text-purple-300 transition-colors">
-                      {nextTrack.title}
-                    </p>
-                  </div>
-                  <p className="text-white/60 text-xs truncate mt-0.5">{nextTrack.subtitle}</p>
-                </div>
-
-                {nextTrack.durationMs && (
-                  <span className="text-white/40 text-xs font-mono">
-                    {formatMs(nextTrack.durationMs)}
-                  </span>
-                )}
-              </div>
-            ) : (
-              <div className="p-4 rounded-2xl bg-white/5 border border-white/5 text-center text-white/40 text-xs">
-                Fim da fila. Adicione mais músicas ou ative a repetição.
-              </div>
-            )}
-          </div>
-
-          {/* 3. RESTANTE DA FILA */}
-          {restOfQueue.length > 0 && (
-            <div>
-              <div className="flex items-center justify-between mb-3">
-                <span className="text-xs font-bold uppercase tracking-wider text-white/60">
-                  Próximas Faixas ({restOfQueue.length})
-                </span>
-                <button
-                  onClick={clearQueue}
-                  className="text-white/30 hover:text-red-400 text-xs transition-colors flex items-center gap-1"
-                >
-                  <Trash2 size={12} />
-                  Limpar
-                </button>
-              </div>
-
-              <div className="space-y-1.5">
-                {restOfQueue.map((track, idx) => {
-                  const targetIdx = queue.findIndex((t) => t.id === track.id)
-                  const displayPos = idx + 2
-                  return (
-                    <div
-                      key={`${track.id}-${idx}`}
-                      className="group flex items-center gap-3 p-2.5 rounded-xl hover:bg-white/5 transition-all cursor-pointer border border-transparent hover:border-white/5"
-                      onClick={() => targetIdx >= 0 && playQueueIndex(targetIdx)}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        removeFromQueue(idx);
+                      }}
+                      className="opacity-0 group-hover:opacity-100 p-1 text-slate-400 hover:text-red-400 transition-opacity"
                     >
-                      <span className="text-white/30 font-mono text-xs w-6 text-center group-hover:hidden">
-                        {displayPos}
-                      </span>
-                      <button className="w-6 hidden group-hover:flex items-center justify-center text-spotify-green">
-                        <Play size={14} className="fill-current" />
-                      </button>
-
-                      <div className="w-10 h-10 rounded-lg overflow-hidden bg-white/10 flex-shrink-0">
-                        {track.imageUrl ? (
-                          <SafeImage referrerPolicy="no-referrer" loading="lazy"                             src={track.imageUrl}
-                            alt={track.title}
-                            className="w-full h-full object-cover"
-                          />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center text-white/40">
-                            <Music2 size={16} />
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="min-w-0 flex-1">
-                        <p className="text-white font-medium text-xs truncate group-hover:text-spotify-green transition-colors">
-                          {track.title}
-                        </p>
-                        <p className="text-white/50 text-[11px] truncate">{track.subtitle}</p>
-                      </div>
-
-                      {track.durationMs && (
-                        <span className="text-white/30 text-xs font-mono">
-                          {formatMs(track.durationMs)}
-                        </span>
-                      )}
-
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          removeFromQueue(track.id)
-                        }}
-                        className="opacity-0 group-hover:opacity-100 p-1 text-white/30 hover:text-red-400 transition-all rounded hover:bg-white/10"
-                        title="Remover da fila"
-                      >
-                        <Trash2 size={13} />
-                      </button>
-                    </div>
-                  )
-                })}
-              </div>
-            </div>
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              );
+            })
           )}
         </div>
       </div>
-    </>
-  )
-}
+    </div>
+  );
+};
