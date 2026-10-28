@@ -58,8 +58,18 @@ const DEFAULT_PLAYLISTS: Playlist[] = [
   }
 ];
 
-const STORAGE_PLAYLISTS_KEY = 'johnmusic_playlists_v3';
-const STORAGE_SAVED_KEY = 'johnmusic_saved_tracks_v3';
+const STORAGE_DELETED_KEY = 'johnmusic_deleted_ids_v4';
+const STORAGE_PLAYLISTS_KEY = 'johnmusic_playlists_v4';
+const STORAGE_SAVED_KEY = 'johnmusic_saved_tracks_v4';
+
+function getDeletedPlaylistIds(): Set<string> {
+  try {
+    const raw = localStorage.getItem(STORAGE_DELETED_KEY);
+    return new Set(raw ? JSON.parse(raw) : []);
+  } catch {
+    return new Set();
+  }
+}
 
 function saveToLocalStorage(key: string, data: any) {
   try {
@@ -73,31 +83,57 @@ const PlaylistContext = createContext<PlaylistContextType | null>(null);
 
 export const PlaylistProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [playlists, setPlaylists] = useState<Playlist[]>(() => {
-    let current: Playlist[] = DEFAULT_PLAYLISTS;
-    const saved = localStorage.getItem(STORAGE_PLAYLISTS_KEY);
+    const deletedIds = getDeletedPlaylistIds();
+    let loaded: Playlist[] | null = null;
 
-    if (saved !== null) {
+    // Check v4 store first, fallback to v3
+    const savedV4 = localStorage.getItem(STORAGE_PLAYLISTS_KEY);
+    const savedV3 = localStorage.getItem('johnmusic_playlists_v3');
+
+    if (savedV4) {
       try {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) {
-          return parsed;
-        }
-      } catch (e) {
-        console.warn('Storage read failed:', e);
-      }
-    } else {
-      // First launch on this domain: perform initial migration from legacy JohnMusic stores
+        const parsed = JSON.parse(savedV4);
+        if (Array.isArray(parsed)) loaded = parsed;
+      } catch {}
+    } else if (savedV3) {
       try {
-        const legacy = importLegacyPlaylists();
-        if (legacy.length > 0) {
-          current = [...legacy, ...DEFAULT_PLAYLISTS];
-        }
-      } catch (e) {
-        console.warn('Initial legacy migration failed:', e);
-      }
-      saveToLocalStorage(STORAGE_PLAYLISTS_KEY, current);
+        const parsed = JSON.parse(savedV3);
+        if (Array.isArray(parsed)) loaded = parsed;
+      } catch {}
     }
 
+    if (loaded !== null) {
+      // Exclude permanently deleted playlists
+      let clean = loaded.filter(p => !deletedIds.has(p.id));
+
+      // Refresh working stream URLs on tracks without overwriting user tracklist or edits
+      clean = clean.map(p => {
+        const updatedTracks = p.tracks.map(t => {
+          const fresh = FEATURED_TRACKS.find(f => f.id === t.id);
+          if (fresh && (!t.streamUrl || t.streamUrl.length < 5) && fresh.streamUrl) {
+            return { ...t, streamUrl: fresh.streamUrl, coverUrl: fresh.coverUrl || t.coverUrl };
+          }
+          return t;
+        });
+        return { ...p, tracks: updatedTracks };
+      });
+
+      saveToLocalStorage(STORAGE_PLAYLISTS_KEY, clean);
+      return clean;
+    }
+
+    // First launch: initialize defaults minus any deleted ones
+    let current: Playlist[] = DEFAULT_PLAYLISTS.filter(p => !deletedIds.has(p.id));
+    try {
+      const legacy = importLegacyPlaylists().filter(p => !deletedIds.has(p.id));
+      if (legacy.length > 0) {
+        current = [...legacy, ...current];
+      }
+    } catch (e) {
+      console.warn('Initial legacy migration failed:', e);
+    }
+
+    saveToLocalStorage(STORAGE_PLAYLISTS_KEY, current);
     return current;
   });
 
@@ -174,6 +210,38 @@ export const PlaylistProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   };
 
   const deletePlaylist = (id: string) => {
+    // 1. Permanently blacklist ID in localStorage so F5 or legacy migrations never revive it
+    try {
+      const raw = localStorage.getItem(STORAGE_DELETED_KEY);
+      const set = new Set<string>(raw ? JSON.parse(raw) : []);
+      set.add(id);
+      localStorage.setItem(STORAGE_DELETED_KEY, JSON.stringify(Array.from(set)));
+    } catch {}
+
+    // 2. Scrub from legacy localStorage keys if present
+    const keysToScrub = [
+      'johnmusic_playlists_v3',
+      'johnmusic_playlists_v2',
+      'johnmusic-library-v4',
+      'johnmusic-library-v3',
+      'customPlaylists',
+      'youtubePlaylists',
+      'tiktokPlaylists'
+    ];
+    keysToScrub.forEach(key => {
+      try {
+        const raw = localStorage.getItem(key);
+        if (!raw) return;
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          localStorage.setItem(key, JSON.stringify(parsed.filter((item: any) => item.id !== id)));
+        } else if (parsed && typeof parsed === 'object' && parsed.state?.playlists) {
+          parsed.state.playlists = parsed.state.playlists.filter((p: any) => p.id !== id);
+          localStorage.setItem(key, JSON.stringify(parsed));
+        }
+      } catch {}
+    });
+
     setPlaylists(prev => {
       const next = prev.filter(p => p.id !== id);
       saveToLocalStorage(STORAGE_PLAYLISTS_KEY, next);
@@ -183,7 +251,7 @@ export const PlaylistProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const updatePlaylist = (id: string, updates: Partial<Playlist>) => {
     setPlaylists(prev => {
-      const next = prev.map(p => (p.id === id ? { ...p, ...updates } : p));
+      const next = prev.map(p => (p.id === id ? { ...p, ...updates, isCustom: true } : p));
       saveToLocalStorage(STORAGE_PLAYLISTS_KEY, next);
       return next;
     });

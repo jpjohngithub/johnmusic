@@ -17,7 +17,8 @@ import {
   Download,
   Sliders,
   Check,
-  Disc
+  Disc,
+  ExternalLink
 } from 'lucide-react';
 
 export const PlayerBar: React.FC = () => {
@@ -241,6 +242,27 @@ export const PlayerBar: React.FC = () => {
                 <Download className="w-4 h-4 md:w-5 md:h-5" />
               )}
             </button>
+
+            {/* Link to original music */}
+            <a
+              href={
+                currentTrack.youtubeId
+                  ? `https://www.youtube.com/watch?v=${currentTrack.youtubeId}`
+                  : currentTrack.tiktokOriginalUrl
+                  ? currentTrack.tiktokOriginalUrl
+                  : currentTrack.platform === 'tiktok'
+                  ? `https://www.tiktok.com/search?q=${encodeURIComponent(`${currentTrack.artist} ${currentTrack.title}`)}`
+                  : currentTrack.platform === 'spotify'
+                  ? `https://open.spotify.com/search/${encodeURIComponent(`${currentTrack.artist} ${currentTrack.title}`)}`
+                  : `https://www.google.com/search?q=${encodeURIComponent(`${currentTrack.artist} ${currentTrack.title}`)}`
+              }
+              target="_blank"
+              rel="noopener noreferrer"
+              title="Abrir música original"
+              className="p-2 rounded-xl text-slate-400 hover:text-purple-400 hover:bg-white/10 transition-colors"
+            >
+              <ExternalLink className="w-4 h-4 md:w-5 md:h-5" />
+            </a>
 
             {/* Queue Toggle Button */}
             <button

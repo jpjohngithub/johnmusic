@@ -29,9 +29,9 @@ export const FEATURED_TRACKS: Track[] = [
     artist: 'LXNGVX & DJ Samir',
     album: 'TikTok Brazilian Phonk',
     duration: 125,
-    coverUrl: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=500&q=80',
+    coverUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/bc/b3/85/bcb38516-3182-f15e-4ba9-4b1e122dd094/67.jpg/600x600bb.jpg',
     platform: 'tiktok',
-    youtubeId: 'WwHh4C7t7wE'
+    streamUrl: 'https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/60/52/ae/6052aec4-6da8-4998-32e3-96ef4d2b4bbc/mzaf_15511878623835122755.plus.aac.p.m4a'
   },
   {
     id: 'sp_2',
@@ -60,9 +60,9 @@ export const FEATURED_TRACKS: Track[] = [
     artist: 'Bibi Babydoll & DJ Brunin XM',
     album: 'TikTok Funk Trends',
     duration: 140,
-    coverUrl: 'https://i.scdn.co/image/ab67616d0000b27357c91ad9bb699a2f2ef48480',
+    coverUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music126/v4/0c/4e/b8/0c4eb8aa-d999-5042-005c-3d596d3c9c81/5063341826598_cover.jpg/600x600bb.jpg',
     platform: 'tiktok',
-    youtubeId: 'zB3c9wMhL2I'
+    streamUrl: 'https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/9c/e8/5f/9ce85f65-9155-4151-5d59-561c47fb5389/mzaf_10269096629337659384.plus.aac.p.m4a'
   },
   {
     id: 'sp_3',
@@ -91,9 +91,9 @@ export const FEATURED_TRACKS: Track[] = [
     artist: 'FloyyMenor, Cris Mj',
     album: 'TikTok Reggaeton Trends',
     duration: 222,
-    coverUrl: 'https://i.scdn.co/image/ab67616d0000b2736ff1235b91b93de1ad4f93ee',
+    coverUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/ff/1b/f4/ff1bf4af-9b8e-b616-2dce-8c41cd292d68/5063535181519_cover.jpg/600x600bb.jpg',
     platform: 'tiktok',
-    youtubeId: 'a_6m0q7E-S0'
+    streamUrl: 'https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/50/18/a7/5018a78a-ee4a-301b-b844-ef38d21f3aa7/mzaf_1766887114284967318.plus.aac.p.m4a'
   }
 ];
 
@@ -178,41 +178,61 @@ export async function searchYouTube(query: string): Promise<Track[]> {
   }));
 }
 
-// 3. Search TikTok
+// 3. Search TikTok with unblocked audio streams
 export async function searchTikTok(query: string): Promise<Track[]> {
   try {
     if (query.includes('tiktok.com')) {
-      const res = await fetch(`https://www.tikwm.com/api/?url=${encodeURIComponent(query)}`);
-      const json = await res.json();
-      if (json.data) {
-        const d = json.data;
-        return [{
-          id: `tt_${d.id}`,
-          title: d.music_info?.title || d.title || 'TikTok Audio',
-          artist: d.music_info?.author || d.author?.nickname || 'TikTok Creator',
-          album: 'TikTok Viral Sound',
-          duration: d.music_info?.duration || d.duration || 60,
-          coverUrl: d.music_info?.cover || d.cover || 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=500&q=80',
-          platform: 'tiktok',
-          streamUrl: d.music || d.music_info?.play || d.play,
-          tiktokOriginalUrl: query
-        }];
+      // Use TikTok official oEmbed (no Cloudflare challenge)
+      const oembedRes = await fetch(`https://www.tiktok.com/oembed?url=${encodeURIComponent(query)}`);
+      if (oembedRes.ok) {
+        const odata = await oembedRes.json();
+        const cleanTitle = (odata.title || 'TikTok Viral').replace(/#\S+/g, '').trim();
+        const author = odata.author_name || 'TikTok Creator';
+
+        // Search audio stream
+        const itunesRes = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(`${author} ${cleanTitle}`)}&entity=song&limit=5`);
+        if (itunesRes.ok) {
+          const idata = await itunesRes.json();
+          if (idata.results && idata.results.length > 0) {
+            const item = idata.results[0];
+            return [{
+              id: `tt_${item.trackId}`,
+              title: item.trackName,
+              artist: item.artistName,
+              album: item.collectionName || 'TikTok Audio',
+              duration: Math.round(item.trackTimeMillis / 1000),
+              coverUrl: item.artworkUrl100 ? item.artworkUrl100.replace('100x100bb', '600x600bb') : odata.thumbnail_url,
+              platform: 'tiktok',
+              streamUrl: item.previewUrl,
+              tiktokOriginalUrl: query
+            }];
+          }
+        }
       }
     }
+  } catch (err) {
+    console.warn('TikTok oembed query fallback:', err);
+  }
 
-    const searchRes = await fetch(`https://www.tikwm.com/api/feed/search?keywords=${encodeURIComponent(query)}&count=12`);
-    if (searchRes.ok) {
-      const json = await searchRes.json();
-      if (json.data && Array.isArray(json.data.videos)) {
-        return json.data.videos.map((v: any) => ({
-          id: `tt_${v.video_id}`,
-          title: v.music_info?.title || v.title?.slice(0, 40) || 'TikTok Sound',
-          artist: v.music_info?.author || v.author?.nickname || 'TikTok Artist',
-          album: 'TikTok Trends',
-          duration: v.music_info?.duration || v.duration || 60,
-          coverUrl: v.music_info?.cover || v.cover || 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=500&q=80',
+  // General TikTok query (viral sounds, phonk, dance) with direct working AAC audio streams
+  try {
+    const searchTerm = query.toLowerCase().includes('tiktok') || query.toLowerCase().includes('phonk')
+      ? query
+      : `${query} tiktok`;
+    const res = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(searchTerm)}&entity=song&limit=15`);
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data.results) && data.results.length > 0) {
+        return data.results.map((item: any) => ({
+          id: `tt_${item.trackId}`,
+          title: item.trackName,
+          artist: item.artistName,
+          album: item.collectionName || 'TikTok Viral Sound',
+          duration: Math.round(item.trackTimeMillis / 1000),
+          coverUrl: item.artworkUrl100 ? item.artworkUrl100.replace('100x100bb', '600x600bb') : 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=500&q=80',
           platform: 'tiktok' as Platform,
-          streamUrl: v.music || v.music_info?.play || v.play
+          streamUrl: item.previewUrl,
+          tiktokOriginalUrl: item.trackViewUrl
         }));
       }
     }
@@ -221,6 +241,57 @@ export async function searchTikTok(query: string): Promise<Track[]> {
   }
 
   return FEATURED_TRACKS.filter(t => t.platform === 'tiktok');
+}
+
+// 4. Recommendations for Playlist (Spotify-like style/genre matching)
+export async function getRecommendedTracksForPlaylist(
+  tracks: Track[],
+  seedOffset = 0
+): Promise<Track[]> {
+  try {
+    const existingIds = new Set(tracks.map(t => t.id));
+    const existingTitles = new Set(tracks.map(t => t.title.toLowerCase().trim()));
+
+    // Collect artist names from playlist
+    const artists = Array.from(new Set(tracks.map(t => t.artist).filter(Boolean)));
+    const fallbackSeeds = ['The Weeknd', 'Billie Eilish', 'Travis Scott', 'Phonk', 'Dua Lipa', 'Post Malone', 'Funk', 'Ariana Grande'];
+
+    let seedTerm = fallbackSeeds[seedOffset % fallbackSeeds.length];
+    if (artists.length > 0) {
+      seedTerm = artists[(seedOffset) % artists.length];
+    }
+
+    const res = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(seedTerm)}&entity=song&limit=20`);
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data.results)) {
+        const candidates: Track[] = data.results
+          .filter((item: any) => {
+            const title = (item.trackName || '').toLowerCase().trim();
+            return !existingIds.has(`sp_${item.trackId}`) && !existingTitles.has(title) && item.previewUrl;
+          })
+          .map((item: any) => ({
+            id: `rec_${item.trackId}`,
+            title: item.trackName,
+            artist: item.artistName,
+            album: item.collectionName,
+            duration: Math.round(item.trackTimeMillis / 1000),
+            coverUrl: item.artworkUrl100 ? item.artworkUrl100.replace('100x100bb', '600x600bb') : '',
+            platform: 'spotify' as Platform,
+            streamUrl: item.previewUrl
+          }));
+
+        if (candidates.length > 0) {
+          return candidates.slice(0, 6);
+        }
+      }
+    }
+  } catch (e) {
+    console.warn('Recommendation fetch failed:', e);
+  }
+
+  // Fallback candidates
+  return FEATURED_TRACKS.filter(t => !tracks.some(pt => pt.id === t.id)).slice(0, 5);
 }
 
 // 4. Resolve exact YouTube video ID for any track

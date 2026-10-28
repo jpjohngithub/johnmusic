@@ -4,7 +4,7 @@ import { usePlayer } from '../context/PlayerContext';
 import { usePlaylists } from '../context/PlaylistContext';
 import { SafeImage } from './SafeImage';
 import { PlatformBadge } from './PlatformBadge';
-import { Play, Pause, Download, Plus, Check, Heart, Trash2, GripVertical } from 'lucide-react';
+import { Play, Pause, Download, Plus, Check, Heart, Trash2, GripVertical, ExternalLink } from 'lucide-react';
 import { downloadTrackMp3 } from '../services/download';
 
 interface TrackRowProps {
@@ -58,6 +58,15 @@ export const TrackRow: React.FC<TrackRowProps> = ({
     const m = Math.floor(seconds / 60);
     const s = Math.floor(seconds % 60);
     return `${m}:${s < 10 ? '0' : ''}${s}`;
+  };
+
+  const getSourceUrl = (): string => {
+    if (track.youtubeId) return `https://www.youtube.com/watch?v=${track.youtubeId}`;
+    if (track.tiktokOriginalUrl) return track.tiktokOriginalUrl;
+    if (track.platform === 'tiktok') return `https://www.tiktok.com/search?q=${encodeURIComponent(`${track.artist} ${track.title}`)}`;
+    if (track.platform === 'spotify') return `https://open.spotify.com/search/${encodeURIComponent(`${track.artist} ${track.title}`)}`;
+    if (track.streamUrl) return track.streamUrl;
+    return `https://www.google.com/search?q=${encodeURIComponent(`${track.artist} ${track.title}`)}`;
   };
 
   return (
@@ -153,6 +162,18 @@ export const TrackRow: React.FC<TrackRowProps> = ({
             <Download className="w-4 h-4" />
           )}
         </button>
+
+        {/* Link to Original Music */}
+        <a
+          href={getSourceUrl()}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={(e) => e.stopPropagation()}
+          title="Abrir música original"
+          className="p-1.5 rounded-lg text-slate-500 hover:text-purple-400 hover:bg-white/5 transition-colors"
+        >
+          <ExternalLink className="w-4 h-4" />
+        </a>
 
         {/* Add to Playlist Button */}
         {onAddToPlaylist && (

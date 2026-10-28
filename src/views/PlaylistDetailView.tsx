@@ -1,12 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { usePlaylists } from '../context/PlaylistContext';
 import { usePlayer } from '../context/PlayerContext';
 import { SafeImage } from '../components/SafeImage';
 import { TrackRow } from '../components/TrackRow';
 import { EditPlaylistModal } from '../components/Modals/EditPlaylistModal';
 import { generatePlaylistShareUrl } from '../services/share';
+import { getRecommendedTracksForPlaylist } from '../services/api';
 import { Track } from '../types';
-import { Play, Shuffle, ArrowLeft, Layers, Trash2, Edit3, Share2, Check } from 'lucide-react';
+import { Play, Pause, Shuffle, ArrowLeft, Layers, Trash2, Edit3, Share2, Check, Sparkles, RotateCcw, Plus, ExternalLink } from 'lucide-react';
 
 interface PlaylistDetailViewProps {
   playlistId: string;
@@ -21,14 +22,49 @@ export const PlaylistDetailView: React.FC<PlaylistDetailViewProps> = ({
   onOpenMergeModal,
   onAddToPlaylist
 }) => {
-  const { getPlaylistById, removeTrackFromPlaylist, deletePlaylist, reorderPlaylistTracks } = usePlaylists();
-  const { playTrack, toggleShuffle } = usePlayer();
+  const { getPlaylistById, removeTrackFromPlaylist, deletePlaylist, reorderPlaylistTracks, addTrackToPlaylist } = usePlaylists();
+  const { currentTrack, isPlaying, playTrack, togglePlay, toggleShuffle } = usePlayer();
 
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [copiedShare, setCopiedShare] = useState(false);
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
 
+  // Recommendations state
+  const [recommendedTracks, setRecommendedTracks] = useState<Track[]>([]);
+  const [loadingRecs, setLoadingRecs] = useState<boolean>(false);
+  const [seedOffset, setSeedOffset] = useState<number>(0);
+  const [addedRecIds, setAddedRecIds] = useState<Set<string>>(new Set());
+
   const playlist = getPlaylistById(playlistId);
+
+  const fetchRecommendations = async (tracks: Track[], offset: number) => {
+    setLoadingRecs(true);
+    try {
+      const recs = await getRecommendedTracksForPlaylist(tracks, offset);
+      setRecommendedTracks(recs);
+    } finally {
+      setLoadingRecs(false);
+    }
+  };
+
+  useEffect(() => {
+    if (playlist) {
+      fetchRecommendations(playlist.tracks, 0);
+    }
+  }, [playlist?.id]);
+
+  const handleRefreshRecommendations = () => {
+    if (!playlist) return;
+    const nextOffset = seedOffset + 1;
+    setSeedOffset(nextOffset);
+    fetchRecommendations(playlist.tracks, nextOffset);
+  };
+
+  const handleAddRecommended = (track: Track) => {
+    if (!playlist) return;
+    addTrackToPlaylist(playlist.id, track);
+    setAddedRecIds(prev => new Set(prev).add(track.id));
+  };
 
   if (!playlist) {
     return (
@@ -240,6 +276,120 @@ export const PlaylistDetailView: React.FC<PlaylistDetailViewProps> = ({
               onDrop={() => handleDrop(idx)}
             />
           ))
+        )}
+      </div>
+
+      {/* Músicas Recomendadas (Spotify-Style Recommendations) */}
+      <div className="pt-8 pb-4 border-t border-purple-900/30">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h3 className="text-lg sm:text-xl font-black text-white flex items-center gap-2">
+              <Sparkles className="w-5 h-5 text-purple-400" />
+              Músicas Recomendadas
+            </h3>
+            <p className="text-xs text-slate-400 mt-0.5">
+              Com base no estilo e nas músicas desta playlist
+            </p>
+          </div>
+
+          <button
+            onClick={handleRefreshRecommendations}
+            disabled={loadingRecs}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-purple-950/60 hover:bg-purple-900/80 border border-purple-800/40 text-purple-300 text-xs font-bold transition-all disabled:opacity-50"
+          >
+            <RotateCcw className={`w-3.5 h-3.5 ${loadingRecs ? 'animate-spin' : ''}`} />
+            <span>Atualizar</span>
+          </button>
+        </div>
+
+        {loadingRecs ? (
+          <div className="flex items-center justify-center py-10 text-purple-400 text-xs gap-2">
+            <RotateCcw className="w-4 h-4 animate-spin" />
+            <span>Buscando recomendações...</span>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {recommendedTracks.map((rec) => {
+              const isAdded = addedRecIds.has(rec.id) || playlist.tracks.some(t => t.id === rec.id || t.title.toLowerCase() === rec.title.toLowerCase());
+              const isCurrent = currentTrack?.id === rec.id;
+              const isPlayingThis = isCurrent && isPlaying;
+
+              const getRecSourceUrl = () => {
+                if (rec.youtubeId) return `https://www.youtube.com/watch?v=${rec.youtubeId}`;
+                if (rec.tiktokOriginalUrl) return rec.tiktokOriginalUrl;
+                if (rec.platform === 'tiktok') return `https://www.tiktok.com/search?q=${encodeURIComponent(`${rec.artist} ${rec.title}`)}`;
+                if (rec.platform === 'spotify') return `https://open.spotify.com/search/${encodeURIComponent(`${rec.artist} ${rec.title}`)}`;
+                if (rec.streamUrl) return rec.streamUrl;
+                return `https://www.google.com/search?q=${encodeURIComponent(`${rec.artist} ${rec.title}`)}`;
+              };
+
+              return (
+                <div
+                  key={rec.id}
+                  className="flex items-center justify-between p-2.5 sm:p-3 rounded-xl bg-[#0f0a17]/50 hover:bg-[#160f22] border border-purple-900/20 transition-all"
+                >
+                  <div
+                    onClick={() => {
+                      if (isCurrent) togglePlay();
+                      else playTrack(rec, [rec, ...playlist.tracks]);
+                    }}
+                    className="flex items-center gap-3 min-w-0 flex-1 cursor-pointer"
+                  >
+                    <div className="relative w-11 h-11 rounded-lg overflow-hidden flex-shrink-0 bg-black shadow-md">
+                      <SafeImage
+                        src={rec.coverUrl}
+                        videoId={rec.youtubeId}
+                        alt={rec.title}
+                        fallbackText={rec.title}
+                        className="w-full h-full object-cover"
+                      />
+                      <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity">
+                        {isPlayingThis ? (
+                          <Pause className="w-4 h-4 text-purple-400 fill-purple-400" />
+                        ) : (
+                          <Play className="w-4 h-4 text-white fill-white ml-0.5" />
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="min-w-0 flex-1 pr-2">
+                      <p className={`font-semibold text-xs sm:text-sm truncate ${isCurrent ? 'text-purple-300 font-bold' : 'text-slate-100'}`}>
+                        {rec.title}
+                      </p>
+                      <p className="text-[11px] text-slate-400 truncate">{rec.artist}</p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <a
+                      href={getRecSourceUrl()}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      title="Abrir música original"
+                      className="p-1.5 rounded-lg text-slate-500 hover:text-purple-400 hover:bg-white/5 transition-colors"
+                    >
+                      <ExternalLink className="w-4 h-4" />
+                    </a>
+
+                    {isAdded ? (
+                      <span className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-emerald-950/40 border border-emerald-800/40 text-emerald-400 text-xs font-bold">
+                        <Check className="w-3.5 h-3.5" />
+                        Adicionada
+                      </span>
+                    ) : (
+                      <button
+                        onClick={() => handleAddRecommended(rec)}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold shadow-md shadow-purple-950/40 transition-colors active:scale-95"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        Adicionar
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         )}
       </div>
 
