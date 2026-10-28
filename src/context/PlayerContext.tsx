@@ -101,8 +101,8 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     try {
       if (!ytDeckA.current && document.getElementById('yt-player-a')) {
         ytDeckA.current = new window.YT.Player('yt-player-a', {
-          height: '1',
-          width: '1',
+          height: '120',
+          width: '200',
           playerVars: { autoplay: 0, controls: 0, disablekb: 1, fs: 0, rel: 0 },
           events: {
             onStateChange: (event: any) => handleYtStateChange('A', event),
@@ -111,8 +111,8 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       }
       if (!ytDeckB.current && document.getElementById('yt-player-b')) {
         ytDeckB.current = new window.YT.Player('yt-player-b', {
-          height: '1',
-          width: '1',
+          height: '120',
+          width: '200',
           playerVars: { autoplay: 0, controls: 0, disablekb: 1, fs: 0, rel: 0 },
           events: {
             onStateChange: (event: any) => handleYtStateChange('B', event),
@@ -529,8 +529,8 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         onError={(e) => console.warn('Deck B audio error:', e)}
       />
 
-      {/* Hidden persistent YouTube Players for background playback */}
-      <div className="fixed -left-[9999px] -top-[9999px] pointer-events-none opacity-0">
+      {/* Background YouTube Players with sufficient dimensions to prevent browser throttling */}
+      <div className="fixed bottom-0 right-0 w-[200px] h-[120px] pointer-events-none z-[-1] overflow-hidden opacity-[0.01]">
         <div id="yt-player-a" />
         <div id="yt-player-b" />
       </div>

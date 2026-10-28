@@ -19,7 +19,7 @@ export const PlaylistDetailView: React.FC<PlaylistDetailViewProps> = ({
   onOpenMergeModal,
   onAddToPlaylist
 }) => {
-  const { getPlaylistById, removeTrackFromPlaylist } = usePlaylists();
+  const { getPlaylistById, removeTrackFromPlaylist, deletePlaylist } = usePlaylists();
   const { playTrack, toggleShuffle } = usePlayer();
 
   const playlist = getPlaylistById(playlistId);
@@ -37,6 +37,13 @@ export const PlaylistDetailView: React.FC<PlaylistDetailViewProps> = ({
       </div>
     );
   }
+
+  const handleDeletePlaylist = () => {
+    if (confirm(`Tem certeza que deseja remover a playlist "${playlist.name}"?`)) {
+      deletePlaylist(playlist.id);
+      onBack();
+    }
+  };
 
   const handlePlayAll = () => {
     if (playlist.tracks.length > 0) {
@@ -119,6 +126,15 @@ export const PlaylistDetailView: React.FC<PlaylistDetailViewProps> = ({
             >
               <Layers className="w-4 h-4" />
               Mesclar
+            </button>
+
+            <button
+              onClick={handleDeletePlaylist}
+              className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl font-bold text-xs bg-red-950/30 hover:bg-red-950/60 text-red-400 border border-red-500/30 transition-colors"
+              title="Remover Playlist"
+            >
+              <Trash2 className="w-4 h-4" />
+              Remover Playlist
             </button>
           </div>
         </div>

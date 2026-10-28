@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import { Track } from '../types';
 import { usePlayer } from '../context/PlayerContext';
+import { usePlaylists } from '../context/PlaylistContext';
 import { SafeImage } from './SafeImage';
 import { PlatformBadge } from './PlatformBadge';
-import { Play, Pause, Download, Plus, Check } from 'lucide-react';
+import { Play, Pause, Download, Plus, Check, Heart } from 'lucide-react';
 import { downloadTrackMp3 } from '../services/download';
 
 interface TrackRowProps {
@@ -20,10 +21,12 @@ export const TrackRow: React.FC<TrackRowProps> = ({
   playlistContextTracks
 }) => {
   const { currentTrack, isPlaying, playTrack, togglePlay } = usePlayer();
+  const { toggleSaveTrack, isSavedTrack } = usePlaylists();
   const [downloading, setDownloading] = useState(false);
 
   const isCurrent = currentTrack?.id === track.id;
   const isThisPlaying = isCurrent && isPlaying;
+  const isSaved = isSavedTrack(track.id);
 
   const handlePlayToggle = () => {
     if (isCurrent) {
@@ -103,6 +106,20 @@ export const TrackRow: React.FC<TrackRowProps> = ({
         <span className="text-xs text-slate-400 hidden sm:inline-block">
           {formatDuration(track.duration)}
         </span>
+
+        {/* Favorite / Save Track to Library */}
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            toggleSaveTrack(track);
+          }}
+          title={isSaved ? 'Remover das músicas salvas' : 'Salvar na Biblioteca'}
+          className={`p-1.5 rounded-lg transition-colors ${
+            isSaved ? 'text-purple-400 hover:text-purple-300' : 'text-slate-500 hover:text-purple-400'
+          }`}
+        >
+          <Heart className={`w-4 h-4 ${isSaved ? 'fill-current' : ''}`} />
+        </button>
 
         {/* Download MP3 Button */}
         <button

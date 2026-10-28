@@ -24,13 +24,11 @@ export const SafeImage: React.FC<SafeImageProps> = ({
     const list: string[] = [];
     if (src && src.trim()) {
       list.push(src);
-      // Proxy version for CORS/hotlink protection
       if (!src.includes('weserv.nl')) {
         list.push(`https://images.weserv.nl/?url=${encodeURIComponent(src)}&w=300&h=300&fit=cover`);
       }
     }
     if (videoId) {
-      list.push(`https://i.ytimg.com/vi/${videoId}/maxresdefault.jpg`);
       list.push(`https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`);
       list.push(`https://i.ytimg.com/vi/${videoId}/mqdefault.jpg`);
       list.push(`https://images.weserv.nl/?url=https://i.ytimg.com/vi/${videoId}/hqdefault.jpg&w=300&h=300&fit=cover`);
@@ -53,11 +51,19 @@ export const SafeImage: React.FC<SafeImageProps> = ({
     }
   };
 
+  // Intercept YouTube's fake 120x90 gray TV placeholder
+  const handleLoad = (e: React.SyntheticEvent<HTMLImageElement>) => {
+    const img = e.currentTarget;
+    if (img.naturalWidth === 120 && img.naturalHeight === 90) {
+      handleError();
+    }
+  };
+
   if (hasError || candidates.length === 0) {
     const letter = (fallbackText || alt || 'M').charAt(0).toUpperCase();
     return (
       <div
-        className={`flex items-center justify-center font-bold text-white shadow-inner bg-gradient-to-tr from-purple-700 via-pink-600 to-indigo-800 ${className}`}
+        className={`flex items-center justify-center font-bold text-purple-300 shadow-inner bg-[#181126] border border-purple-800/40 ${className}`}
         aria-label={alt}
       >
         <span className="drop-shadow-sm">{letter}</span>
@@ -72,6 +78,7 @@ export const SafeImage: React.FC<SafeImageProps> = ({
       referrerPolicy="no-referrer"
       loading="lazy"
       onError={handleError}
+      onLoad={handleLoad}
       className={`object-cover ${className}`}
       {...props}
     />

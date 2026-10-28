@@ -1,15 +1,20 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { Playlist, Track } from '../types';
 import { FEATURED_TRACKS } from '../services/api';
+import { importLegacyPlaylists } from '../services/legacyMigration';
 
 interface PlaylistContextType {
   playlists: Playlist[];
+  savedTracks: Track[];
   createPlaylist: (name: string, description?: string, coverUrl?: string) => Playlist;
   deletePlaylist: (id: string) => void;
   addTrackToPlaylist: (playlistId: string, track: Track) => void;
   removeTrackFromPlaylist: (playlistId: string, trackId: string) => void;
   mergePlaylists: (playlistIds: string[], newName: string, removeDuplicates?: boolean) => Playlist;
   getPlaylistById: (id: string) => Playlist | undefined;
+  restoreLegacyPlaylists: () => number;
+  toggleSaveTrack: (track: Track) => void;
+  isSavedTrack: (trackId: string) => boolean;
 }
 
 const DEFAULT_PLAYLISTS: Playlist[] = [
@@ -55,13 +60,38 @@ const PlaylistContext = createContext<PlaylistContextType | null>(null);
 
 export const PlaylistProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [playlists, setPlaylists] = useState<Playlist[]>(() => {
+    let current: Playlist[] = DEFAULT_PLAYLISTS;
     try {
       const saved = localStorage.getItem('johnmusic_playlists_v3');
-      if (saved) return JSON.parse(saved);
+      if (saved) {
+        current = JSON.parse(saved);
+      }
     } catch (e) {
       console.warn('Storage read failed:', e);
     }
-    return DEFAULT_PLAYLISTS;
+
+    try {
+      const legacy = importLegacyPlaylists();
+      if (legacy.length > 0) {
+        const existingIds = new Set(current.map(p => p.id));
+        const newLegacy = legacy.filter(p => !existingIds.has(p.id));
+        if (newLegacy.length > 0) {
+          current = [...newLegacy, ...current];
+        }
+      }
+    } catch (e) {
+      console.warn('Legacy migration check failed:', e);
+    }
+
+    return current;
+  });
+
+  const [savedTracks, setSavedTracks] = useState<Track[]>(() => {
+    try {
+      const saved = localStorage.getItem('johnmusic_saved_tracks_v3');
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return FEATURED_TRACKS.slice(0, 4);
   });
 
   useEffect(() => {
@@ -72,11 +102,51 @@ export const PlaylistProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }
   }, [playlists]);
 
+  useEffect(() => {
+    try {
+      localStorage.setItem('johnmusic_saved_tracks_v3', JSON.stringify(savedTracks));
+    } catch (e) {
+      console.warn('Saved tracks save failed:', e);
+    }
+  }, [savedTracks]);
+
+  const toggleSaveTrack = (track: Track) => {
+    setSavedTracks(prev => {
+      const exists = prev.some(t => t.id === track.id);
+      if (exists) {
+        return prev.filter(t => t.id !== track.id);
+      } else {
+        return [track, ...prev];
+      }
+    });
+  };
+
+  const isSavedTrack = (trackId: string): boolean => {
+    return savedTracks.some(t => t.id === trackId);
+  };
+
+  const restoreLegacyPlaylists = (): number => {
+    try {
+      const legacy = importLegacyPlaylists();
+      if (legacy.length === 0) return 0;
+      let count = 0;
+      setPlaylists(prev => {
+        const existingIds = new Set(prev.map(p => p.id));
+        const toAdd = legacy.filter(p => !existingIds.has(p.id));
+        count = toAdd.length;
+        return [...toAdd, ...prev];
+      });
+      return count;
+    } catch {
+      return 0;
+    }
+  };
+
   const createPlaylist = (name: string, description?: string, coverUrl?: string): Playlist => {
     const newPl: Playlist = {
       id: `pl_custom_${Date.now()}`,
       name,
-      description: description || 'Playlist personalizada criada no JohnMusic',
+      description: description || 'Playlist criada no JohnMusic',
       coverUrl: coverUrl || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=600&q=80',
       tracks: [],
       createdAt: Date.now(),
@@ -154,12 +224,16 @@ export const PlaylistProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     <PlaylistContext.Provider
       value={{
         playlists,
+        savedTracks,
         createPlaylist,
         deletePlaylist,
         addTrackToPlaylist,
         removeTrackFromPlaylist,
         mergePlaylists,
         getPlaylistById,
+        restoreLegacyPlaylists,
+        toggleSaveTrack,
+        isSavedTrack
       }}
     >
       {children}
