@@ -40,7 +40,9 @@ export const PlayerBar: React.FC = () => {
     setVolume,
     setCrossfadeDuration,
     toggleShuffle,
-    toggleRepeat
+    toggleRepeat,
+    stableAudio,
+    toggleStableAudio
   } = usePlayer();
 
   const [isQueueOpen, setIsQueueOpen] = useState(false);
@@ -163,6 +165,28 @@ export const PlayerBar: React.FC = () => {
                 title="Repetir"
               >
                 <Repeat className="w-4 h-4" />
+              </button>
+
+              {/* Áudio Estável (Real-time Audio Normalizer & Dynamic Limiter) */}
+              <button
+                onClick={toggleStableAudio}
+                className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] md:text-xs font-mono font-medium border transition-all ${
+                  stableAudio
+                    ? 'bg-purple-600/30 text-purple-300 border-purple-400 shadow-sm shadow-purple-950/40'
+                    : 'bg-white/5 text-slate-400 border-white/10 hover:text-slate-200 hover:border-white/20'
+                }`}
+                title={
+                  stableAudio
+                    ? 'Áudio Estável ATIVADO: normaliza o som e previne estouros/distorções em tempo real'
+                    : 'Áudio Estável DESATIVADO: clique para ativar o nivelamento dinâmico de áudio'
+                }
+              >
+                <Sliders className={`w-3.5 h-3.5 ${stableAudio ? 'text-purple-400' : ''}`} />
+                <span className="hidden sm:inline">Áudio Estável</span>
+                <span className="sm:hidden">Estável</span>
+                {stableAudio && (
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse ml-0.5" />
+                )}
               </button>
 
               {/* DJ Crossfade Status Pill */}

@@ -34,6 +34,8 @@ interface PlayerContextType {
   clearQueue: () => void;
   toggleShuffle: () => void;
   toggleRepeat: () => void;
+  stableAudio: boolean;
+  toggleStableAudio: () => void;
 }
 
 const PlayerContext = createContext<PlayerContextType | null>(null);
@@ -51,6 +53,14 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [isCrossfading, setIsCrossfading] = useState<boolean>(false);
   const [isShuffle, setIsShuffle] = useState<boolean>(false);
   const [isRepeat, setIsRepeat] = useState<boolean>(false);
+  const [stableAudio, setStableAudio] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem('johnmusic_stable_audio');
+      return saved !== null ? saved === 'true' : true; // Default active (protection on)
+    } catch {
+      return true;
+    }
+  });
 
   // Deck references
   const audioDeckA = useRef<HTMLAudioElement | null>(null);
@@ -61,6 +71,12 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const ytDeckReadyA = useRef<boolean>(false);
   const ytDeckReadyB = useRef<boolean>(false);
   const pendingTrackRef = useRef<{ deck: 'A' | 'B'; track: Track; vol: number } | null>(null);
+
+  // Web Audio compressor chain for real-time waveform limiting & leveling
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const compressorNodeRef = useRef<DynamicsCompressorNode | null>(null);
+  const makeupGainRef = useRef<GainNode | null>(null);
+  const connectedAudioNodes = useRef<WeakSet<HTMLAudioElement>>(new WeakSet());
 
   // State refs to avoid stale closures in listeners/crossfade loops
   const activeDeckRef = useRef<'A' | 'B'>('A');
@@ -73,6 +89,9 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const isRepeatRef = useRef<boolean>(false);
   const crossfadeTimerRef = useRef<number | null>(null);
   const playSessionIdRef = useRef<number>(0);
+  const stableAudioRef = useRef<boolean>(stableAudio);
+
+  stableAudioRef.current = stableAudio;
 
   activeDeckRef.current = activeDeck;
   volumeRef.current = volume;
@@ -212,9 +231,36 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     return false;
   };
 
-  // Set volume across decks
+  // Helper to determine normalization multiplier for tracks (Áudio Estável)
+  const getStableVolumeMultiplier = (track: Track | null): number => {
+    if (!stableAudioRef.current || !track) return 1;
+    const titleAndArtist = `${track.title} ${track.artist}`.toLowerCase();
+    // Phonk, Bass Boosted, Funk automotivo, Loud remixes are naturally recorded 4-8dB higher than normal
+    if (
+      titleAndArtist.includes('phonk') ||
+      titleAndArtist.includes('bass boost') ||
+      titleAndArtist.includes('estourado') ||
+      titleAndArtist.includes('automotivo') ||
+      titleAndArtist.includes('slowed') ||
+      titleAndArtist.includes('hardstyle')
+    ) {
+      return 0.74; // Lower by ~26% to equalize with normal songs and prevent distortion
+    }
+    // Very quiet acoustic/classical tracks get gentle boost
+    if (
+      titleAndArtist.includes('acoustic') ||
+      titleAndArtist.includes('lofi') ||
+      titleAndArtist.includes('piano')
+    ) {
+      return 1.15;
+    }
+    return 0.90; // Standard comfortable target for normalized loudness
+  };
+
+  // Set volume across decks with real-time loudness leveling
   const setDeckVolume = (deck: 'A' | 'B', vol: number, track: Track | null) => {
-    const clamped = Math.max(0, Math.min(1, vol));
+    const stableMultiplier = getStableVolumeMultiplier(track);
+    const clamped = Math.max(0, Math.min(1, vol * stableMultiplier));
     const isYt = isTrackYouTube(track);
 
     if (deck === 'A') {
@@ -315,6 +361,7 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   // Start playback on a deck
   const startDeckPlayback = (deck: 'A' | 'B', track: Track, initialVol = volumeRef.current) => {
     const isYt = isTrackYouTube(track);
+    const effectiveVol = Math.max(0, Math.min(1, initialVol * getStableVolumeMultiplier(track)));
 
     if (deck === 'A') {
       if (isYt && track.youtubeId) {
@@ -325,7 +372,7 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
               videoId: track.youtubeId,
               startSeconds: 0
             });
-            ytDeckA.current.setVolume(initialVol * 100);
+            ytDeckA.current.setVolume(effectiveVol * 100);
             ytDeckA.current.playVideo();
           } catch (e) {
             console.warn('YT Deck A play error:', e);
@@ -336,7 +383,7 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       } else if (audioDeckA.current && track.streamUrl && !track.streamUrl.includes('itunes.apple.com')) {
         if (ytDeckA.current?.stopVideo) ytDeckA.current.stopVideo();
         audioDeckA.current.src = track.streamUrl;
-        audioDeckA.current.volume = initialVol;
+        audioDeckA.current.volume = effectiveVol;
         audioDeckA.current.muted = false;
         audioDeckA.current.play().catch(async (e) => {
           console.warn('Deck A audio play failed, falling back to YouTube:', e);
@@ -361,7 +408,7 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
               videoId: track.youtubeId,
               startSeconds: 0
             });
-            ytDeckB.current.setVolume(initialVol * 100);
+            ytDeckB.current.setVolume(effectiveVol * 100);
             ytDeckB.current.playVideo();
           } catch (e) {
             console.warn('YT Deck B play error:', e);
@@ -372,7 +419,7 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       } else if (audioDeckB.current && track.streamUrl && !track.streamUrl.includes('itunes.apple.com')) {
         if (ytDeckB.current?.stopVideo) ytDeckB.current.stopVideo();
         audioDeckB.current.src = track.streamUrl;
-        audioDeckB.current.volume = initialVol;
+        audioDeckB.current.volume = effectiveVol;
         audioDeckB.current.muted = false;
         audioDeckB.current.play().catch(async (e) => {
           console.warn('Deck B audio play failed, falling back to YouTube:', e);
@@ -608,6 +655,19 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const toggleShuffle = () => setIsShuffle(prev => !prev);
   const toggleRepeat = () => setIsRepeat(prev => !prev);
 
+  const toggleStableAudio = useCallback(() => {
+    setStableAudio(prev => {
+      const next = !prev;
+      stableAudioRef.current = next;
+      try {
+        localStorage.setItem('johnmusic_stable_audio', String(next));
+      } catch {}
+      // Immediately re-normalize output volume for currently active deck
+      setDeckVolume(activeDeckRef.current, volumeRef.current, currentTrack);
+      return next;
+    });
+  }, [currentTrack]);
+
   return (
     <PlayerContext.Provider
       value={{
@@ -623,6 +683,7 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         isCrossfading,
         isShuffle,
         isRepeat,
+        stableAudio,
         playTrack,
         togglePlay,
         seek,
@@ -635,6 +696,7 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         clearQueue,
         toggleShuffle,
         toggleRepeat,
+        toggleStableAudio,
       }}
     >
       {children}
