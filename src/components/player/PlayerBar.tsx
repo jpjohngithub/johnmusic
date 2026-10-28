@@ -70,11 +70,11 @@ export const PlayerBar: React.FC = () => {
 
   return (
     <>
-      <div className="fixed bottom-16 md:bottom-0 left-0 right-0 z-40 bg-[#0d0e15]/90 backdrop-blur-2xl border-t border-white/10 px-3 md:px-6 py-2.5 md:py-3 shadow-2xl transition-all">
+      <div className="fixed bottom-16 md:bottom-0 left-0 right-0 z-40 bg-[#08060c]/95 backdrop-blur-2xl border-t border-purple-950/40 px-3 md:px-6 py-2.5 md:py-3 shadow-2xl transition-all">
         {/* Mobile thin top progress bar */}
         <div className="absolute top-0 left-0 right-0 h-1 bg-white/5 md:hidden">
           <div
-            className="h-full bg-gradient-to-r from-purple-500 via-pink-500 to-indigo-500 transition-all duration-200"
+            className="h-full bg-purple-500 transition-all duration-200"
             style={{ width: `${progressPercent}%` }}
           />
         </div>

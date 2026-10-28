@@ -1,93 +1,72 @@
 import React from 'react';
 import { Platform } from '../../types';
-import { SpotifyIcon, YouTubeIcon, TikTokIcon } from '../Icons';
-import { Home, Search, Library } from 'lucide-react';
+import { Home, Search, Library, Radio, Link2 } from 'lucide-react';
 
 interface BottomNavProps {
   currentView: string;
   activeFilter?: Platform | 'all';
   onNavigate: (view: string, filter?: Platform | 'all') => void;
+  onOpenRecognizerModal?: () => void;
+  onOpenImportModal?: () => void;
 }
 
 export const BottomNav: React.FC<BottomNavProps> = ({
   currentView,
   activeFilter,
-  onNavigate
+  onNavigate,
+  onOpenRecognizerModal,
+  onOpenImportModal
 }) => {
   return (
-    <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-[#0c0d14]/95 backdrop-blur-2xl border-t border-white/10 px-2 py-2 flex items-center justify-around shadow-2xl">
-      {/* 1. Início */}
+    <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-[#09070e]/95 backdrop-blur-2xl border-t border-purple-950/40 px-3 py-2 flex items-center justify-around shadow-2xl">
       <button
         onClick={() => onNavigate('home')}
         className={`flex flex-col items-center gap-1 py-1 px-2 rounded-xl transition-colors ${
-          currentView === 'home'
-            ? 'text-purple-400 font-bold'
-            : 'text-slate-400 hover:text-slate-200'
+          currentView === 'home' ? 'text-purple-400 font-bold' : 'text-slate-400 hover:text-slate-200'
         }`}
       >
         <Home className="w-5 h-5" />
         <span className="text-[10px]">Início</span>
       </button>
 
-      {/* 2. Buscar */}
       <button
         onClick={() => onNavigate('search', 'all')}
         className={`flex flex-col items-center gap-1 py-1 px-2 rounded-xl transition-colors ${
-          currentView === 'search' && activeFilter === 'all'
-            ? 'text-purple-400 font-bold'
-            : 'text-slate-400 hover:text-slate-200'
+          currentView === 'search' ? 'text-purple-400 font-bold' : 'text-slate-400 hover:text-slate-200'
         }`}
       >
         <Search className="w-5 h-5" />
         <span className="text-[10px]">Buscar</span>
       </button>
 
-      {/* 3. Spotify */}
-      <button
-        onClick={() => onNavigate('search', 'spotify')}
-        className={`flex flex-col items-center gap-1 py-1 px-2 rounded-xl transition-colors ${
-          currentView === 'search' && activeFilter === 'spotify'
-            ? 'text-emerald-400 font-bold'
-            : 'text-slate-400 hover:text-emerald-400'
-        }`}
-      >
-        <SpotifyIcon className="w-5 h-5" />
-        <span className="text-[10px]">Spotify</span>
-      </button>
+      {onOpenRecognizerModal && (
+        <button
+          onClick={onOpenRecognizerModal}
+          className="flex flex-col items-center gap-1 py-1 px-2 rounded-xl text-purple-300 hover:text-purple-200"
+          title="Shazam / Ouvir do PC"
+        >
+          <div className="w-6 h-6 rounded-full bg-purple-900/60 border border-purple-500/40 flex items-center justify-center">
+            <Radio className="w-3.5 h-3.5 text-purple-300" />
+          </div>
+          <span className="text-[10px]">Shazam</span>
+        </button>
+      )}
 
-      {/* 4. YouTube */}
-      <button
-        onClick={() => onNavigate('search', 'youtube')}
-        className={`flex flex-col items-center gap-1 py-1 px-2 rounded-xl transition-colors ${
-          currentView === 'search' && activeFilter === 'youtube'
-            ? 'text-red-400 font-bold'
-            : 'text-slate-400 hover:text-red-400'
-        }`}
-      >
-        <YouTubeIcon className="w-5 h-5" />
-        <span className="text-[10px]">YouTube</span>
-      </button>
+      {onOpenImportModal && (
+        <button
+          onClick={onOpenImportModal}
+          className="flex flex-col items-center gap-1 py-1 px-2 rounded-xl text-slate-400 hover:text-purple-300"
+          title="Importar Link"
+        >
+          <Link2 className="w-5 h-5" />
+          <span className="text-[10px]">Importar</span>
+        </button>
+      )}
 
-      {/* 5. TikTok */}
-      <button
-        onClick={() => onNavigate('search', 'tiktok')}
-        className={`flex flex-col items-center gap-1 py-1 px-2 rounded-xl transition-colors ${
-          currentView === 'search' && activeFilter === 'tiktok'
-            ? 'text-cyan-400 font-bold'
-            : 'text-slate-400 hover:text-cyan-400'
-        }`}
-      >
-        <TikTokIcon className="w-5 h-5" />
-        <span className="text-[10px]">TikTok</span>
-      </button>
-
-      {/* 6. Biblioteca */}
       <button
         onClick={() => onNavigate('library')}
         className={`flex flex-col items-center gap-1 py-1 px-2 rounded-xl transition-colors ${
-          currentView === 'library'
-            ? 'text-purple-400 font-bold'
-            : 'text-slate-400 hover:text-slate-200'
+          currentView === 'library' ? 'text-purple-400 font-bold' : 'text-slate-400 hover:text-slate-200'
         }`}
       >
         <Library className="w-5 h-5" />

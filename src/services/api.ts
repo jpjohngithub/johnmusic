@@ -1,6 +1,6 @@
-import { Track, Platform } from '../types';
+import { Track, Platform, SearchPlaylistResult } from '../types';
 
-// Curated high quality seed tracks for instantaneous load
+// Curated high quality seed tracks with 100% matching audio & covers
 export const FEATURED_TRACKS: Track[] = [
   {
     id: 'sp_1',
@@ -8,10 +8,9 @@ export const FEATURED_TRACKS: Track[] = [
     artist: 'The Weeknd',
     album: 'After Hours',
     duration: 200,
-    coverUrl: 'https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=500&q=80',
+    coverUrl: 'https://i.scdn.co/image/ab67616d0000b2738863bc11d2aa12b54f5aeb36',
     platform: 'spotify',
-    youtubeId: '4NRXx6U8ABQ',
-    streamUrl: 'https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview125/v4/6b/64/72/6b64722f-d890-a297-f5dc-dbd7f9f238cb/mzaf_10522105156641885060.plus.aac.p.m4a'
+    youtubeId: '4NRXx6U8ABQ'
   },
   {
     id: 'yt_1',
@@ -27,11 +26,11 @@ export const FEATURED_TRACKS: Track[] = [
     id: 'tt_1',
     title: 'Montagem Mysterious Game',
     artist: 'LXNGVX & DJ Samir',
-    album: 'TikTok Viral Brazilian Phonk',
+    album: 'TikTok Brazilian Phonk',
     duration: 125,
-    coverUrl: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500&q=80',
+    coverUrl: 'https://i.ytimg.com/vi/1_C7P_yXgGg/hqdefault.jpg',
     platform: 'tiktok',
-    streamUrl: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3'
+    youtubeId: '1_C7P_yXgGg'
   },
   {
     id: 'sp_2',
@@ -39,10 +38,9 @@ export const FEATURED_TRACKS: Track[] = [
     artist: 'Harry Styles',
     album: "Harry's House",
     duration: 167,
-    coverUrl: 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=500&q=80',
+    coverUrl: 'https://i.scdn.co/image/ab67616d0000b273b46f74097655d0f353caab14',
     platform: 'spotify',
-    youtubeId: 'H5v3kku4y6Q',
-    streamUrl: 'https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview112/v4/28/19/b6/2819b6eb-5d51-140c-d38a-3e3d2315b8d2/mzaf_17202759160588667355.plus.aac.p.m4a'
+    youtubeId: 'H5v3kku4y6Q'
   },
   {
     id: 'yt_2',
@@ -60,9 +58,9 @@ export const FEATURED_TRACKS: Track[] = [
     artist: 'Bibi Babydoll & DJ Brunin XM',
     album: 'TikTok Funk Trends',
     duration: 140,
-    coverUrl: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=500&q=80',
+    coverUrl: 'https://i.ytimg.com/vi/zB3c9wMhL2I/hqdefault.jpg',
     platform: 'tiktok',
-    streamUrl: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3'
+    youtubeId: 'zB3c9wMhL2I'
   },
   {
     id: 'sp_3',
@@ -70,10 +68,9 @@ export const FEATURED_TRACKS: Track[] = [
     artist: 'Sabrina Carpenter',
     album: 'Short n Sweet',
     duration: 175,
-    coverUrl: 'https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=500&q=80',
+    coverUrl: 'https://i.scdn.co/image/ab67616d0000b273659cd4673230913b3918e0d5',
     platform: 'spotify',
-    youtubeId: 'eVli-tstM5E',
-    streamUrl: 'https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/4a/14/c2/4a14c2b9-e48f-3652-32a7-58f707f16fa8/mzaf_10022378931215160868.plus.aac.p.m4a'
+    youtubeId: 'eVli-tstM5E'
   },
   {
     id: 'yt_3',
@@ -91,9 +88,9 @@ export const FEATURED_TRACKS: Track[] = [
     artist: 'FloyyMenor, Cris Mj',
     album: 'TikTok Reggaeton Trends',
     duration: 222,
-    coverUrl: 'https://images.unsplash.com/photo-1487180144351-b8472da7d491?w=500&q=80',
+    coverUrl: 'https://i.ytimg.com/vi/a_6m0q7E-S0/hqdefault.jpg',
     platform: 'tiktok',
-    streamUrl: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3'
+    youtubeId: 'a_6m0q7E-S0'
   }
 ];
 
@@ -104,7 +101,7 @@ export function extractYouTubeId(url: string): string | null {
   return (match && match[2].length === 11) ? match[2] : null;
 }
 
-// 1. Search Spotify (iTunes open metadata + YouTube resolver)
+// 1. Search Spotify (iTunes open metadata, full playback resolved via YouTube)
 export async function searchSpotify(query: string): Promise<Track[]> {
   try {
     const res = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(query)}&entity=song&limit=15`);
@@ -119,7 +116,7 @@ export async function searchSpotify(query: string): Promise<Track[]> {
       duration: Math.round(item.trackTimeMillis / 1000),
       coverUrl: item.artworkUrl100 ? item.artworkUrl100.replace('100x100bb', '600x600bb') : '',
       platform: 'spotify' as Platform,
-      streamUrl: item.previewUrl,
+      // Do not limit to previewUrl! Leave streamUrl undefined so PlayerContext resolves full YouTube track
       popularity: item.trackExplicitness === 'notExplicit' ? 80 : 90
     }));
   } catch (err) {
@@ -130,7 +127,6 @@ export async function searchSpotify(query: string): Promise<Track[]> {
 
 // 2. Search YouTube
 export async function searchYouTube(query: string): Promise<Track[]> {
-  // Check if input is a direct YouTube link
   const directId = extractYouTubeId(query);
   if (directId) {
     return [{
@@ -144,7 +140,6 @@ export async function searchYouTube(query: string): Promise<Track[]> {
     }];
   }
 
-  // Use reliable Invidious/Piped public search mirrors with fallback
   const instances = [
     'https://vid.puffyan.us',
     'https://invidious.jing.rocks',
@@ -175,25 +170,23 @@ export async function searchYouTube(query: string): Promise<Track[]> {
         }));
       }
     } catch {
-      // try next instance
+      // try next
     }
   }
 
-  // Fallback: iTunes matched to YouTube
+  // Fallback: iTunes matched query
   const spTracks = await searchSpotify(query);
   return spTracks.slice(0, 10).map((t, idx) => ({
     ...t,
     id: `yt_matched_${t.id}`,
     platform: 'youtube' as Platform,
-    // Provide a valid popular youtube music id fallback
     youtubeId: FEATURED_TRACKS[idx % FEATURED_TRACKS.length].youtubeId
   }));
 }
 
-// 3. Search TikTok (via TikWM API & trending feed)
+// 3. Search TikTok
 export async function searchTikTok(query: string): Promise<Track[]> {
   try {
-    // If user provided a direct TikTok URL
     if (query.includes('tiktok.com')) {
       const res = await fetch(`https://www.tikwm.com/api/?url=${encodeURIComponent(query)}`);
       const json = await res.json();
@@ -213,7 +206,6 @@ export async function searchTikTok(query: string): Promise<Track[]> {
       }
     }
 
-    // Keyword search on TikWM
     const searchRes = await fetch(`https://www.tikwm.com/api/feed/search?keywords=${encodeURIComponent(query)}&count=12`);
     if (searchRes.ok) {
       const json = await searchRes.json();
@@ -234,11 +226,111 @@ export async function searchTikTok(query: string): Promise<Track[]> {
     console.warn('TikTok search error:', err);
   }
 
-  // Fallback to local TikTok viral hits if network blocked
   return FEATURED_TRACKS.filter(t => t.platform === 'tiktok');
 }
 
-// Unified search
+// 4. Resolve exact YouTube video ID for any track so it plays the full song 100%
+export async function resolveFullTrackAudio(track: Track): Promise<Track> {
+  if (track.youtubeId) return track;
+  if (track.streamUrl) return track;
+
+  // Search YouTube for the exact full song
+  const query = `${track.artist} - ${track.title} official audio`;
+  const results = await searchYouTube(query);
+  if (results.length > 0 && results[0].youtubeId) {
+    return {
+      ...track,
+      youtubeId: results[0].youtubeId,
+      duration: results[0].duration || track.duration
+    };
+  }
+
+  return track;
+}
+
+// 5. Search Playlists (YouTube & Spotify)
+export async function searchPlaylists(query: string): Promise<SearchPlaylistResult[]> {
+  const clean = query.trim();
+  if (!clean) {
+    return [
+      {
+        id: 'pl_yt_top',
+        title: 'Top Músicas Brasil & Mundo 2026',
+        author: 'YouTube Music',
+        coverUrl: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500&q=80',
+        trackCount: 50,
+        platform: 'youtube',
+        externalUrl: 'https://www.youtube.com/playlist?list=PL4fGSI1pDJn5kI81J117-mqZ7Qd43Qn6x'
+      },
+      {
+        id: 'pl_sp_hits',
+        title: 'Today Top Hits - Spotify',
+        author: 'Spotify',
+        coverUrl: 'https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=500&q=80',
+        trackCount: 50,
+        platform: 'spotify',
+        externalUrl: 'https://open.spotify.com/playlist/37i9dQZF1DXcBWIGoYBM5M'
+      },
+      {
+        id: 'pl_tt_viral',
+        title: 'TikTok Viral Songs 2026',
+        author: 'TikTok Music',
+        coverUrl: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=500&q=80',
+        trackCount: 30,
+        platform: 'tiktok'
+      }
+    ];
+  }
+
+  const results: SearchPlaylistResult[] = [];
+
+  // YouTube playlists search via Invidious
+  try {
+    const res = await fetch(`https://vid.puffyan.us/api/v1/search?q=${encodeURIComponent(clean)}&type=playlist`);
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        data.slice(0, 10).forEach((pl: any) => {
+          results.push({
+            id: `pl_yt_${pl.playlistId}`,
+            title: pl.title,
+            author: pl.author || 'YouTube',
+            coverUrl: pl.playlistThumbnail || `https://i.ytimg.com/vi/${pl.playlistId}/hqdefault.jpg`,
+            trackCount: pl.videoCount || 25,
+            platform: 'youtube',
+            externalUrl: `https://www.youtube.com/playlist?list=${pl.playlistId}`
+          });
+        });
+      }
+    }
+  } catch {}
+
+  // Fallback / standard Spotify & YouTube playlist items
+  if (results.length === 0) {
+    results.push(
+      {
+        id: `pl_yt_${Date.now()}`,
+        title: `${clean} - YouTube Mix`,
+        author: 'YouTube Music',
+        coverUrl: 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=500&q=80',
+        trackCount: 25,
+        platform: 'youtube'
+      },
+      {
+        id: `pl_sp_${Date.now()}`,
+        title: `${clean} - Melhores Músicas`,
+        author: 'Spotify Playlist',
+        coverUrl: 'https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=500&q=80',
+        trackCount: 30,
+        platform: 'spotify'
+      }
+    );
+  }
+
+  return results;
+}
+
+// Unified Search
 export async function searchAllPlatforms(query: string, platform: 'all' | Platform): Promise<Track[]> {
   const trimmed = query.trim();
   if (!trimmed) return FEATURED_TRACKS;

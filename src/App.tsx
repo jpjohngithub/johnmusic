@@ -11,8 +11,10 @@ import { PlaylistDetailView } from './views/PlaylistDetailView';
 import { MergePlaylistsModal } from './components/Modals/MergePlaylistsModal';
 import { AddToPlaylistModal } from './components/Modals/AddToPlaylistModal';
 import { CreatePlaylistModal } from './components/Modals/CreatePlaylistModal';
+import { AudioRecognizerModal } from './components/AudioRecognizerModal';
+import { ImportLinkModal } from './components/ImportLinkModal';
 import { Platform, Track } from './types';
-import { Headphones, Search } from 'lucide-react';
+import { Headphones, Search, Radio, Link2 } from 'lucide-react';
 
 const MainApp: React.FC = () => {
   const [currentView, setCurrentView] = useState<'home' | 'search' | 'library' | 'playlist'>('home');
@@ -22,6 +24,8 @@ const MainApp: React.FC = () => {
   // Modals
   const [isMergeModalOpen, setIsMergeModalOpen] = useState(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [isRecognizerModalOpen, setIsRecognizerModalOpen] = useState(false);
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [trackToAddToPlaylist, setTrackToAddToPlaylist] = useState<Track | null>(null);
 
   const handleNavigate = (view: string, filter: Platform | 'all' = 'all') => {
@@ -38,13 +42,15 @@ const MainApp: React.FC = () => {
   };
 
   return (
-    <div className="flex h-screen w-full bg-[#0b0c10] text-[#f1f5f9] overflow-hidden">
-      {/* Desktop Glassmorphic Sidebar */}
+    <div className="flex h-screen w-full bg-[#060509] text-[#f1f5f9] overflow-hidden">
+      {/* Desktop Sidebar */}
       <Sidebar
         currentView={currentView}
         onNavigate={handleNavigate}
         onOpenMergeModal={() => setIsMergeModalOpen(true)}
         onOpenCreateModal={() => setIsCreateModalOpen(true)}
+        onOpenRecognizerModal={() => setIsRecognizerModalOpen(true)}
+        onOpenImportModal={() => setIsImportModalOpen(true)}
         onSelectPlaylist={handleSelectPlaylist}
         selectedPlaylistId={selectedPlaylistId}
       />
@@ -52,32 +58,50 @@ const MainApp: React.FC = () => {
       {/* Main Content Area */}
       <main className="flex-1 flex flex-col h-full overflow-hidden relative">
         {/* Mobile Header Bar */}
-        <header className="md:hidden flex items-center justify-between px-4 py-3 bg-[#0d0e15]/90 border-b border-white/10 backdrop-blur-xl sticky top-0 z-30">
+        <header className="md:hidden flex items-center justify-between px-4 py-3 bg-[#09070e] border-b border-purple-950/40 sticky top-0 z-30">
           <div
             onClick={() => handleNavigate('home')}
             className="flex items-center gap-2 cursor-pointer"
           >
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-purple-600 to-indigo-600 flex items-center justify-center shadow-md">
+            <div className="w-7 h-7 rounded-lg bg-purple-600 flex items-center justify-center shadow-md">
               <Headphones className="w-4 h-4 text-white" />
             </div>
-            <span className="font-extrabold text-base tracking-tight bg-gradient-to-r from-white to-purple-300 bg-clip-text text-transparent">
+            <span className="font-extrabold text-sm tracking-tight text-white">
               JohnMusic
             </span>
           </div>
 
-          <button
-            onClick={() => handleNavigate('search', 'all')}
-            className="p-2 rounded-xl bg-white/5 border border-white/10 text-slate-300 hover:text-white"
-          >
-            <Search className="w-4 h-4" />
-          </button>
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={() => setIsRecognizerModalOpen(true)}
+              className="p-1.5 rounded-xl bg-purple-950 text-purple-300 border border-purple-800/40"
+              title="Shazam"
+            >
+              <Radio className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => setIsImportModalOpen(true)}
+              className="p-1.5 rounded-xl bg-purple-950 text-purple-300 border border-purple-800/40"
+              title="Importar Link"
+            >
+              <Link2 className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => handleNavigate('search', 'all')}
+              className="p-1.5 rounded-xl bg-white/5 border border-white/10 text-slate-300"
+            >
+              <Search className="w-4 h-4" />
+            </button>
+          </div>
         </header>
 
-        {/* Scrollable View Container with pb-44 md:pb-28 for mobile and desktop players */}
+        {/* Scrollable View Container */}
         <div className="flex-1 overflow-y-auto px-4 md:px-8 py-5 md:py-6 pb-44 md:pb-28 scroll-smooth">
           {currentView === 'home' && (
             <HomeView
               onOpenMergeModal={() => setIsMergeModalOpen(true)}
+              onOpenRecognizerModal={() => setIsRecognizerModalOpen(true)}
+              onOpenImportModal={() => setIsImportModalOpen(true)}
               onAddToPlaylist={(track) => setTrackToAddToPlaylist(track)}
               onSelectPlaylist={handleSelectPlaylist}
               onNavigateSearch={(filter) => handleNavigate('search', filter)}
@@ -88,6 +112,7 @@ const MainApp: React.FC = () => {
             <SearchView
               initialFilter={activeFilter}
               onAddToPlaylist={(track) => setTrackToAddToPlaylist(track)}
+              onOpenPlaylist={handleSelectPlaylist}
             />
           )}
 
@@ -109,14 +134,16 @@ const MainApp: React.FC = () => {
           )}
         </div>
 
-        {/* PlayerBar (Compact on mobile, full on desktop) */}
+        {/* PlayerBar */}
         <PlayerBar />
 
-        {/* Mobile Bottom Navigation Bar (< 768px) */}
+        {/* Mobile Bottom Navigation Bar */}
         <BottomNav
           currentView={currentView}
           activeFilter={activeFilter}
           onNavigate={handleNavigate}
+          onOpenRecognizerModal={() => setIsRecognizerModalOpen(true)}
+          onOpenImportModal={() => setIsImportModalOpen(true)}
         />
       </main>
 
@@ -137,6 +164,19 @@ const MainApp: React.FC = () => {
         isOpen={isCreateModalOpen}
         onClose={() => setIsCreateModalOpen(false)}
         onCreated={(id) => handleSelectPlaylist(id)}
+      />
+
+      <AudioRecognizerModal
+        isOpen={isRecognizerModalOpen}
+        onClose={() => setIsRecognizerModalOpen(false)}
+        onAddToPlaylist={(track) => setTrackToAddToPlaylist(track)}
+      />
+
+      <ImportLinkModal
+        isOpen={isImportModalOpen}
+        onClose={() => setIsImportModalOpen(false)}
+        onPlaylistImported={(id) => handleSelectPlaylist(id)}
+        onAddToPlaylist={(track) => setTrackToAddToPlaylist(track)}
       />
     </div>
   );

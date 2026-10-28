@@ -24,6 +24,16 @@ export interface Playlist {
   isCustom?: boolean;
 }
 
+export interface SearchPlaylistResult {
+  id: string;
+  title: string;
+  author: string;
+  coverUrl: string;
+  trackCount?: number;
+  platform: Platform;
+  externalUrl?: string;
+}
+
 export interface DeckState {
   track: Track | null;
   isPlaying: boolean;

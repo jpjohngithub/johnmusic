@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useRef, useEffect, useCallback } from 'react';
 import { Track } from '../types';
+import { resolveFullTrackAudio } from '../services/api';
 
 declare global {
   interface Window {
@@ -278,7 +279,7 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   };
 
   // Play a specific track
-  const playTrack = useCallback((track: Track, newQueue?: Track[]) => {
+  const playTrack = useCallback(async (track: Track, newQueue?: Track[]) => {
     if (crossfadeTimerRef.current) {
       cancelAnimationFrame(crossfadeTimerRef.current);
       crossfadeTimerRef.current = null;
@@ -286,27 +287,34 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     isCrossfadingRef.current = false;
     setIsCrossfading(false);
 
-    let nextQueue = newQueue || queueRef.current;
+    // Resolve full track audio (Spotify -> YouTube) if needed
+    const resolvedTrack = (!track.youtubeId && !track.streamUrl)
+      ? await resolveFullTrackAudio(track)
+      : track;
+
+    let nextQueue = newQueue ? [...newQueue] : [...queueRef.current];
     let idx = nextQueue.findIndex(t => t.id === track.id);
     if (idx === -1) {
-      nextQueue = [track, ...nextQueue];
+      nextQueue = [resolvedTrack, ...nextQueue];
       idx = 0;
+    } else {
+      nextQueue[idx] = resolvedTrack;
     }
 
     setQueue(nextQueue);
     setQueueIndex(idx);
-    setCurrentTrack(track);
+    setCurrentTrack(resolvedTrack);
     setIsPlaying(true);
 
     const targetDeck = activeDeckRef.current;
     const idleDeck = targetDeck === 'A' ? 'B' : 'A';
 
     stopDeckPlayback(idleDeck, null);
-    startDeckPlayback(targetDeck, track, volumeRef.current);
+    startDeckPlayback(targetDeck, resolvedTrack, volumeRef.current);
   }, []);
 
   // Next Track with Crossfade
-  const nextTrack = useCallback(() => {
+  const nextTrack = useCallback(async () => {
     const q = queueRef.current;
     if (q.length === 0) return;
 
@@ -320,7 +328,13 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       }
     }
 
-    const nextTrackObj = q[nextIndex];
+    let nextTrackObj = q[nextIndex];
+    if (!nextTrackObj.youtubeId && !nextTrackObj.streamUrl) {
+      nextTrackObj = await resolveFullTrackAudio(nextTrackObj);
+      q[nextIndex] = nextTrackObj;
+      setQueue([...q]);
+    }
+
     const fromDeck = activeDeckRef.current;
     const toDeck = fromDeck === 'A' ? 'B' : 'A';
 
@@ -328,7 +342,7 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   }, [currentTrack]);
 
   // Prev Track
-  const prevTrack = useCallback(() => {
+  const prevTrack = useCallback(async () => {
     const q = queueRef.current;
     if (q.length === 0) return;
 
@@ -337,7 +351,13 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       prevIndex = q.length - 1;
     }
 
-    const prevTrackObj = q[prevIndex];
+    let prevTrackObj = q[prevIndex];
+    if (!prevTrackObj.youtubeId && !prevTrackObj.streamUrl) {
+      prevTrackObj = await resolveFullTrackAudio(prevTrackObj);
+      q[prevIndex] = prevTrackObj;
+      setQueue([...q]);
+    }
+
     const fromDeck = activeDeckRef.current;
     const toDeck = fromDeck === 'A' ? 'B' : 'A';
 

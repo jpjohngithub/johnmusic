@@ -6,10 +6,12 @@ import { TrackRow } from '../components/TrackRow';
 import { usePlayer } from '../context/PlayerContext';
 import { usePlaylists } from '../context/PlaylistContext';
 import { SafeImage } from '../components/SafeImage';
-import { Play, Sparkles, Layers, Disc3 } from 'lucide-react';
+import { Play, Sparkles, Layers, Disc3, Radio, Link2 } from 'lucide-react';
 
 interface HomeViewProps {
   onOpenMergeModal: () => void;
+  onOpenRecognizerModal: () => void;
+  onOpenImportModal: () => void;
   onAddToPlaylist: (track: Track) => void;
   onSelectPlaylist: (id: string) => void;
   onNavigateSearch: (filter: Platform | 'all') => void;
@@ -17,6 +19,8 @@ interface HomeViewProps {
 
 export const HomeView: React.FC<HomeViewProps> = ({
   onOpenMergeModal,
+  onOpenRecognizerModal,
+  onOpenImportModal,
   onAddToPlaylist,
   onSelectPlaylist,
   onNavigateSearch
@@ -36,86 +40,101 @@ export const HomeView: React.FC<HomeViewProps> = ({
 
   return (
     <div className="space-y-8 animate-fadeIn">
-      {/* Hero Banner */}
-      <div className="relative rounded-3xl overflow-hidden p-6 sm:p-10 bg-gradient-to-br from-purple-900/60 via-indigo-950/70 to-[#0b0c10] border border-purple-500/20 shadow-2xl backdrop-blur-xl">
-        <div className="absolute -right-10 -bottom-10 w-80 h-80 bg-purple-600/10 rounded-full blur-3xl pointer-events-none" />
+      {/* Hero Minimalist Banner */}
+      <div className="relative rounded-3xl overflow-hidden p-6 sm:p-8 bg-[#0f0a17] border border-purple-900/40 shadow-2xl">
         <div className="relative z-10 max-w-2xl">
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-mono font-bold bg-purple-500/20 border border-purple-400/30 text-purple-300 mb-3">
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-mono font-bold bg-purple-950 text-purple-300 border border-purple-800/40 mb-3">
             <Sparkles className="w-3.5 h-3.5" />
             Spotify + YouTube + TikTok Unificados
           </span>
-          <h2 className="text-3xl sm:text-5xl font-black text-white tracking-tight leading-tight">
-            Todas as músicas do mundo. <span className="bg-gradient-to-r from-purple-400 via-pink-400 to-cyan-400 bg-clip-text text-transparent">Sem login.</span>
+          <h2 className="text-2xl sm:text-4xl font-black text-white tracking-tight">
+            Todas as suas músicas. <span className="text-purple-400">Sem limites.</span>
           </h2>
-          <p className="mt-3 text-sm sm:text-base text-slate-300 leading-relaxed max-w-xl">
-            Transição contínua Dual-Deck DJ, sem silêncio, download direto em MP3 e fusão de playlists em um só lugar.
+          <p className="mt-2 text-xs sm:text-sm text-slate-400 leading-relaxed max-w-lg">
+            Transição contínua Dual-Deck DJ, áudios 100% completos do Spotify, extração de som do TikTok e identificação estilo Shazam.
           </p>
 
-          <div className="flex flex-wrap items-center gap-3 mt-6">
+          <div className="flex flex-wrap items-center gap-2.5 mt-5">
             <button
               onClick={handlePlayAll}
-              className="flex items-center gap-2 px-6 py-3 rounded-2xl font-bold text-sm bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white shadow-xl shadow-purple-900/40 active:scale-95 transition-transform"
+              className="flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-xs bg-purple-600 hover:bg-purple-500 text-white shadow-lg shadow-purple-950/50 active:scale-95 transition-all"
             >
-              <Play className="w-5 h-5 fill-white" />
-              Tocar Mega Mix Unificado
+              <Play className="w-4 h-4 fill-white" />
+              Tocar Mega Mix
+            </button>
+
+            <button
+              onClick={onOpenRecognizerModal}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs bg-purple-950 hover:bg-purple-900 text-purple-200 border border-purple-800/40 active:scale-95 transition-all"
+            >
+              <Radio className="w-4 h-4 text-purple-400" />
+              Ouvir do PC (Shazam)
+            </button>
+
+            <button
+              onClick={onOpenImportModal}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs bg-[#160f22] hover:bg-purple-950 text-slate-300 border border-purple-900/30 active:scale-95 transition-all"
+            >
+              <Link2 className="w-4 h-4 text-purple-400" />
+              Importar Link
             </button>
 
             <button
               onClick={onOpenMergeModal}
-              className="flex items-center gap-2 px-5 py-3 rounded-2xl font-bold text-sm bg-white/10 hover:bg-white/15 text-white border border-white/10 shadow-lg active:scale-95 transition-all"
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs bg-transparent hover:bg-white/5 text-slate-400 hover:text-white border border-white/5 active:scale-95 transition-all"
             >
-              <Layers className="w-4 h-4 text-purple-400" />
+              <Layers className="w-4 h-4" />
               Mesclar Playlists
             </button>
           </div>
         </div>
       </div>
 
-      {/* Featured Playlists Carousel */}
+      {/* Featured Playlists */}
       <section>
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg sm:text-xl font-bold text-white flex items-center gap-2">
-            <Disc3 className="w-5 h-5 text-purple-400" />
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-base sm:text-lg font-bold text-white flex items-center gap-2">
+            <Disc3 className="w-4 h-4 text-purple-400" />
             Playlists em Destaque
           </h3>
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {playlists.slice(0, 4).map((pl) => (
             <div
               key={pl.id}
               onClick={() => onSelectPlaylist(pl.id)}
-              className="group p-3.5 rounded-2xl bg-white/[0.03] hover:bg-white/[0.08] border border-white/5 hover:border-purple-500/30 transition-all cursor-pointer backdrop-blur-md"
+              className="group p-3 rounded-2xl bg-[#0f0a17]/50 hover:bg-[#160f22] border border-purple-900/20 hover:border-purple-600/30 transition-all cursor-pointer"
             >
-              <div className="aspect-square rounded-xl overflow-hidden mb-3 bg-slate-900 shadow-md">
+              <div className="aspect-square rounded-xl overflow-hidden mb-2.5 bg-black shadow-md">
                 <SafeImage
                   src={pl.coverUrl}
                   alt={pl.name}
                   className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                 />
               </div>
-              <h4 className="font-bold text-sm text-white truncate">{pl.name}</h4>
-              <p className="text-xs text-slate-400 truncate mt-0.5">{pl.tracks.length} músicas</p>
+              <h4 className="font-bold text-xs text-white truncate">{pl.name}</h4>
+              <p className="text-[11px] text-slate-400 truncate mt-0.5">{pl.tracks.length} músicas</p>
             </div>
           ))}
         </div>
       </section>
 
-      {/* Destaques Multiplataforma Grid */}
+      {/* Top Tracks Grid */}
       <section>
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg sm:text-xl font-bold text-white">
-            Top Músicas Globais
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-base sm:text-lg font-bold text-white">
+            Mais Tocadas (Áudios Oficiais)
           </h3>
           <button
             onClick={() => onNavigateSearch('all')}
             className="text-xs font-semibold text-purple-400 hover:text-purple-300"
           >
-            Ver mais
+            Ver catálogo completo
           </button>
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 sm:gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3">
           {FEATURED_TRACKS.slice(0, 6).map((track) => (
             <TrackCard
               key={track.id}
@@ -128,21 +147,21 @@ export const HomeView: React.FC<HomeViewProps> = ({
       </section>
 
       {/* Three Column Platform Showcases */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Spotify Column */}
-        <div className="p-4 rounded-2xl bg-white/[0.02] border border-emerald-500/20 backdrop-blur-md">
-          <div className="flex items-center justify-between mb-3 pb-2 border-b border-emerald-500/20">
-            <span className="font-bold text-sm text-emerald-400 flex items-center gap-2">
-              Spotify Music
+        <div className="p-4 rounded-2xl bg-[#0f0a17]/60 border border-purple-900/30">
+          <div className="flex items-center justify-between mb-3 pb-2 border-b border-purple-900/20">
+            <span className="font-bold text-xs text-purple-300 flex items-center gap-2">
+              Spotify (Músicas Completas)
             </span>
             <button
               onClick={() => onNavigateSearch('spotify')}
-              className="text-[11px] text-slate-400 hover:text-emerald-400"
+              className="text-[10px] text-slate-500 hover:text-purple-400"
             >
-              Explorar
+              Ver mais
             </button>
           </div>
-          <div className="space-y-2">
+          <div className="space-y-1.5">
             {spotifyTracks.map((track) => (
               <TrackRow
                 key={track.id}
@@ -155,19 +174,19 @@ export const HomeView: React.FC<HomeViewProps> = ({
         </div>
 
         {/* YouTube Column */}
-        <div className="p-4 rounded-2xl bg-white/[0.02] border border-red-500/20 backdrop-blur-md">
-          <div className="flex items-center justify-between mb-3 pb-2 border-b border-red-500/20">
-            <span className="font-bold text-sm text-red-400 flex items-center gap-2">
-              YouTube Music
+        <div className="p-4 rounded-2xl bg-[#0f0a17]/60 border border-purple-900/30">
+          <div className="flex items-center justify-between mb-3 pb-2 border-b border-purple-900/20">
+            <span className="font-bold text-xs text-purple-300 flex items-center gap-2">
+              YouTube Music (Áudio Contínuo)
             </span>
             <button
               onClick={() => onNavigateSearch('youtube')}
-              className="text-[11px] text-slate-400 hover:text-red-400"
+              className="text-[10px] text-slate-500 hover:text-purple-400"
             >
-              Explorar
+              Ver mais
             </button>
           </div>
-          <div className="space-y-2">
+          <div className="space-y-1.5">
             {youtubeTracks.map((track) => (
               <TrackRow
                 key={track.id}
@@ -180,19 +199,19 @@ export const HomeView: React.FC<HomeViewProps> = ({
         </div>
 
         {/* TikTok Column */}
-        <div className="p-4 rounded-2xl bg-white/[0.02] border border-cyan-500/20 backdrop-blur-md">
-          <div className="flex items-center justify-between mb-3 pb-2 border-b border-cyan-500/20">
-            <span className="font-bold text-sm text-cyan-400 flex items-center gap-2">
-              TikTok Trends
+        <div className="p-4 rounded-2xl bg-[#0f0a17]/60 border border-purple-900/30">
+          <div className="flex items-center justify-between mb-3 pb-2 border-b border-purple-900/20">
+            <span className="font-bold text-xs text-purple-300 flex items-center gap-2">
+              TikTok Trends (Sem Travamento)
             </span>
             <button
               onClick={() => onNavigateSearch('tiktok')}
-              className="text-[11px] text-slate-400 hover:text-cyan-400"
+              className="text-[10px] text-slate-500 hover:text-purple-400"
             >
-              Explorar
+              Ver mais
             </button>
           </div>
-          <div className="space-y-2">
+          <div className="space-y-1.5">
             {tiktokTracks.map((track) => (
               <TrackRow
                 key={track.id}
