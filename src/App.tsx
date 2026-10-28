@@ -18,10 +18,47 @@ import { Platform, Track } from './types';
 import { Headphones, Search, Radio, Link2 } from 'lucide-react';
 
 const MainApp: React.FC = () => {
-  const { createPlaylist, addTrackToPlaylist } = usePlaylists();
-  const [currentView, setCurrentView] = useState<'home' | 'search' | 'library' | 'playlist'>('home');
+  const { createPlaylist, addTrackToPlaylist, playlists } = usePlaylists();
+  const [currentView, setCurrentView] = useState<'home' | 'search' | 'library' | 'playlist'>(() => {
+    try {
+      const saved = localStorage.getItem('johnmusic_active_view');
+      if (saved && ['home', 'search', 'library', 'playlist'].includes(saved)) {
+        return saved as any;
+      }
+    } catch {}
+    return 'home';
+  });
   const [activeFilter, setActiveFilter] = useState<Platform | 'all'>('all');
-  const [selectedPlaylistId, setSelectedPlaylistId] = useState<string | null>(null);
+  const [selectedPlaylistId, setSelectedPlaylistId] = useState<string | null>(() => {
+    try {
+      return localStorage.getItem('johnmusic_active_playlist_id') || null;
+    } catch {
+      return null;
+    }
+  });
+
+  // Keep active view & selected playlist in storage
+  React.useEffect(() => {
+    try {
+      localStorage.setItem('johnmusic_active_view', currentView);
+      if (selectedPlaylistId) {
+        localStorage.setItem('johnmusic_active_playlist_id', selectedPlaylistId);
+      } else {
+        localStorage.removeItem('johnmusic_active_playlist_id');
+      }
+    } catch {}
+  }, [currentView, selectedPlaylistId]);
+
+  // If playlist was deleted while selected, return to library
+  React.useEffect(() => {
+    if (currentView === 'playlist' && selectedPlaylistId) {
+      const exists = playlists.some(p => p.id === selectedPlaylistId);
+      if (!exists && playlists.length > 0) {
+        setCurrentView('library');
+        setSelectedPlaylistId(null);
+      }
+    }
+  }, [playlists, currentView, selectedPlaylistId]);
 
   // Auto-import shared playlist from URL (?playlist=...)
   React.useEffect(() => {

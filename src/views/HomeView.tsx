@@ -28,9 +28,13 @@ export const HomeView: React.FC<HomeViewProps> = ({
   const { playTrack } = usePlayer();
   const { playlists } = usePlaylists();
 
-  const spotifyTracks = FEATURED_TRACKS.filter(t => t.platform === 'spotify');
-  const youtubeTracks = FEATURED_TRACKS.filter(t => t.platform === 'youtube');
-  const tiktokTracks = FEATURED_TRACKS.filter(t => t.platform === 'tiktok');
+  const spotifyPl = playlists.find(p => p.id === 'pl_spotify_hits');
+  const youtubePl = playlists.find(p => p.id === 'pl_youtube_trends');
+  const tiktokPl = playlists.find(p => p.id === 'pl_tiktok_viral');
+
+  const spotifyTracks = (spotifyPl && spotifyPl.tracks.length > 0) ? spotifyPl.tracks : FEATURED_TRACKS.filter(t => t.platform === 'spotify');
+  const youtubeTracks = (youtubePl && youtubePl.tracks.length > 0) ? youtubePl.tracks : FEATURED_TRACKS.filter(t => t.platform === 'youtube');
+  const tiktokTracks = (tiktokPl && tiktokPl.tracks.length > 0) ? tiktokPl.tracks : FEATURED_TRACKS.filter(t => t.platform === 'tiktok');
 
   const handlePlayAll = () => {
     if (FEATURED_TRACKS.length > 0) {

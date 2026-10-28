@@ -62,8 +62,9 @@ export function importLegacyPlaylists(): Playlist[] {
               ? pl.tracks.map(convertLegacyItemToTrack)
               : [];
 
+            const stableId = pl.id || `pl_leg_${(pl.name || 'custom').toLowerCase().replace(/[^a-z0-9]/g, '_')}`;
             importedList.push({
-              id: pl.id || `pl_migrated_${Date.now()}_${Math.random()}`,
+              id: stableId,
               name: pl.name || 'Playlist Recuperada',
               description: pl.description || 'Restaurada da versão anterior do JohnMusic',
               coverUrl: pl.coverUrl || tracks[0]?.coverUrl || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=600&q=80',
@@ -78,7 +79,7 @@ export function importLegacyPlaylists(): Playlist[] {
       // Check youtubePlaylists
       if (Array.isArray(stateObj.youtubePlaylists)) {
         for (const pl of stateObj.youtubePlaylists) {
-          const plId = pl.id || `pl_yt_mig_${Math.random()}`;
+          const plId = pl.id || `pl_yt_${(pl.name || 'yt').toLowerCase().replace(/[^a-z0-9]/g, '_')}`;
           if (!seenIds.has(plId)) {
             seenIds.add(plId);
             const tracks: Track[] = Array.isArray(pl.videos)
@@ -109,7 +110,7 @@ export function importLegacyPlaylists(): Playlist[] {
       // Check tiktokPlaylists
       if (Array.isArray(stateObj.tiktokPlaylists)) {
         for (const pl of stateObj.tiktokPlaylists) {
-          const plId = pl.id || `pl_tt_mig_${Math.random()}`;
+          const plId = pl.id || `pl_tt_${(pl.name || 'tt').toLowerCase().replace(/[^a-z0-9]/g, '_')}`;
           if (!seenIds.has(plId)) {
             seenIds.add(plId);
             const tracks: Track[] = Array.isArray(pl.videos)
@@ -141,10 +142,11 @@ export function importLegacyPlaylists(): Playlist[] {
       if (Array.isArray(stateObj) && key.toLowerCase().includes('playlist')) {
         for (const pl of stateObj) {
           if (pl && pl.name && !seenIds.has(pl.id)) {
-            seenIds.add(pl.id || pl.name);
+            const stableId = pl.id || `pl_arr_${(pl.name || 'raw').toLowerCase().replace(/[^a-z0-9]/g, '_')}`;
+            seenIds.add(stableId);
             const rawTracks = pl.tracks || pl.items || [];
             importedList.push({
-              id: pl.id || `pl_arr_${Date.now()}_${Math.random()}`,
+              id: stableId,
               name: pl.name,
               description: pl.description || 'Restaurada do histórico anterior',
               coverUrl: pl.coverUrl || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=600&q=80',

@@ -81,7 +81,13 @@ export const PlaylistDetailView: React.FC<PlaylistDetailViewProps> = ({
   }
 
   const handleDeletePlaylist = () => {
-    if (confirm(`Tem certeza que deseja remover a playlist "${playlist.name}"?`)) {
+    let ok = true;
+    try {
+      ok = window.confirm(`Tem certeza que deseja remover a playlist "${playlist.name}"?`);
+    } catch {
+      ok = true;
+    }
+    if (ok) {
       deletePlaylist(playlist.id);
       onBack();
     }

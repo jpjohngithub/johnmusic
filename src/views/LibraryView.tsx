@@ -41,7 +41,13 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
 
   const handleDelete = (e: React.MouseEvent, id: string, name: string) => {
     e.stopPropagation();
-    if (confirm(`Tem certeza que deseja remover a playlist "${name}"?`)) {
+    let ok = true;
+    try {
+      ok = window.confirm(`Tem certeza que deseja remover a playlist "${name}"?`);
+    } catch {
+      ok = true;
+    }
+    if (ok) {
       deletePlaylist(id);
     }
   };

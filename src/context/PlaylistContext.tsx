@@ -59,12 +59,39 @@ const DEFAULT_PLAYLISTS: Playlist[] = [
 ];
 
 const STORAGE_DELETED_KEY = 'johnmusic_deleted_ids_v4';
+const STORAGE_DELETED_NAMES_KEY = 'johnmusic_deleted_names_v4';
+const STORAGE_MIGRATED_KEY = 'johnmusic_legacy_migrated_v4';
 const STORAGE_PLAYLISTS_KEY = 'johnmusic_playlists_v4';
 const STORAGE_SAVED_KEY = 'johnmusic_saved_tracks_v4';
 
+function setCookie(name: string, value: string, days = 365) {
+  try {
+    const expires = new Date(Date.now() + days * 864e5).toUTCString();
+    document.cookie = `${name}=${encodeURIComponent(value)}; expires=${expires}; path=/; SameSite=Lax`;
+  } catch {}
+}
+
+function getCookie(name: string): string | null {
+  try {
+    const match = document.cookie.match(new RegExp('(^|;\\s*)' + name + '=([^;]*)'));
+    return match ? decodeURIComponent(match[2]) : null;
+  } catch {
+    return null;
+  }
+}
+
 function getDeletedPlaylistIds(): Set<string> {
   try {
-    const raw = localStorage.getItem(STORAGE_DELETED_KEY);
+    const raw = localStorage.getItem(STORAGE_DELETED_KEY) || getCookie(STORAGE_DELETED_KEY);
+    return new Set(raw ? JSON.parse(raw) : []);
+  } catch {
+    return new Set();
+  }
+}
+
+function getDeletedPlaylistNames(): Set<string> {
+  try {
+    const raw = localStorage.getItem(STORAGE_DELETED_NAMES_KEY) || getCookie(STORAGE_DELETED_NAMES_KEY);
     return new Set(raw ? JSON.parse(raw) : []);
   } catch {
     return new Set();
@@ -73,7 +100,10 @@ function getDeletedPlaylistIds(): Set<string> {
 
 function saveToLocalStorage(key: string, data: any) {
   try {
-    localStorage.setItem(key, JSON.stringify(data));
+    const str = JSON.stringify(data);
+    localStorage.setItem(key, str);
+    // Also backup to session storage
+    sessionStorage.setItem(key, str);
   } catch (err) {
     console.error(`Failed to save to localStorage (${key}):`, err);
   }
@@ -84,10 +114,11 @@ const PlaylistContext = createContext<PlaylistContextType | null>(null);
 export const PlaylistProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [playlists, setPlaylists] = useState<Playlist[]>(() => {
     const deletedIds = getDeletedPlaylistIds();
+    const deletedNames = getDeletedPlaylistNames();
     let loaded: Playlist[] | null = null;
 
-    // Check v4 store first, fallback to v3
-    const savedV4 = localStorage.getItem(STORAGE_PLAYLISTS_KEY);
+    // Check v4 store first, then sessionStorage, then v3
+    const savedV4 = localStorage.getItem(STORAGE_PLAYLISTS_KEY) || sessionStorage.getItem(STORAGE_PLAYLISTS_KEY);
     const savedV3 = localStorage.getItem('johnmusic_playlists_v3');
 
     if (savedV4) {
@@ -103,8 +134,8 @@ export const PlaylistProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }
 
     if (loaded !== null) {
-      // Exclude permanently deleted playlists
-      let clean = loaded.filter(p => !deletedIds.has(p.id));
+      // Exclude permanently deleted playlists by ID and by normalized name
+      let clean = loaded.filter(p => !deletedIds.has(p.id) && !deletedNames.has(p.name.toLowerCase().trim()));
 
       // Refresh working stream URLs on tracks without overwriting user tracklist or edits
       clean = clean.map(p => {
@@ -122,15 +153,20 @@ export const PlaylistProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       return clean;
     }
 
-    // First launch: initialize defaults minus any deleted ones
-    let current: Playlist[] = DEFAULT_PLAYLISTS.filter(p => !deletedIds.has(p.id));
-    try {
-      const legacy = importLegacyPlaylists().filter(p => !deletedIds.has(p.id));
-      if (legacy.length > 0) {
-        current = [...legacy, ...current];
+    // First launch only: initialize defaults minus deleted items
+    let current: Playlist[] = DEFAULT_PLAYLISTS.filter(p => !deletedIds.has(p.id) && !deletedNames.has(p.name.toLowerCase().trim()));
+
+    const isAlreadyMigrated = localStorage.getItem(STORAGE_MIGRATED_KEY) === 'true';
+    if (!isAlreadyMigrated) {
+      try {
+        const legacy = importLegacyPlaylists().filter(p => !deletedIds.has(p.id) && !deletedNames.has(p.name.toLowerCase().trim()));
+        if (legacy.length > 0) {
+          current = [...legacy, ...current];
+        }
+      } catch (e) {
+        console.warn('Initial legacy migration failed:', e);
       }
-    } catch (e) {
-      console.warn('Initial legacy migration failed:', e);
+      localStorage.setItem(STORAGE_MIGRATED_KEY, 'true');
     }
 
     saveToLocalStorage(STORAGE_PLAYLISTS_KEY, current);
@@ -210,16 +246,31 @@ export const PlaylistProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   };
 
   const deletePlaylist = (id: string) => {
-    // 1. Permanently blacklist ID in localStorage so F5 or legacy migrations never revive it
+    const target = playlists.find(p => p.id === id);
+    const targetName = target ? target.name.toLowerCase().trim() : '';
+
+    // 1. Permanently blacklist ID and name in localStorage and cookie
     try {
       const raw = localStorage.getItem(STORAGE_DELETED_KEY);
       const set = new Set<string>(raw ? JSON.parse(raw) : []);
       set.add(id);
-      localStorage.setItem(STORAGE_DELETED_KEY, JSON.stringify(Array.from(set)));
+      const idJson = JSON.stringify(Array.from(set));
+      localStorage.setItem(STORAGE_DELETED_KEY, idJson);
+      setCookie(STORAGE_DELETED_KEY, idJson);
+
+      if (targetName) {
+        const rawNames = localStorage.getItem(STORAGE_DELETED_NAMES_KEY);
+        const nameSet = new Set<string>(rawNames ? JSON.parse(rawNames) : []);
+        nameSet.add(targetName);
+        const nameJson = JSON.stringify(Array.from(nameSet));
+        localStorage.setItem(STORAGE_DELETED_NAMES_KEY, nameJson);
+        setCookie(STORAGE_DELETED_NAMES_KEY, nameJson);
+      }
     } catch {}
 
-    // 2. Scrub from legacy localStorage keys if present
+    // 2. Scrub from legacy localStorage stores
     const keysToScrub = [
+      'johnmusic_playlists_v4',
       'johnmusic_playlists_v3',
       'johnmusic_playlists_v2',
       'johnmusic-library-v4',
@@ -234,9 +285,14 @@ export const PlaylistProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         if (!raw) return;
         const parsed = JSON.parse(raw);
         if (Array.isArray(parsed)) {
-          localStorage.setItem(key, JSON.stringify(parsed.filter((item: any) => item.id !== id)));
-        } else if (parsed && typeof parsed === 'object' && parsed.state?.playlists) {
-          parsed.state.playlists = parsed.state.playlists.filter((p: any) => p.id !== id);
+          localStorage.setItem(key, JSON.stringify(parsed.filter((item: any) => item.id !== id && item.name?.toLowerCase().trim() !== targetName)));
+        } else if (parsed && typeof parsed === 'object') {
+          const stateObj = parsed.state || parsed;
+          ['customPlaylists', 'youtubePlaylists', 'tiktokPlaylists', 'playlists'].forEach(arrKey => {
+            if (Array.isArray(stateObj[arrKey])) {
+              stateObj[arrKey] = stateObj[arrKey].filter((item: any) => item.id !== id && item.name?.toLowerCase().trim() !== targetName);
+            }
+          });
           localStorage.setItem(key, JSON.stringify(parsed));
         }
       } catch {}
