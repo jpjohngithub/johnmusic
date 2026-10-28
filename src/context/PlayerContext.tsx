@@ -58,6 +58,9 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const ytDeckA = useRef<any>(null);
   const ytDeckB = useRef<any>(null);
   const ytReady = useRef<boolean>(false);
+  const ytDeckReadyA = useRef<boolean>(false);
+  const ytDeckReadyB = useRef<boolean>(false);
+  const pendingTrackRef = useRef<{ deck: 'A' | 'B'; track: Track; vol: number } | null>(null);
 
   // State refs to avoid stale closures in listeners/crossfade loops
   const activeDeckRef = useRef<'A' | 'B'>('A');
@@ -81,41 +84,78 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   // Initialize YouTube IFrame API
   useEffect(() => {
-    if (!window.YT) {
-      const tag = document.createElement('script');
-      tag.src = 'https://www.youtube.com/iframe_api';
-      const firstScriptTag = document.getElementsByTagName('script')[0];
-      firstScriptTag?.parentNode?.insertBefore(tag, firstScriptTag);
-
-      window.onYouTubeIframeAPIReady = () => {
-        ytReady.current = true;
+    const initTimer = setInterval(() => {
+      if (window.YT && window.YT.Player) {
         initYtPlayers();
-      };
-    } else if (window.YT && window.YT.Player) {
+        if (ytDeckA.current && ytDeckB.current) {
+          clearInterval(initTimer);
+        }
+      }
+    }, 150);
+
+    window.onYouTubeIframeAPIReady = () => {
       ytReady.current = true;
       initYtPlayers();
-    }
+    };
+
+    return () => clearInterval(initTimer);
   }, []);
 
   const initYtPlayers = () => {
     try {
-      if (!ytDeckA.current && document.getElementById('yt-player-a')) {
+      if (!ytDeckA.current && document.getElementById('yt-player-a') && window.YT?.Player) {
         ytDeckA.current = new window.YT.Player('yt-player-a', {
-          height: '120',
-          width: '200',
-          playerVars: { autoplay: 0, controls: 0, disablekb: 1, fs: 0, rel: 0 },
+          height: '200',
+          width: '300',
+          playerVars: {
+            autoplay: 0,
+            controls: 0,
+            disablekb: 1,
+            fs: 0,
+            rel: 0,
+            playsinline: 1,
+            enablejsapi: 1,
+            origin: window.location.origin
+          },
           events: {
+            onReady: () => {
+              ytDeckReadyA.current = true;
+              if (pendingTrackRef.current && pendingTrackRef.current.deck === 'A') {
+                const { track, vol } = pendingTrackRef.current;
+                pendingTrackRef.current = null;
+                startDeckPlayback('A', track, vol);
+              }
+            },
             onStateChange: (event: any) => handleYtStateChange('A', event),
+            onError: (err: any) => console.warn('Deck A YT Error:', err)
           }
         });
       }
-      if (!ytDeckB.current && document.getElementById('yt-player-b')) {
+      if (!ytDeckB.current && document.getElementById('yt-player-b') && window.YT?.Player) {
         ytDeckB.current = new window.YT.Player('yt-player-b', {
-          height: '120',
-          width: '200',
-          playerVars: { autoplay: 0, controls: 0, disablekb: 1, fs: 0, rel: 0 },
+          height: '200',
+          width: '300',
+          playerVars: {
+            autoplay: 0,
+            controls: 0,
+            disablekb: 1,
+            fs: 0,
+            rel: 0,
+            playsinline: 1,
+            enablejsapi: 1,
+            origin: window.location.origin
+          },
           events: {
+            onReady: () => {
+              ytDeckReadyB.current = true;
+              if (pendingTrackRef.current && pendingTrackRef.current.deck === 'B') {
+                const { track, vol } = pendingTrackRef.current;
+                pendingTrackRef.current = null;
+                startDeckPlayback('B', track, vol);
+              }
+            },
             onStateChange: (event: any) => handleYtStateChange('B', event),
+            onError: (err: any) => console.warn('Deck B YT Error:', err)
           }
         });
       }
@@ -151,9 +191,10 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   // Helper to determine if playback should use YouTube engine or HTML5 audio
   const isTrackYouTube = (track: Track | null): boolean => {
     if (!track) return false;
-    if (track.streamUrl) return false;
+    // Prefer YouTube whenever a valid youtubeId exists (full uninterrupted audio stream)
     if (track.youtubeId) return true;
-    return track.platform === 'youtube';
+    if (track.platform === 'spotify' || track.platform === 'youtube') return true;
+    return false;
   };
 
   // Set volume across decks
@@ -250,48 +291,60 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     if (deck === 'A') {
       if (isYt && track.youtubeId) {
         resetAudioElement(audioDeckA.current);
-        if (ytDeckA.current?.loadVideoById) {
-          ytDeckA.current.loadVideoById({
-            videoId: track.youtubeId,
-            startSeconds: 0
-          });
-          ytDeckA.current.setVolume(initialVol * 100);
-          ytDeckA.current.playVideo();
+        if (ytDeckReadyA.current && ytDeckA.current?.loadVideoById) {
+          try {
+            ytDeckA.current.loadVideoById({
+              videoId: track.youtubeId,
+              startSeconds: 0
+            });
+            ytDeckA.current.setVolume(initialVol * 100);
+            ytDeckA.current.playVideo();
+          } catch (e) {
+            console.warn('YT Deck A play error:', e);
+          }
+        } else {
+          pendingTrackRef.current = { deck: 'A', track, vol: initialVol };
         }
       } else if (audioDeckA.current && track.streamUrl) {
         if (ytDeckA.current?.stopVideo) ytDeckA.current.stopVideo();
         audioDeckA.current.src = track.streamUrl;
         audioDeckA.current.volume = initialVol;
         audioDeckA.current.muted = false;
-        audioDeckA.current.play().catch(e => {
-          console.warn('Deck A audio play failed, attempting YouTube fallback:', e);
-          if (track.youtubeId && ytDeckA.current?.loadVideoById) {
-            ytDeckA.current.loadVideoById({ videoId: track.youtubeId, startSeconds: 0 });
-            ytDeckA.current.playVideo();
+        audioDeckA.current.play().catch(async (e) => {
+          console.warn('Deck A audio play failed, falling back to YouTube:', e);
+          const resolved = await resolveFullTrackAudio(track, true);
+          if (resolved.youtubeId) {
+            startDeckPlayback('A', resolved, initialVol);
           }
         });
       }
     } else {
       if (isYt && track.youtubeId) {
         resetAudioElement(audioDeckB.current);
-        if (ytDeckB.current?.loadVideoById) {
-          ytDeckB.current.loadVideoById({
-            videoId: track.youtubeId,
-            startSeconds: 0
-          });
-          ytDeckB.current.setVolume(initialVol * 100);
-          ytDeckB.current.playVideo();
+        if (ytDeckReadyB.current && ytDeckB.current?.loadVideoById) {
+          try {
+            ytDeckB.current.loadVideoById({
+              videoId: track.youtubeId,
+              startSeconds: 0
+            });
+            ytDeckB.current.setVolume(initialVol * 100);
+            ytDeckB.current.playVideo();
+          } catch (e) {
+            console.warn('YT Deck B play error:', e);
+          }
+        } else {
+          pendingTrackRef.current = { deck: 'B', track, vol: initialVol };
         }
       } else if (audioDeckB.current && track.streamUrl) {
         if (ytDeckB.current?.stopVideo) ytDeckB.current.stopVideo();
         audioDeckB.current.src = track.streamUrl;
         audioDeckB.current.volume = initialVol;
         audioDeckB.current.muted = false;
-        audioDeckB.current.play().catch(e => {
-          console.warn('Deck B audio play failed, attempting YouTube fallback:', e);
-          if (track.youtubeId && ytDeckB.current?.loadVideoById) {
-            ytDeckB.current.loadVideoById({ videoId: track.youtubeId, startSeconds: 0 });
-            ytDeckB.current.playVideo();
+        audioDeckB.current.play().catch(async (e) => {
+          console.warn('Deck B audio play failed, falling back to YouTube:', e);
+          const resolved = await resolveFullTrackAudio(track, true);
+          if (resolved.youtubeId) {
+            startDeckPlayback('B', resolved, initialVol);
           }
         });
       }
@@ -538,7 +591,15 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         onEnded={() => {
           if (activeDeckRef.current === 'A' && !isCrossfadingRef.current) nextTrack();
         }}
-        onError={(e) => console.warn('Deck A audio error:', e)}
+        onError={async (e) => {
+          console.warn('Deck A audio error, attempting YouTube resolution:', e);
+          if (currentTrack) {
+            const resolved = await resolveFullTrackAudio(currentTrack, true);
+            if (resolved.youtubeId) {
+              startDeckPlayback('A', resolved, volumeRef.current);
+            }
+          }
+        }}
       />
       <audio
         ref={audioDeckB}
@@ -546,11 +607,19 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         onEnded={() => {
           if (activeDeckRef.current === 'B' && !isCrossfadingRef.current) nextTrack();
         }}
-        onError={(e) => console.warn('Deck B audio error:', e)}
+        onError={async (e) => {
+          console.warn('Deck B audio error, attempting YouTube resolution:', e);
+          if (currentTrack) {
+            const resolved = await resolveFullTrackAudio(currentTrack, true);
+            if (resolved.youtubeId) {
+              startDeckPlayback('B', resolved, volumeRef.current);
+            }
+          }
+        }}
       />
 
-      {/* Background YouTube Players with sufficient dimensions to prevent browser throttling */}
-      <div className="fixed bottom-0 right-0 w-[200px] h-[120px] pointer-events-none z-[-1] overflow-hidden opacity-[0.01]">
+      {/* Background YouTube Players with sufficient dimensions & visible opacity to pass browser autoplay policies */}
+      <div className="fixed -bottom-[500px] -right-[500px] w-[300px] h-[200px] pointer-events-none opacity-100 z-10 overflow-hidden">
         <div id="yt-player-a" />
         <div id="yt-player-b" />
       </div>

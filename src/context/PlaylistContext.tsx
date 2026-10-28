@@ -137,12 +137,17 @@ export const PlaylistProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       // Exclude permanently deleted playlists by ID and by normalized name
       let clean = loaded.filter(p => !deletedIds.has(p.id) && !deletedNames.has(p.name.toLowerCase().trim()));
 
-      // Refresh working stream URLs on tracks without overwriting user tracklist or edits
+      // Refresh working stream URLs and verified YouTube IDs on tracks without overwriting user additions
       clean = clean.map(p => {
         const updatedTracks = p.tracks.map(t => {
           const fresh = FEATURED_TRACKS.find(f => f.id === t.id);
-          if (fresh && (!t.streamUrl || t.streamUrl.length < 5) && fresh.streamUrl) {
-            return { ...t, streamUrl: fresh.streamUrl, coverUrl: fresh.coverUrl || t.coverUrl };
+          if (fresh) {
+            return {
+              ...t,
+              youtubeId: fresh.youtubeId || t.youtubeId,
+              streamUrl: fresh.streamUrl || t.streamUrl,
+              coverUrl: fresh.coverUrl || t.coverUrl
+            };
           }
           return t;
         });

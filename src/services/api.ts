@@ -31,6 +31,7 @@ export const FEATURED_TRACKS: Track[] = [
     duration: 125,
     coverUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/bc/b3/85/bcb38516-3182-f15e-4ba9-4b1e122dd094/67.jpg/600x600bb.jpg',
     platform: 'tiktok',
+    youtubeId: 'dJM5DN1mMls',
     streamUrl: 'https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/60/52/ae/6052aec4-6da8-4998-32e3-96ef4d2b4bbc/mzaf_15511878623835122755.plus.aac.p.m4a'
   },
   {
@@ -52,7 +53,7 @@ export const FEATURED_TRACKS: Track[] = [
     duration: 251,
     coverUrl: 'https://i.scdn.co/image/ab67616d0000b27382ea2e9e1858aa012c58977a',
     platform: 'youtube',
-    youtubeId: 'kPa7bsKwL-8'
+    youtubeId: 'kPa7bsKwL-c'
   },
   {
     id: 'tt_2',
@@ -62,6 +63,7 @@ export const FEATURED_TRACKS: Track[] = [
     duration: 140,
     coverUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music126/v4/0c/4e/b8/0c4eb8aa-d999-5042-005c-3d596d3c9c81/5063341826598_cover.jpg/600x600bb.jpg',
     platform: 'tiktok',
+    youtubeId: 'PgF29M69QXg',
     streamUrl: 'https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/9c/e8/5f/9ce85f65-9155-4151-5d59-561c47fb5389/mzaf_10269096629337659384.plus.aac.p.m4a'
   },
   {
@@ -83,7 +85,7 @@ export const FEATURED_TRACKS: Track[] = [
     duration: 198,
     coverUrl: 'https://i.scdn.co/image/ab67616d0000b27371d62ea7ea8a5be92d3c1f62',
     platform: 'youtube',
-    youtubeId: 'd5gf9dXHevw'
+    youtubeId: 'V9PVRfjEBTI'
   },
   {
     id: 'tt_3',
@@ -93,6 +95,7 @@ export const FEATURED_TRACKS: Track[] = [
     duration: 222,
     coverUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/ff/1b/f4/ff1bf4af-9b8e-b616-2dce-8c41cd292d68/5063535181519_cover.jpg/600x600bb.jpg',
     platform: 'tiktok',
+    youtubeId: '-r687V8yqKY',
     streamUrl: 'https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/50/18/a7/5018a78a-ee4a-301b-b844-ef38d21f3aa7/mzaf_1766887114284967318.plus.aac.p.m4a'
   }
 ];
@@ -295,9 +298,9 @@ export async function getRecommendedTracksForPlaylist(
 }
 
 // 4. Resolve exact YouTube video ID for any track
-export async function resolveFullTrackAudio(track: Track): Promise<Track> {
-  if (track.youtubeId) return track;
-  if (track.streamUrl) return track;
+export async function resolveFullTrackAudio(track: Track, force = false): Promise<Track> {
+  if (track.youtubeId && !force) return track;
+  if (track.streamUrl && !force) return track;
 
   const query = `${track.artist} - ${track.title}`;
   const results = await searchYouTube(query);
