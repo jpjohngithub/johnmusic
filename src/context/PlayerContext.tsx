@@ -128,7 +128,12 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
               }
             },
             onStateChange: (event: any) => handleYtStateChange('A', event),
-            onError: (err: any) => console.warn('Deck A YT Error:', err)
+            onError: (err: any) => {
+              console.warn('Deck A YT Error:', err);
+              if (activeDeckRef.current === 'A' && !isCrossfadingRef.current) {
+                nextTrack();
+              }
+            }
           }
         });
       }
@@ -156,7 +161,12 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
               }
             },
             onStateChange: (event: any) => handleYtStateChange('B', event),
-            onError: (err: any) => console.warn('Deck B YT Error:', err)
+            onError: (err: any) => {
+              console.warn('Deck B YT Error:', err);
+              if (activeDeckRef.current === 'B' && !isCrossfadingRef.current) {
+                nextTrack();
+              }
+            }
           }
         });
       }
@@ -222,7 +232,7 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }
   };
 
-  // Perform equal-power crossfade transition from deckFrom to deckTo
+  // Perform equal-power crossfade transition from deckFrom to deckTo (background-tab safe)
   const executeCrossfade = (
     fromDeck: 'A' | 'B',
     toDeck: 'A' | 'B',
@@ -234,17 +244,32 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     isCrossfadingRef.current = true;
     setIsCrossfading(true);
 
-    const durationMs = crossfadeDurationRef.current * 1000;
-    const startTime = performance.now();
+    const durationMs = Math.max(1000, crossfadeDurationRef.current * 1000);
+    const startTime = Date.now();
     const masterVol = volumeRef.current;
 
     // Start next deck at volume 0
     setDeckVolume(toDeck, 0, nextTrackObj);
     startDeckPlayback(toDeck, nextTrackObj, 0);
 
-    // Handshake & equal-power ramp
-    const crossfadeStep = (now: number) => {
-      const elapsed = now - startTime;
+    const finishCrossfade = () => {
+      if (crossfadeTimerRef.current) {
+        clearInterval(crossfadeTimerRef.current);
+        crossfadeTimerRef.current = null;
+      }
+      stopDeckPlayback(fromDeck, fromTrack);
+      setDeckVolume(toDeck, masterVol, nextTrackObj);
+
+      setActiveDeck(toDeck);
+      setCurrentTrack(nextTrackObj);
+      setQueueIndex(nextIndex);
+      setIsCrossfading(false);
+      isCrossfadingRef.current = false;
+    };
+
+    // Use setInterval instead of requestAnimationFrame so audio ramps smoothly even in background tabs
+    const intervalId = window.setInterval(() => {
+      const elapsed = Date.now() - startTime;
       const progress = Math.min(1, elapsed / durationMs);
 
       // Equal-power curve
@@ -255,22 +280,19 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       setDeckVolume(fromDeck, masterVol * gainFrom, fromTrack);
       setDeckVolume(toDeck, masterVol * gainTo, nextTrackObj);
 
-      if (progress < 1) {
-        crossfadeTimerRef.current = requestAnimationFrame(crossfadeStep);
-      } else {
-        // Complete crossfade
-        stopDeckPlayback(fromDeck, fromTrack);
-        setDeckVolume(toDeck, masterVol, nextTrackObj);
-
-        setActiveDeck(toDeck);
-        setCurrentTrack(nextTrackObj);
-        setQueueIndex(nextIndex);
-        setIsCrossfading(false);
-        isCrossfadingRef.current = false;
+      if (progress >= 1) {
+        finishCrossfade();
       }
-    };
+    }, 50);
 
-    crossfadeTimerRef.current = requestAnimationFrame(crossfadeStep);
+    crossfadeTimerRef.current = intervalId;
+
+    // Failsafe timeout ensuring crossfade completes under aggressive browser background throttling
+    setTimeout(() => {
+      if (isCrossfadingRef.current) {
+        finishCrossfade();
+      }
+    }, durationMs + 400);
   };
 
   // Stop playback on a deck unconditionally (both YT and HTML5 audio)
@@ -375,7 +397,7 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
     // 1. Immediately cancel any running crossfade & clear pending buffer
     if (crossfadeTimerRef.current) {
-      cancelAnimationFrame(crossfadeTimerRef.current);
+      clearInterval(crossfadeTimerRef.current);
       crossfadeTimerRef.current = null;
     }
     isCrossfadingRef.current = false;
@@ -549,11 +571,11 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         setCurrentTime(cur);
         setDuration(dur);
 
-        // Dynamic early crossfade trigger between 3s and 8s before end
+        // Dynamic early crossfade trigger between 3s and 8s before end (only after track is established)
         const remaining = dur - cur;
         const triggerThreshold = Math.max(3, Math.min(8, crossfadeDurationRef.current));
 
-        if (remaining <= triggerThreshold && remaining > 0.5 && !isCrossfadingRef.current) {
+        if (dur > 10 && cur > 5 && remaining <= triggerThreshold && remaining > 0.5 && !isCrossfadingRef.current) {
           const q = queueRef.current;
           if (q.length > 0 && (queueIndexRef.current < q.length - 1 || isRepeatRef.current)) {
             nextTrack();
@@ -629,7 +651,11 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             const resolved = await resolveFullTrackAudio(currentTrack, true);
             if (resolved.youtubeId) {
               startDeckPlayback('A', resolved, volumeRef.current);
+            } else if (!isCrossfadingRef.current) {
+              nextTrack();
             }
+          } else if (!isCrossfadingRef.current) {
+            nextTrack();
           }
         }}
       />
@@ -645,13 +671,17 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             const resolved = await resolveFullTrackAudio(currentTrack, true);
             if (resolved.youtubeId) {
               startDeckPlayback('B', resolved, volumeRef.current);
+            } else if (!isCrossfadingRef.current) {
+              nextTrack();
             }
+          } else if (!isCrossfadingRef.current) {
+            nextTrack();
           }
         }}
       />
 
-      {/* Background YouTube Players with sufficient dimensions & visible opacity to pass browser autoplay policies */}
-      <div className="fixed -bottom-[500px] -right-[500px] w-[300px] h-[200px] pointer-events-none opacity-100 z-10 overflow-hidden">
+      {/* Background YouTube Players rendered in viewport with non-zero opacity to avoid Chrome offscreen iframe throttling */}
+      <div className="fixed bottom-1 right-1 w-[200px] h-[150px] pointer-events-none opacity-[0.005] z-[-1] overflow-hidden">
         <div id="yt-player-a" />
         <div id="yt-player-b" />
       </div>
