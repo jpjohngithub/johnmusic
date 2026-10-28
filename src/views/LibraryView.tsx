@@ -10,12 +10,14 @@ interface LibraryViewProps {
   onOpenCreateModal: () => void;
   onOpenMergeModal: () => void;
   onSelectPlaylist: (id: string) => void;
+  onAddToPlaylist?: (track: Track) => void;
 }
 
 export const LibraryView: React.FC<LibraryViewProps> = ({
   onOpenCreateModal,
   onOpenMergeModal,
-  onSelectPlaylist
+  onSelectPlaylist,
+  onAddToPlaylist
 }) => {
   const { playlists, savedTracks, deletePlaylist, restoreLegacyPlaylists } = usePlaylists();
   const { playTrack } = usePlayer();
@@ -221,6 +223,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                   key={`${track.id}-${idx}`}
                   track={track}
                   index={idx}
+                  onAddToPlaylist={onAddToPlaylist}
                   playlistContextTracks={savedTracks}
                 />
               ))

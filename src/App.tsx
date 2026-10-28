@@ -174,6 +174,7 @@ const MainApp: React.FC = () => {
               onOpenCreateModal={() => setIsCreateModalOpen(true)}
               onOpenMergeModal={() => setIsMergeModalOpen(true)}
               onSelectPlaylist={handleSelectPlaylist}
+              onAddToPlaylist={(track) => setTrackToAddToPlaylist(track)}
             />
           )}
 
