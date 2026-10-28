@@ -8,6 +8,8 @@ interface PlaylistContextType {
   savedTracks: Track[];
   createPlaylist: (name: string, description?: string, coverUrl?: string) => Playlist;
   deletePlaylist: (id: string) => void;
+  updatePlaylist: (id: string, updates: Partial<Playlist>) => void;
+  reorderPlaylistTracks: (playlistId: string, fromIndex: number, toIndex: number) => void;
   addTrackToPlaylist: (playlistId: string, track: Track) => void;
   removeTrackFromPlaylist: (playlistId: string, trackId: string) => void;
   mergePlaylists: (playlistIds: string[], newName: string, removeDuplicates?: boolean) => Playlist;
@@ -160,6 +162,24 @@ export const PlaylistProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     setPlaylists(prev => prev.filter(p => p.id !== id));
   };
 
+  const updatePlaylist = (id: string, updates: Partial<Playlist>) => {
+    setPlaylists(prev =>
+      prev.map(p => (p.id === id ? { ...p, ...updates } : p))
+    );
+  };
+
+  const reorderPlaylistTracks = (playlistId: string, fromIndex: number, toIndex: number) => {
+    setPlaylists(prev =>
+      prev.map(p => {
+        if (p.id !== playlistId) return p;
+        const newTracks = [...p.tracks];
+        const [moved] = newTracks.splice(fromIndex, 1);
+        newTracks.splice(toIndex, 0, moved);
+        return { ...p, tracks: newTracks };
+      })
+    );
+  };
+
   const addTrackToPlaylist = (playlistId: string, track: Track) => {
     setPlaylists(prev =>
       prev.map(p => {
@@ -227,6 +247,8 @@ export const PlaylistProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         savedTracks,
         createPlaylist,
         deletePlaylist,
+        updatePlaylist,
+        reorderPlaylistTracks,
         addTrackToPlaylist,
         removeTrackFromPlaylist,
         mergePlaylists,

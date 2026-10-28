@@ -148,10 +148,18 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }
   };
 
+  // Helper to determine if playback should use YouTube engine or HTML5 audio
+  const isTrackYouTube = (track: Track | null): boolean => {
+    if (!track) return false;
+    if (track.streamUrl) return false;
+    if (track.youtubeId) return true;
+    return track.platform === 'youtube';
+  };
+
   // Set volume across decks
   const setDeckVolume = (deck: 'A' | 'B', vol: number, track: Track | null) => {
     const clamped = Math.max(0, Math.min(1, vol));
-    const isYt = track?.platform === 'youtube' || (!track?.streamUrl && track?.youtubeId);
+    const isYt = isTrackYouTube(track);
 
     if (deck === 'A') {
       if (isYt && ytDeckA.current?.setVolume) {
@@ -221,7 +229,7 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   // Stop playback on a deck
   const stopDeckPlayback = (deck: 'A' | 'B', track: Track | null) => {
-    const isYt = track?.platform === 'youtube' || (!track?.streamUrl && track?.youtubeId);
+    const isYt = isTrackYouTube(track);
     if (deck === 'A') {
       if (isYt && ytDeckA.current?.stopVideo) {
         ytDeckA.current.stopVideo();
@@ -237,10 +245,10 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   // Start playback on a deck
   const startDeckPlayback = (deck: 'A' | 'B', track: Track, initialVol = volumeRef.current) => {
-    const isYt = track.platform === 'youtube' || (!track.streamUrl && track.youtubeId);
+    const isYt = isTrackYouTube(track);
 
     if (deck === 'A') {
-      if (isYt) {
+      if (isYt && track.youtubeId) {
         resetAudioElement(audioDeckA.current);
         if (ytDeckA.current?.loadVideoById) {
           ytDeckA.current.loadVideoById({
@@ -255,10 +263,16 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         audioDeckA.current.src = track.streamUrl;
         audioDeckA.current.volume = initialVol;
         audioDeckA.current.muted = false;
-        audioDeckA.current.play().catch(e => console.warn('Deck A play failed:', e));
+        audioDeckA.current.play().catch(e => {
+          console.warn('Deck A audio play failed, attempting YouTube fallback:', e);
+          if (track.youtubeId && ytDeckA.current?.loadVideoById) {
+            ytDeckA.current.loadVideoById({ videoId: track.youtubeId, startSeconds: 0 });
+            ytDeckA.current.playVideo();
+          }
+        });
       }
     } else {
-      if (isYt) {
+      if (isYt && track.youtubeId) {
         resetAudioElement(audioDeckB.current);
         if (ytDeckB.current?.loadVideoById) {
           ytDeckB.current.loadVideoById({
@@ -273,7 +287,13 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         audioDeckB.current.src = track.streamUrl;
         audioDeckB.current.volume = initialVol;
         audioDeckB.current.muted = false;
-        audioDeckB.current.play().catch(e => console.warn('Deck B play failed:', e));
+        audioDeckB.current.play().catch(e => {
+          console.warn('Deck B audio play failed, attempting YouTube fallback:', e);
+          if (track.youtubeId && ytDeckB.current?.loadVideoById) {
+            ytDeckB.current.loadVideoById({ videoId: track.youtubeId, startSeconds: 0 });
+            ytDeckB.current.playVideo();
+          }
+        });
       }
     }
   };
@@ -367,7 +387,7 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   // Toggle play/pause
   const togglePlay = useCallback(() => {
     const targetDeck = activeDeckRef.current;
-    const isYt = currentTrack?.platform === 'youtube' || (!currentTrack?.streamUrl && currentTrack?.youtubeId);
+    const isYt = isTrackYouTube(currentTrack);
 
     if (isPlaying) {
       if (isYt) {
@@ -393,7 +413,7 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   // Seek
   const seek = useCallback((seconds: number) => {
     const targetDeck = activeDeckRef.current;
-    const isYt = currentTrack?.platform === 'youtube' || (!currentTrack?.streamUrl && currentTrack?.youtubeId);
+    const isYt = isTrackYouTube(currentTrack);
 
     if (isYt) {
       const yt = targetDeck === 'A' ? ytDeckA.current : ytDeckB.current;
@@ -421,7 +441,7 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       if (!isPlayingRef.current) return;
 
       const deck = activeDeckRef.current;
-      const isYt = currentTrack?.platform === 'youtube' || (!currentTrack?.streamUrl && currentTrack?.youtubeId);
+      const isYt = isTrackYouTube(currentTrack);
 
       let cur = 0;
       let dur = 0;

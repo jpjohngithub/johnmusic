@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { PlayerProvider } from './context/PlayerContext';
-import { PlaylistProvider } from './context/PlaylistContext';
+import { PlaylistProvider, usePlaylists } from './context/PlaylistContext';
 import { Sidebar } from './components/Navigation/Sidebar';
 import { BottomNav } from './components/Navigation/BottomNav';
 import { PlayerBar } from './components/Player/PlayerBar';
@@ -13,13 +13,32 @@ import { AddToPlaylistModal } from './components/Modals/AddToPlaylistModal';
 import { CreatePlaylistModal } from './components/Modals/CreatePlaylistModal';
 import { AudioRecognizerModal } from './components/AudioRecognizerModal';
 import { ImportLinkModal } from './components/ImportLinkModal';
+import { decodeSharedPlaylist } from './services/share';
 import { Platform, Track } from './types';
 import { Headphones, Search, Radio, Link2 } from 'lucide-react';
 
 const MainApp: React.FC = () => {
+  const { createPlaylist, addTrackToPlaylist } = usePlaylists();
   const [currentView, setCurrentView] = useState<'home' | 'search' | 'library' | 'playlist'>('home');
   const [activeFilter, setActiveFilter] = useState<Platform | 'all'>('all');
   const [selectedPlaylistId, setSelectedPlaylistId] = useState<string | null>(null);
+
+  // Auto-import shared playlist from URL (?playlist=...)
+  React.useEffect(() => {
+    if (typeof window !== 'undefined' && window.location.search) {
+      const decoded = decodeSharedPlaylist(window.location.search);
+      if (decoded) {
+        const created = createPlaylist(decoded.name, decoded.description, decoded.coverUrl);
+        for (const t of decoded.tracks) {
+          addTrackToPlaylist(created.id, t);
+        }
+        setSelectedPlaylistId(created.id);
+        setCurrentView('playlist');
+        // Clean URL query without reload
+        window.history.replaceState({}, document.title, window.location.pathname);
+      }
+    }
+  }, []);
 
   // Modals
   const [isMergeModalOpen, setIsMergeModalOpen] = useState(false);

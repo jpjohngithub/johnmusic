@@ -103,7 +103,7 @@ export function extractYouTubeId(url: string): string | null {
   return (match && match[2].length === 11) ? match[2] : null;
 }
 
-// 1. Search Spotify (Real metadata from open catalog with instant audio preview fallback + YouTube resolver)
+// 1. Search Spotify
 export async function searchSpotify(query: string): Promise<Track[]> {
   try {
     const res = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(query)}&entity=song&limit=15`);
@@ -144,40 +144,32 @@ export async function searchYouTube(query: string): Promise<Track[]> {
 
   // Multi-endpoint search
   const instances = [
-    'https://vid.puffyan.us',
-    'https://invidious.jing.rocks',
-    'https://inv.tux.pizza',
-    'https://invidious.nerdvpn.de'
+    'https://pipedapi.kavin.rocks/search?q=',
+    'https://api.invidious.io/api/v1/search?q='
   ];
 
-  for (const instance of instances) {
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 3500);
-      const res = await fetch(`${instance}/api/v1/search?q=${encodeURIComponent(query)}&type=video`, {
-        signal: controller.signal
-      });
-      clearTimeout(timeoutId);
-      if (!res.ok) continue;
-
+  try {
+    const res = await fetch(`https://pipedapi.kavin.rocks/search?q=${encodeURIComponent(query)}&filter=videos`);
+    if (res.ok) {
       const data = await res.json();
-      if (Array.isArray(data) && data.length > 0) {
-        return data.slice(0, 15).map((item: any) => ({
-          id: `yt_${item.videoId}`,
-          title: item.title,
-          artist: item.author,
-          duration: item.lengthSeconds || 180,
-          coverUrl: `https://i.ytimg.com/vi/${item.videoId}/hqdefault.jpg`,
-          platform: 'youtube' as Platform,
-          youtubeId: item.videoId
-        }));
+      if (Array.isArray(data?.items)) {
+        return data.items.slice(0, 15).map((item: any) => {
+          const vId = item.url?.replace('/watch?v=', '') || item.id;
+          return {
+            id: `yt_${vId}`,
+            title: item.title,
+            artist: item.uploaderName || 'YouTube',
+            duration: item.duration || 180,
+            coverUrl: item.thumbnail || `https://i.ytimg.com/vi/${vId}/hqdefault.jpg`,
+            platform: 'youtube' as Platform,
+            youtubeId: vId
+          };
+        });
       }
-    } catch {
-      // try next
     }
-  }
+  } catch {}
 
-  // If Invidious blocked by CORS, search Spotify catalog so user still gets the song with direct audio
+  // Fallback: iTunes search
   const spTracks = await searchSpotify(query);
   return spTracks.map(t => ({
     ...t,
@@ -250,81 +242,114 @@ export async function resolveFullTrackAudio(track: Track): Promise<Track> {
   return track;
 }
 
-// 5. Search Playlists
+// 5. Search Playlists (YouTube Music & Spotify)
 export async function searchPlaylists(query: string): Promise<SearchPlaylistResult[]> {
   const clean = query.trim();
-  if (!clean) {
-    return [
-      {
-        id: 'pl_yt_top',
-        title: 'Top Músicas Brasil & Mundo 2026',
-        author: 'YouTube Music',
-        coverUrl: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500&q=80',
-        trackCount: 50,
-        platform: 'youtube',
-        externalUrl: 'https://www.youtube.com/playlist?list=PL4fGSI1pDJn5kI81J117-mqZ7Qd43Qn6x'
-      },
-      {
-        id: 'pl_sp_hits',
-        title: 'Today Top Hits - Spotify',
-        author: 'Spotify',
-        coverUrl: 'https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=500&q=80',
-        trackCount: 50,
-        platform: 'spotify',
-        externalUrl: 'https://open.spotify.com/playlist/37i9dQZF1DXcBWIGoYBM5M'
-      },
-      {
-        id: 'pl_tt_viral',
-        title: 'TikTok Viral Songs 2026',
-        author: 'TikTok Music',
-        coverUrl: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=500&q=80',
-        trackCount: 30,
-        platform: 'tiktok'
-      }
-    ];
-  }
-
   const results: SearchPlaylistResult[] = [];
 
-  try {
-    const res = await fetch(`https://vid.puffyan.us/api/v1/search?q=${encodeURIComponent(clean)}&type=playlist`);
-    if (res.ok) {
-      const data = await res.json();
-      if (Array.isArray(data)) {
-        data.slice(0, 10).forEach((pl: any) => {
-          results.push({
-            id: `pl_yt_${pl.playlistId}`,
-            title: pl.title,
-            author: pl.author || 'YouTube',
-            coverUrl: pl.playlistThumbnail || `https://i.ytimg.com/vi/${pl.playlistId}/hqdefault.jpg`,
-            trackCount: pl.videoCount || 25,
-            platform: 'youtube',
-            externalUrl: `https://www.youtube.com/playlist?list=${pl.playlistId}`
+  // If query is provided, query Piped playlists (Open CORS)
+  if (clean) {
+    try {
+      const res = await fetch(`https://pipedapi.kavin.rocks/search?q=${encodeURIComponent(clean)}&filter=playlists`);
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data?.items)) {
+          data.items.slice(0, 8).forEach((item: any) => {
+            const plId = item.url?.replace('/playlist?list=', '') || item.id;
+            results.push({
+              id: `pl_yt_${plId}`,
+              title: item.title,
+              author: item.uploaderName || 'YouTube Music',
+              coverUrl: item.thumbnail || `https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500&q=80`,
+              trackCount: item.videos || 25,
+              platform: 'youtube',
+              externalUrl: `https://www.youtube.com/playlist?list=${plId}`
+            });
           });
-        });
+        }
       }
+    } catch {}
+
+    // Search Spotify/iTunes Albums (Compilations/Playlists)
+    try {
+      const albumRes = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(clean)}&entity=album&limit=8`);
+      if (albumRes.ok) {
+        const data = await albumRes.json();
+        if (Array.isArray(data?.results)) {
+          data.results.forEach((album: any) => {
+            results.push({
+              id: `pl_sp_${album.collectionId}`,
+              title: album.collectionName,
+              author: album.artistName || 'Spotify',
+              coverUrl: album.artworkUrl100 ? album.artworkUrl100.replace('100x100bb', '600x600bb') : '',
+              trackCount: album.trackCount || 12,
+              platform: 'spotify',
+              externalUrl: `https://open.spotify.com/album/${album.collectionId}`
+            });
+          });
+        }
+      }
+    } catch {}
+  }
+
+  // Pre-loaded popular playlists for Spotify & YouTube Music
+  const POPULAR_PLAYLISTS: SearchPlaylistResult[] = [
+    {
+      id: 'pl_yt_top_br',
+      title: 'Top Hits Brasil 2026',
+      author: 'YouTube Music',
+      coverUrl: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=500&q=80',
+      trackCount: 50,
+      platform: 'youtube',
+      externalUrl: 'https://www.youtube.com/playlist?list=PL4fGSI1pDJn5kI81J117-mqZ7Qd43Qn6x'
+    },
+    {
+      id: 'pl_sp_today_hits',
+      title: "Today's Top Hits - Global",
+      author: 'Spotify',
+      coverUrl: 'https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=500&q=80',
+      trackCount: 50,
+      platform: 'spotify',
+      externalUrl: 'https://open.spotify.com/playlist/37i9dQZF1DXcBWIGoYBM5M'
+    },
+    {
+      id: 'pl_yt_funk_2026',
+      title: 'Mega Funk & Phonk Brasil',
+      author: 'YouTube Music',
+      coverUrl: 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=500&q=80',
+      trackCount: 40,
+      platform: 'youtube',
+      externalUrl: 'https://www.youtube.com/playlist?list=PL4fGSI1pDJn6OPOk_2v6xNnI-r2wD5kXF'
+    },
+    {
+      id: 'pl_sp_viral_br',
+      title: 'As Mais Tocadas no Brasil',
+      author: 'Spotify',
+      coverUrl: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500&q=80',
+      trackCount: 50,
+      platform: 'spotify',
+      externalUrl: 'https://open.spotify.com/playlist/37i9dQZEVXbMXbN3b9iqyt'
+    },
+    {
+      id: 'pl_tt_viral_trends',
+      title: 'TikTok Viral Songs 2026',
+      author: 'TikTok Trends',
+      coverUrl: 'https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=500&q=80',
+      trackCount: 35,
+      platform: 'tiktok'
     }
-  } catch {}
+  ];
 
   if (results.length === 0) {
-    results.push(
-      {
-        id: `pl_yt_${Date.now()}`,
-        title: `${clean} - YouTube Mix`,
-        author: 'YouTube Music',
-        coverUrl: 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=500&q=80',
-        trackCount: 25,
-        platform: 'youtube'
-      },
-      {
-        id: `pl_sp_${Date.now()}`,
-        title: `${clean} - Melhores Músicas`,
-        author: 'Spotify Playlist',
-        coverUrl: 'https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=500&q=80',
-        trackCount: 30,
-        platform: 'spotify'
-      }
-    );
+    if (clean) {
+      // Filter popular by keyword
+      const matched = POPULAR_PLAYLISTS.filter(p =>
+        p.title.toLowerCase().includes(clean.toLowerCase()) ||
+        p.author.toLowerCase().includes(clean.toLowerCase())
+      );
+      if (matched.length > 0) return matched;
+    }
+    return POPULAR_PLAYLISTS;
   }
 
   return results;
