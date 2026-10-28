@@ -17,7 +17,7 @@ export const AudioRecognizerModal: React.FC<AudioRecognizerModalProps> = ({
   onAddToPlaylist
 }) => {
   const { playTrack, addToQueue } = usePlayer();
-  const [source, setSource] = useState<'system' | 'mic'>('system');
+  const [source, setSource] = useState<'system' | 'mic'>('mic');
   const [isListening, setIsListening] = useState(false);
   const [countdown, setCountdown] = useState(5);
   const [identifiedTrack, setIdentifiedTrack] = useState<Track | null>(null);

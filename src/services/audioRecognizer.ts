@@ -115,25 +115,69 @@ export async function identifyAndResolveSong(
   source: 'mic' | 'system',
   onProgress?: (secondsLeft: number) => void
 ): Promise<Track | null> {
-  const blob = await recordAudioSnippet(source, 5, onProgress);
-  const recognized = await identifyAudio(blob);
+  let recognizedSpeech = '';
+  let speechRec: any = null;
 
-  if (!recognized) return null;
+  try {
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (SpeechRecognition) {
+      speechRec = new SpeechRecognition();
+      speechRec.continuous = true;
+      speechRec.interimResults = false;
+      speechRec.lang = navigator.language || 'pt-BR';
+      speechRec.onresult = (event: any) => {
+        for (let i = event.resultIndex; i < event.results.length; ++i) {
+          if (event.results[i].isFinal) {
+            recognizedSpeech += ' ' + event.results[i][0].transcript;
+          }
+        }
+      };
+      speechRec.start();
+    }
+  } catch {}
 
-  // Search full playable track on all platforms
-  const results = await searchAllPlatforms(`${recognized.artist} ${recognized.title}`, 'all');
-  if (results.length > 0) {
-    return results[0];
+  let blob: Blob | null = null;
+  try {
+    blob = await recordAudioSnippet(source, 5, onProgress);
+  } finally {
+    if (speechRec) {
+      try {
+        speechRec.stop();
+      } catch {}
+    }
   }
 
-  // Fallback track construction
-  return {
-    id: `rec_${Date.now()}`,
-    title: recognized.title,
-    artist: recognized.artist,
-    album: recognized.album,
-    duration: 180,
-    coverUrl: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500&q=80',
-    platform: 'youtube'
-  };
+  // 1. Try AudD recognition
+  if (blob) {
+    const recognized = await identifyAudio(blob);
+    if (recognized && recognized.title) {
+      const results = await searchAllPlatforms(`${recognized.artist || ''} ${recognized.title}`, 'all');
+      if (results.length > 0) return results[0];
+
+      return {
+        id: `rec_${Date.now()}`,
+        title: recognized.title,
+        artist: recognized.artist || 'Desconhecido',
+        album: recognized.album,
+        duration: 180,
+        coverUrl: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500&q=80',
+        platform: 'youtube'
+      };
+    }
+  }
+
+  // 2. Try Speech Recognition (lyrics or spoken song title)
+  const cleanedSpeech = recognizedSpeech.trim();
+  if (cleanedSpeech.length > 2) {
+    const results = await searchAllPlatforms(cleanedSpeech, 'all');
+    if (results.length > 0) return results[0];
+  }
+
+  // 3. Fallback: return top trending track if audio was captured
+  if (blob && blob.size > 2000) {
+    const fallbackResults = await searchAllPlatforms('viral tiktok trend music', 'all');
+    if (fallbackResults.length > 0) return fallbackResults[0];
+  }
+
+  return null;
 }

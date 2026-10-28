@@ -1,5 +1,27 @@
 import { Track, Platform, SearchPlaylistResult } from '../types';
 
+export const CANONICAL_TRACK_YOUTUBE_IDS: Record<string, string> = {
+  'montagem mysterious game': 'dJM5DN1mMls',
+  'automotivo bibi fogosa': 'PgF29M69QXg',
+  'gata only': '-r687V8yqKY',
+  'die with a smile': 'kPa7bsKwL-c',
+  'birds of a feather': 'V9PVRfjEBTI',
+  'blinding lights': '4NRXx6U8ABQ',
+  'starboy': '34Na4j8AVgA',
+  'as it was': 'H5v3kku4y6Q',
+  'espresso': 'eVli-tstM5E'
+};
+
+export function getCanonicalYoutubeId(title: string): string | null {
+  const clean = (title || '').toLowerCase().trim();
+  for (const [name, id] of Object.entries(CANONICAL_TRACK_YOUTUBE_IDS)) {
+    if (clean.includes(name) || name.includes(clean)) {
+      return id;
+    }
+  }
+  return null;
+}
+
 // Curated high quality seed tracks with verified official audio & real album art
 export const FEATURED_TRACKS: Track[] = [
   {
@@ -293,8 +315,16 @@ export async function getRecommendedTracksForPlaylist(
 
 // 4. Resolve exact YouTube video ID for any track
 export async function resolveFullTrackAudio(track: Track, force = false): Promise<Track> {
+  const canonicalId = getCanonicalYoutubeId(track.title);
+  if (canonicalId) {
+    return {
+      ...track,
+      youtubeId: canonicalId,
+      streamUrl: undefined
+    };
+  }
   if (track.youtubeId && !force) return track;
-  if (track.streamUrl && !force) return track;
+  if (track.streamUrl && !force && !track.streamUrl.includes('itunes.apple.com')) return track;
 
   const query = `${track.artist} - ${track.title}`;
   const results = await searchYouTube(query);

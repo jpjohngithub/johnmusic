@@ -139,6 +139,12 @@ export const PlaylistProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
       // Refresh working stream URLs and verified YouTube IDs on tracks without overwriting user additions
       clean = clean.map(p => {
+        if (p.id === 'pl_tiktok_viral' && !p.isCustom) {
+          return {
+            ...p,
+            tracks: FEATURED_TRACKS.filter(t => t.platform === 'tiktok')
+          };
+        }
         const updatedTracks = p.tracks.map(t => {
           const fresh = FEATURED_TRACKS.find(f => f.id === t.id);
           if (fresh) {

@@ -48,9 +48,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <h1 className="font-extrabold text-base tracking-tight text-white">
             JohnMusic
           </h1>
-          <p className="text-[10px] font-mono uppercase tracking-wider text-purple-400 font-semibold">
-            Unified 3.0
-          </p>
         </div>
       </div>
 
