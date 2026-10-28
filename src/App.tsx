@@ -28,10 +28,7 @@ const MainApp: React.FC = () => {
     if (typeof window !== 'undefined' && window.location.search) {
       const decoded = decodeSharedPlaylist(window.location.search);
       if (decoded) {
-        const created = createPlaylist(decoded.name, decoded.description, decoded.coverUrl);
-        for (const t of decoded.tracks) {
-          addTrackToPlaylist(created.id, t);
-        }
+        const created = createPlaylist(decoded.name, decoded.description, decoded.coverUrl, decoded.tracks);
         setSelectedPlaylistId(created.id);
         setCurrentView('playlist');
         // Clean URL query without reload

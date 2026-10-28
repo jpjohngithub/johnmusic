@@ -6,7 +6,7 @@ import { importLegacyPlaylists } from '../services/legacyMigration';
 interface PlaylistContextType {
   playlists: Playlist[];
   savedTracks: Track[];
-  createPlaylist: (name: string, description?: string, coverUrl?: string) => Playlist;
+  createPlaylist: (name: string, description?: string, coverUrl?: string, tracks?: Track[]) => Playlist;
   deletePlaylist: (id: string) => void;
   updatePlaylist: (id: string, updates: Partial<Playlist>) => void;
   reorderPlaylistTracks: (playlistId: string, fromIndex: number, toIndex: number) => void;
@@ -58,31 +58,44 @@ const DEFAULT_PLAYLISTS: Playlist[] = [
   }
 ];
 
+const STORAGE_PLAYLISTS_KEY = 'johnmusic_playlists_v3';
+const STORAGE_SAVED_KEY = 'johnmusic_saved_tracks_v3';
+
+function saveToLocalStorage(key: string, data: any) {
+  try {
+    localStorage.setItem(key, JSON.stringify(data));
+  } catch (err) {
+    console.error(`Failed to save to localStorage (${key}):`, err);
+  }
+}
+
 const PlaylistContext = createContext<PlaylistContextType | null>(null);
 
 export const PlaylistProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [playlists, setPlaylists] = useState<Playlist[]>(() => {
     let current: Playlist[] = DEFAULT_PLAYLISTS;
-    try {
-      const saved = localStorage.getItem('johnmusic_playlists_v3');
-      if (saved) {
-        current = JSON.parse(saved);
-      }
-    } catch (e) {
-      console.warn('Storage read failed:', e);
-    }
+    const saved = localStorage.getItem(STORAGE_PLAYLISTS_KEY);
 
-    try {
-      const legacy = importLegacyPlaylists();
-      if (legacy.length > 0) {
-        const existingIds = new Set(current.map(p => p.id));
-        const newLegacy = legacy.filter(p => !existingIds.has(p.id));
-        if (newLegacy.length > 0) {
-          current = [...newLegacy, ...current];
+    if (saved !== null) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          return parsed;
         }
+      } catch (e) {
+        console.warn('Storage read failed:', e);
       }
-    } catch (e) {
-      console.warn('Legacy migration check failed:', e);
+    } else {
+      // First launch on this domain: perform initial migration from legacy JohnMusic stores
+      try {
+        const legacy = importLegacyPlaylists();
+        if (legacy.length > 0) {
+          current = [...legacy, ...DEFAULT_PLAYLISTS];
+        }
+      } catch (e) {
+        console.warn('Initial legacy migration failed:', e);
+      }
+      saveToLocalStorage(STORAGE_PLAYLISTS_KEY, current);
     }
 
     return current;
@@ -90,36 +103,27 @@ export const PlaylistProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const [savedTracks, setSavedTracks] = useState<Track[]>(() => {
     try {
-      const saved = localStorage.getItem('johnmusic_saved_tracks_v3');
+      const saved = localStorage.getItem(STORAGE_SAVED_KEY);
       if (saved) return JSON.parse(saved);
     } catch {}
     return FEATURED_TRACKS.slice(0, 4);
   });
 
+  // Synchronous auto-save backup
   useEffect(() => {
-    try {
-      localStorage.setItem('johnmusic_playlists_v3', JSON.stringify(playlists));
-    } catch (e) {
-      console.warn('Storage save failed:', e);
-    }
+    saveToLocalStorage(STORAGE_PLAYLISTS_KEY, playlists);
   }, [playlists]);
 
   useEffect(() => {
-    try {
-      localStorage.setItem('johnmusic_saved_tracks_v3', JSON.stringify(savedTracks));
-    } catch (e) {
-      console.warn('Saved tracks save failed:', e);
-    }
+    saveToLocalStorage(STORAGE_SAVED_KEY, savedTracks);
   }, [savedTracks]);
 
   const toggleSaveTrack = (track: Track) => {
     setSavedTracks(prev => {
       const exists = prev.some(t => t.id === track.id);
-      if (exists) {
-        return prev.filter(t => t.id !== track.id);
-      } else {
-        return [track, ...prev];
-      }
+      const next = exists ? prev.filter(t => t.id !== track.id) : [track, ...prev];
+      saveToLocalStorage(STORAGE_SAVED_KEY, next);
+      return next;
     });
   };
 
@@ -136,7 +140,9 @@ export const PlaylistProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         const existingIds = new Set(prev.map(p => p.id));
         const toAdd = legacy.filter(p => !existingIds.has(p.id));
         count = toAdd.length;
-        return [...toAdd, ...prev];
+        const next = [...toAdd, ...prev];
+        saveToLocalStorage(STORAGE_PLAYLISTS_KEY, next);
+        return next;
       });
       return count;
     } catch {
@@ -144,59 +150,80 @@ export const PlaylistProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }
   };
 
-  const createPlaylist = (name: string, description?: string, coverUrl?: string): Playlist => {
+  const createPlaylist = (
+    name: string,
+    description?: string,
+    coverUrl?: string,
+    tracks?: Track[]
+  ): Playlist => {
     const newPl: Playlist = {
       id: `pl_custom_${Date.now()}`,
       name,
       description: description || 'Playlist criada no JohnMusic',
-      coverUrl: coverUrl || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=600&q=80',
-      tracks: [],
+      coverUrl: coverUrl || (tracks && tracks[0]?.coverUrl) || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=600&q=80',
+      tracks: tracks || [],
       createdAt: Date.now(),
       isCustom: true
     };
-    setPlaylists(prev => [newPl, ...prev]);
+    setPlaylists(prev => {
+      const next = [newPl, ...prev];
+      saveToLocalStorage(STORAGE_PLAYLISTS_KEY, next);
+      return next;
+    });
     return newPl;
   };
 
   const deletePlaylist = (id: string) => {
-    setPlaylists(prev => prev.filter(p => p.id !== id));
+    setPlaylists(prev => {
+      const next = prev.filter(p => p.id !== id);
+      saveToLocalStorage(STORAGE_PLAYLISTS_KEY, next);
+      return next;
+    });
   };
 
   const updatePlaylist = (id: string, updates: Partial<Playlist>) => {
-    setPlaylists(prev =>
-      prev.map(p => (p.id === id ? { ...p, ...updates } : p))
-    );
+    setPlaylists(prev => {
+      const next = prev.map(p => (p.id === id ? { ...p, ...updates } : p));
+      saveToLocalStorage(STORAGE_PLAYLISTS_KEY, next);
+      return next;
+    });
   };
 
   const reorderPlaylistTracks = (playlistId: string, fromIndex: number, toIndex: number) => {
-    setPlaylists(prev =>
-      prev.map(p => {
+    setPlaylists(prev => {
+      const next = prev.map(p => {
         if (p.id !== playlistId) return p;
         const newTracks = [...p.tracks];
         const [moved] = newTracks.splice(fromIndex, 1);
         newTracks.splice(toIndex, 0, moved);
         return { ...p, tracks: newTracks };
-      })
-    );
+      });
+      saveToLocalStorage(STORAGE_PLAYLISTS_KEY, next);
+      return next;
+    });
   };
 
   const addTrackToPlaylist = (playlistId: string, track: Track) => {
-    setPlaylists(prev =>
-      prev.map(p => {
+    setPlaylists(prev => {
+      const next = prev.map(p => {
         if (p.id !== playlistId) return p;
         if (p.tracks.some(t => t.id === track.id)) return p;
         return { ...p, tracks: [...p.tracks, track] };
-      })
-    );
+      });
+      saveToLocalStorage(STORAGE_PLAYLISTS_KEY, next);
+      return next;
+    });
   };
 
   const removeTrackFromPlaylist = (playlistId: string, trackId: string) => {
-    setPlaylists(prev =>
-      prev.map(p => {
+    setPlaylists(prev => {
+      const next = prev.map(p => {
         if (p.id !== playlistId) return p;
         return { ...p, tracks: p.tracks.filter(t => t.id !== trackId) };
-      })
-    );
+      });
+      saveToLocalStorage(STORAGE_PLAYLISTS_KEY, next);
+      return next;
+    });
   };
 
   const mergePlaylists = (
@@ -234,7 +261,11 @@ export const PlaylistProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       isCustom: true
     };
 
-    setPlaylists(prev => [merged, ...prev]);
+    setPlaylists(prev => {
+      const next = [merged, ...prev];
+      saveToLocalStorage(STORAGE_PLAYLISTS_KEY, next);
+      return next;
+    });
     return merged;
   };
 
