@@ -72,6 +72,7 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const isPlayingRef = useRef<boolean>(false);
   const isRepeatRef = useRef<boolean>(false);
   const crossfadeTimerRef = useRef<number | null>(null);
+  const playSessionIdRef = useRef<number>(0);
 
   activeDeckRef.current = activeDeck;
   volumeRef.current = volume;
@@ -272,18 +273,19 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     crossfadeTimerRef.current = requestAnimationFrame(crossfadeStep);
   };
 
-  // Stop playback on a deck
-  const stopDeckPlayback = (deck: 'A' | 'B', track: Track | null) => {
-    const isYt = isTrackYouTube(track);
+  // Stop playback on a deck unconditionally (both YT and HTML5 audio)
+  const stopDeckPlayback = (deck: 'A' | 'B', _track?: Track | null) => {
     if (deck === 'A') {
-      if (isYt && ytDeckA.current?.stopVideo) {
-        ytDeckA.current.stopVideo();
-      }
+      try {
+        if (ytDeckA.current?.stopVideo) ytDeckA.current.stopVideo();
+        if (ytDeckA.current?.pauseVideo) ytDeckA.current.pauseVideo();
+      } catch {}
       resetAudioElement(audioDeckA.current);
     } else {
-      if (isYt && ytDeckB.current?.stopVideo) {
-        ytDeckB.current.stopVideo();
-      }
+      try {
+        if (ytDeckB.current?.stopVideo) ytDeckB.current.stopVideo();
+        if (ytDeckB.current?.pauseVideo) ytDeckB.current.pauseVideo();
+      } catch {}
       resetAudioElement(audioDeckB.current);
     }
   };
@@ -369,36 +371,50 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   // Play a specific track
   const playTrack = useCallback(async (track: Track, newQueue?: Track[]) => {
+    const sessionId = ++playSessionIdRef.current;
+
+    // 1. Immediately cancel any running crossfade & clear pending buffer
     if (crossfadeTimerRef.current) {
       cancelAnimationFrame(crossfadeTimerRef.current);
       crossfadeTimerRef.current = null;
     }
     isCrossfadingRef.current = false;
     setIsCrossfading(false);
+    pendingTrackRef.current = null;
 
-    // Resolve full track audio (Spotify -> YouTube) if needed
-    const resolvedTrack = (!track.youtubeId && !track.streamUrl)
-      ? await resolveFullTrackAudio(track)
-      : track;
+    // 2. Unconditionally stop previous playback on both decks so old song NEVER bleeds or keeps playing!
+    stopDeckPlayback('A');
+    stopDeckPlayback('B');
+
+    // 3. Immediately set current state
+    setCurrentTrack(track);
+    setIsPlaying(true);
 
     let nextQueue = newQueue ? [...newQueue] : [...queueRef.current];
     let idx = nextQueue.findIndex(t => t.id === track.id);
     if (idx === -1) {
-      nextQueue = [resolvedTrack, ...nextQueue];
+      nextQueue = [track, ...nextQueue];
       idx = 0;
-    } else {
-      nextQueue[idx] = resolvedTrack;
     }
-
     setQueue(nextQueue);
     setQueueIndex(idx);
+
+    // 4. Resolve track audio (Spotify / Search results -> YouTube ID)
+    const needsResolution = !track.youtubeId && (!track.streamUrl || track.streamUrl.includes('itunes.apple.com'));
+    const resolvedTrack = needsResolution
+      ? await resolveFullTrackAudio(track)
+      : track;
+
+    // Check if another song was selected while resolving
+    if (sessionId !== playSessionIdRef.current) {
+      return;
+    }
+
+    nextQueue[idx] = resolvedTrack;
+    setQueue([...nextQueue]);
     setCurrentTrack(resolvedTrack);
-    setIsPlaying(true);
 
     const targetDeck = activeDeckRef.current;
-    const idleDeck = targetDeck === 'A' ? 'B' : 'A';
-
-    stopDeckPlayback(idleDeck, null);
     startDeckPlayback(targetDeck, resolvedTrack, volumeRef.current);
   }, []);
 

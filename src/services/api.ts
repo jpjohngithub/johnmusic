@@ -129,17 +129,21 @@ export async function searchSpotify(query: string): Promise<Track[]> {
     if (!res.ok) throw new Error('Spotify metadata search failed');
     const data = await res.json();
 
-    return (data.results || []).map((item: any) => ({
-      id: `sp_${item.trackId}`,
-      title: item.trackName,
-      artist: item.artistName,
-      album: item.collectionName,
-      duration: Math.round(item.trackTimeMillis / 1000),
-      coverUrl: item.artworkUrl100 ? item.artworkUrl100.replace('100x100bb', '600x600bb') : '',
-      platform: 'spotify' as Platform,
-      streamUrl: item.previewUrl,
-      popularity: item.trackExplicitness === 'notExplicit' ? 80 : 90
-    }));
+    return (data.results || []).map((item: any) => {
+      const canonicalYt = getCanonicalYoutubeId(item.trackName);
+      return {
+        id: `sp_${item.trackId}`,
+        title: item.trackName,
+        artist: item.artistName,
+        album: item.collectionName,
+        duration: Math.round(item.trackTimeMillis / 1000),
+        coverUrl: item.artworkUrl100 ? item.artworkUrl100.replace('100x100bb', '600x600bb') : '',
+        platform: 'spotify' as Platform,
+        youtubeId: canonicalYt || undefined,
+        streamUrl: undefined,
+        popularity: item.trackExplicitness === 'notExplicit' ? 80 : 90
+      };
+    });
   } catch (err) {
     console.warn('Spotify search error:', err);
     return [];
@@ -161,12 +165,33 @@ export async function searchYouTube(query: string): Promise<Track[]> {
     }];
   }
 
-  // Multi-endpoint search
-  const instances = [
-    'https://pipedapi.kavin.rocks/search?q=',
-    'https://api.invidious.io/api/v1/search?q='
-  ];
+  // 1. Primary Invidious / YouTube Search (Open CORS & API)
+  try {
+    const res = await fetch(`https://yt.chocolatemoo53.com/api/v1/search?q=${encodeURIComponent(query)}`);
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        const videos = data.filter((item: any) => item.type === 'video' && item.videoId);
+        if (videos.length > 0) {
+          return videos.slice(0, 15).map((item: any) => ({
+            id: `yt_${item.videoId}`,
+            title: item.title,
+            artist: item.author || 'YouTube',
+            duration: item.lengthSeconds || 180,
+            coverUrl: (item.videoThumbnails && item.videoThumbnails[0]?.url)
+              ? (item.videoThumbnails[0].url.startsWith('http') ? item.videoThumbnails[0].url : `https://yt-comp1.chocolatemoo53.com${item.videoThumbnails[0].url}`)
+              : `https://i.ytimg.com/vi/${item.videoId}/hqdefault.jpg`,
+            platform: 'youtube' as Platform,
+            youtubeId: item.videoId
+          }));
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('Invidious search fallback:', err);
+  }
 
+  // 2. Piped fallback
   try {
     const res = await fetch(`https://pipedapi.kavin.rocks/search?q=${encodeURIComponent(query)}&filter=videos`);
     if (res.ok) {
@@ -188,13 +213,18 @@ export async function searchYouTube(query: string): Promise<Track[]> {
     }
   } catch {}
 
-  // Fallback: iTunes search
+  // 3. Fallback: Search Spotify metadata, then map canonical IDs
   const spTracks = await searchSpotify(query);
-  return spTracks.map(t => ({
-    ...t,
-    id: `yt_resolved_${t.id}`,
-    platform: 'youtube' as Platform
-  }));
+  return spTracks.map(t => {
+    const canon = getCanonicalYoutubeId(t.title);
+    return {
+      ...t,
+      id: `yt_resolved_${t.id}`,
+      platform: 'youtube' as Platform,
+      youtubeId: canon || undefined,
+      streamUrl: undefined
+    };
+  });
 }
 
 // 3. Search TikTok with unblocked audio streams
@@ -345,8 +375,28 @@ export async function searchPlaylists(query: string): Promise<SearchPlaylistResu
   const clean = query.trim();
   const results: SearchPlaylistResult[] = [];
 
-  // If query is provided, query Piped playlists (Open CORS)
+  // If query is provided, search Invidious & Piped playlists (Open CORS)
   if (clean) {
+    try {
+      const res = await fetch(`https://yt.chocolatemoo53.com/api/v1/search?q=${encodeURIComponent(clean)}&type=playlist`);
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data)) {
+          data.filter((item: any) => item.type === 'playlist' && item.playlistId).slice(0, 8).forEach((item: any) => {
+            results.push({
+              id: `pl_yt_${item.playlistId}`,
+              title: item.title,
+              author: item.author || 'YouTube Music',
+              coverUrl: item.playlistThumbnail || `https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500&q=80`,
+              trackCount: item.videoCount || 20,
+              platform: 'youtube',
+              externalUrl: `https://www.youtube.com/playlist?list=${item.playlistId}`
+            });
+          });
+        }
+      }
+    } catch {}
+
     try {
       const res = await fetch(`https://pipedapi.kavin.rocks/search?q=${encodeURIComponent(clean)}&filter=playlists`);
       if (res.ok) {
