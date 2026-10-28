@@ -2,8 +2,9 @@ import React, { useState } from 'react';
 import { identifyAndResolveSong } from '../services/audioRecognizer';
 import { Track } from '../types';
 import { usePlayer } from '../context/PlayerContext';
+import { usePlaylists } from '../context/PlaylistContext';
 import { SafeImage } from './SafeImage';
-import { Radio, Mic, Monitor, Loader2, Play, Plus, X, Sparkles, Check } from 'lucide-react';
+import { Radio, Mic, Monitor, Loader2, Play, Plus, X, Sparkles, Check, Heart, ListPlus } from 'lucide-react';
 
 interface AudioRecognizerModalProps {
   isOpen: boolean;
@@ -17,6 +18,7 @@ export const AudioRecognizerModal: React.FC<AudioRecognizerModalProps> = ({
   onAddToPlaylist
 }) => {
   const { playTrack, addToQueue } = usePlayer();
+  const { toggleSaveTrack, isSavedTrack } = usePlaylists();
   const [source, setSource] = useState<'system' | 'mic'>('mic');
   const [isListening, setIsListening] = useState(false);
   const [countdown, setCountdown] = useState(5);
@@ -180,8 +182,37 @@ export const AudioRecognizerModal: React.FC<AudioRecognizerModalProps> = ({
               </button>
 
               <button
+                onClick={() => {
+                  if (identifiedTrack) {
+                    toggleSaveTrack(identifiedTrack);
+                  }
+                }}
+                className={`py-2.5 px-3 rounded-xl font-bold text-xs border flex items-center justify-center gap-1.5 transition-all ${
+                  isSavedTrack(identifiedTrack.id)
+                    ? 'bg-purple-950/80 border-purple-500 text-purple-300'
+                    : 'bg-white/5 hover:bg-white/10 text-slate-300 border-white/10'
+                }`}
+              >
+                <Heart className={`w-4 h-4 ${isSavedTrack(identifiedTrack.id) ? 'fill-current text-purple-400' : ''}`} />
+                {isSavedTrack(identifiedTrack.id) ? 'Na Biblioteca' : 'Salvar Biblioteca'}
+              </button>
+
+              {onAddToPlaylist && (
+                <button
+                  onClick={() => {
+                    onAddToPlaylist(identifiedTrack);
+                    onClose();
+                  }}
+                  className="py-2.5 px-3 rounded-xl font-bold text-xs bg-purple-950/50 hover:bg-purple-900/60 text-purple-200 border border-purple-800/40 flex items-center justify-center gap-1.5 transition-all"
+                >
+                  <ListPlus className="w-4 h-4 text-purple-400" />
+                  Add Playlist
+                </button>
+              )}
+
+              <button
                 onClick={handleAddQueue}
-                className="py-2.5 px-3 rounded-xl font-bold text-xs bg-white/5 hover:bg-white/10 text-purple-200 border border-purple-800/30 flex items-center justify-center gap-1.5 transition-all"
+                className="py-2.5 px-3 rounded-xl font-bold text-xs bg-white/5 hover:bg-white/10 text-slate-300 border border-white/10 flex items-center justify-center gap-1.5 transition-all"
               >
                 {isAdded ? (
                   <>

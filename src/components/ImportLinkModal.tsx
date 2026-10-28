@@ -4,7 +4,7 @@ import { Track, Playlist } from '../types';
 import { usePlayer } from '../context/PlayerContext';
 import { usePlaylists } from '../context/PlaylistContext';
 import { SafeImage } from './SafeImage';
-import { Link2, Sparkles, Loader2, Play, Plus, X, Check, Disc3 } from 'lucide-react';
+import { Link2, Sparkles, Loader2, Play, Plus, X, Check, Disc3, Heart, ListPlus } from 'lucide-react';
 
 interface ImportLinkModalProps {
   isOpen: boolean;
@@ -20,7 +20,7 @@ export const ImportLinkModal: React.FC<ImportLinkModalProps> = ({
   onAddToPlaylist
 }) => {
   const { playTrack, addToQueue } = usePlayer();
-  const { createPlaylist, addTrackToPlaylist } = usePlaylists();
+  const { createPlaylist, addTrackToPlaylist, toggleSaveTrack, isSavedTrack } = usePlaylists();
   const [url, setUrl] = useState('');
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -166,20 +166,50 @@ export const ImportLinkModal: React.FC<ImportLinkModalProps> = ({
               </div>
             </div>
 
-            <div className="flex gap-2">
+            <div className="grid grid-cols-2 gap-2 pt-1">
               <button
                 onClick={handlePlayImportedTrack}
-                className="flex-1 py-2 px-3 rounded-xl font-bold text-xs bg-purple-600 hover:bg-purple-500 text-white flex items-center justify-center gap-1.5 shadow-md"
+                className="py-2.5 px-3 rounded-xl font-bold text-xs bg-purple-600 hover:bg-purple-500 text-white flex items-center justify-center gap-1.5 shadow-md transition-all"
               >
                 <Play className="w-3.5 h-3.5 fill-white" />
-                Tocar Imediatamente
+                Tocar Agora
               </button>
+
+              <button
+                onClick={() => {
+                  if (importedTrack) {
+                    toggleSaveTrack(importedTrack);
+                  }
+                }}
+                className={`py-2.5 px-3 rounded-xl font-bold text-xs border flex items-center justify-center gap-1.5 transition-all ${
+                  isSavedTrack(importedTrack.id)
+                    ? 'bg-purple-950/80 border-purple-500 text-purple-300'
+                    : 'bg-white/5 hover:bg-white/10 text-slate-300 border-white/10'
+                }`}
+              >
+                <Heart className={`w-3.5 h-3.5 ${isSavedTrack(importedTrack.id) ? 'fill-current text-purple-400' : ''}`} />
+                {isSavedTrack(importedTrack.id) ? 'Na Biblioteca' : 'Salvar Biblioteca'}
+              </button>
+
+              {onAddToPlaylist && (
+                <button
+                  onClick={() => {
+                    onAddToPlaylist(importedTrack);
+                    onClose();
+                  }}
+                  className="py-2.5 px-3 rounded-xl font-bold text-xs bg-purple-950/50 hover:bg-purple-900/60 text-purple-200 border border-purple-800/40 flex items-center justify-center gap-1.5 transition-all"
+                >
+                  <ListPlus className="w-3.5 h-3.5 text-purple-400" />
+                  Add Playlist
+                </button>
+              )}
+
               <button
                 onClick={handleAddQueue}
-                className="py-2 px-3 rounded-xl font-bold text-xs bg-white/5 hover:bg-white/10 text-purple-200 border border-purple-800/30 flex items-center gap-1.5"
+                className="py-2.5 px-3 rounded-xl font-bold text-xs bg-white/5 hover:bg-white/10 text-slate-300 border border-white/10 flex items-center justify-center gap-1.5 transition-all"
               >
                 <Plus className="w-3.5 h-3.5" />
-                Adicionar à Fila
+                Fila
               </button>
             </div>
           </div>
