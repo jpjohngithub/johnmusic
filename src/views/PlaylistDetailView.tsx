@@ -48,6 +48,7 @@ export const PlaylistDetailView: React.FC<PlaylistDetailViewProps> = ({
   };
 
   useEffect(() => {
+    setAddedRecIds(new Set());
     if (playlist) {
       fetchRecommendations(playlist.tracks, 0);
     }
@@ -316,7 +317,11 @@ export const PlaylistDetailView: React.FC<PlaylistDetailViewProps> = ({
         ) : (
           <div className="space-y-2">
             {recommendedTracks.map((rec) => {
-              const isAdded = addedRecIds.has(rec.id) || playlist.tracks.some(t => t.id === rec.id || t.title.toLowerCase() === rec.title.toLowerCase());
+              const isAdded = addedRecIds.has(rec.id) || playlist.tracks.some(t => 
+                t.id === rec.id || 
+                (t.youtubeId && rec.youtubeId && t.youtubeId === rec.youtubeId) ||
+                (t.title.toLowerCase().trim() === rec.title.toLowerCase().trim() && t.artist.toLowerCase().trim() === rec.artist.toLowerCase().trim())
+              );
               const isCurrent = currentTrack?.id === rec.id;
               const isPlayingThis = isCurrent && isPlaying;
 

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { usePlaylists } from '../../context/PlaylistContext';
 import { Track } from '../../types';
 import { SafeImage } from '../SafeImage';
@@ -19,6 +19,12 @@ export const AddToPlaylistModal: React.FC<AddToPlaylistModalProps> = ({
   const [addedIds, setAddedIds] = useState<string[]>([]);
   const [newPlaylistName, setNewPlaylistName] = useState('');
   const [showCreateInput, setShowCreateInput] = useState(false);
+
+  useEffect(() => {
+    setAddedIds([]);
+    setShowCreateInput(false);
+    setNewPlaylistName('');
+  }, [isOpen, track?.id]);
 
   if (!isOpen || !track) return null;
 
@@ -101,7 +107,11 @@ export const AddToPlaylistModal: React.FC<AddToPlaylistModalProps> = ({
           )}
 
           {playlists.map((pl) => {
-            const isAlreadyIn = pl.tracks.some(t => t.id === track.id) || addedIds.includes(pl.id);
+            const isAlreadyIn = pl.tracks.some(t => 
+              t.id === track.id ||
+              (t.youtubeId && track.youtubeId && t.youtubeId === track.youtubeId) ||
+              (t.title.toLowerCase().trim() === track.title.toLowerCase().trim() && t.artist.toLowerCase().trim() === track.artist.toLowerCase().trim())
+            ) || addedIds.includes(pl.id);
             return (
               <div
                 key={pl.id}
