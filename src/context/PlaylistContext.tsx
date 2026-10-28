@@ -145,9 +145,12 @@ export const PlaylistProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             return {
               ...t,
               youtubeId: fresh.youtubeId || t.youtubeId,
-              streamUrl: fresh.streamUrl || t.streamUrl,
+              streamUrl: (fresh.streamUrl && !fresh.streamUrl.includes('itunes.apple.com')) ? fresh.streamUrl : undefined,
               coverUrl: fresh.coverUrl || t.coverUrl
             };
+          }
+          if (t.streamUrl && t.streamUrl.includes('itunes.apple.com')) {
+            return { ...t, streamUrl: undefined };
           }
           return t;
         });

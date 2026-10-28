@@ -191,9 +191,13 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   // Helper to determine if playback should use YouTube engine or HTML5 audio
   const isTrackYouTube = (track: Track | null): boolean => {
     if (!track) return false;
-    // Prefer YouTube whenever a valid youtubeId exists (full uninterrupted audio stream)
+    // Real direct audio streams (like from TikTok CDN) can play in HTML5 audio
+    if (track.streamUrl && !track.youtubeId && !track.streamUrl.includes('itunes.apple.com')) {
+      return false;
+    }
+    // Prefer YouTube whenever a valid youtubeId exists or for unified platforms
     if (track.youtubeId) return true;
-    if (track.platform === 'spotify' || track.platform === 'youtube') return true;
+    if (track.platform === 'spotify' || track.platform === 'youtube' || track.platform === 'tiktok') return true;
     return false;
   };
 
@@ -305,7 +309,7 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         } else {
           pendingTrackRef.current = { deck: 'A', track, vol: initialVol };
         }
-      } else if (audioDeckA.current && track.streamUrl) {
+      } else if (audioDeckA.current && track.streamUrl && !track.streamUrl.includes('itunes.apple.com')) {
         if (ytDeckA.current?.stopVideo) ytDeckA.current.stopVideo();
         audioDeckA.current.src = track.streamUrl;
         audioDeckA.current.volume = initialVol;
@@ -313,6 +317,12 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         audioDeckA.current.play().catch(async (e) => {
           console.warn('Deck A audio play failed, falling back to YouTube:', e);
           const resolved = await resolveFullTrackAudio(track, true);
+          if (resolved.youtubeId) {
+            startDeckPlayback('A', resolved, initialVol);
+          }
+        });
+      } else {
+        resolveFullTrackAudio(track, true).then(resolved => {
           if (resolved.youtubeId) {
             startDeckPlayback('A', resolved, initialVol);
           }
@@ -335,7 +345,7 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         } else {
           pendingTrackRef.current = { deck: 'B', track, vol: initialVol };
         }
-      } else if (audioDeckB.current && track.streamUrl) {
+      } else if (audioDeckB.current && track.streamUrl && !track.streamUrl.includes('itunes.apple.com')) {
         if (ytDeckB.current?.stopVideo) ytDeckB.current.stopVideo();
         audioDeckB.current.src = track.streamUrl;
         audioDeckB.current.volume = initialVol;
@@ -343,6 +353,12 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         audioDeckB.current.play().catch(async (e) => {
           console.warn('Deck B audio play failed, falling back to YouTube:', e);
           const resolved = await resolveFullTrackAudio(track, true);
+          if (resolved.youtubeId) {
+            startDeckPlayback('B', resolved, initialVol);
+          }
+        });
+      } else {
+        resolveFullTrackAudio(track, true).then(resolved => {
           if (resolved.youtubeId) {
             startDeckPlayback('B', resolved, initialVol);
           }
