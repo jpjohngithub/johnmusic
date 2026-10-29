@@ -7,7 +7,7 @@ import { EditPlaylistModal } from '../components/Modals/EditPlaylistModal';
 import { generatePlaylistShareUrl } from '../services/share';
 import { getRecommendedTracksForPlaylist } from '../services/api';
 import { Track } from '../types';
-import { Play, Pause, Shuffle, ArrowLeft, Layers, Trash2, Edit3, Share2, Check, Sparkles, RotateCcw, Plus, ExternalLink } from 'lucide-react';
+import { Play, Pause, Shuffle, ArrowLeft, Layers, Trash2, Edit3, Share2, Check, Sparkles, RotateCcw, Plus, ExternalLink, Loader2 } from 'lucide-react';
 
 interface PlaylistDetailViewProps {
   playlistId: string;
@@ -27,6 +27,7 @@ export const PlaylistDetailView: React.FC<PlaylistDetailViewProps> = ({
 
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [copiedShare, setCopiedShare] = useState(false);
+  const [isSharing, setIsSharing] = useState(false);
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
 
   // Recommendations state
@@ -95,13 +96,16 @@ export const PlaylistDetailView: React.FC<PlaylistDetailViewProps> = ({
   };
 
   const handleSharePlaylist = async () => {
+    setIsSharing(true);
     try {
-      const url = generatePlaylistShareUrl(playlist);
+      const url = await generatePlaylistShareUrl(playlist);
       await navigator.clipboard.writeText(url);
       setCopiedShare(true);
       setTimeout(() => setCopiedShare(false), 3000);
     } catch {
       alert('Não foi possível copiar o link de compartilhamento.');
+    } finally {
+      setIsSharing(false);
     }
   };
 
@@ -153,13 +157,19 @@ export const PlaylistDetailView: React.FC<PlaylistDetailViewProps> = ({
           {/* Share Playlist Button */}
           <button
             onClick={handleSharePlaylist}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-[#160f22] hover:bg-purple-950 text-purple-300 border border-purple-900/30 transition-colors shadow-sm"
-            title="Compartilhar playlist via link"
+            disabled={isSharing}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-[#160f22] hover:bg-purple-950 text-purple-300 border border-purple-900/30 transition-colors shadow-sm disabled:opacity-50"
+            title="Compartilhar playlist via link curto"
           >
             {copiedShare ? (
               <>
                 <Check className="w-3.5 h-3.5 text-emerald-400" />
                 <span className="text-emerald-300">Link Copiado!</span>
+              </>
+            ) : isSharing ? (
+              <>
+                <Loader2 className="w-3.5 h-3.5 animate-spin text-purple-400" />
+                <span>Encurtando...</span>
               </>
             ) : (
               <>

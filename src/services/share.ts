@@ -42,47 +42,105 @@ function fromBase64Url(b64url: string): string {
   return new TextDecoder().decode(bytes);
 }
 
-// Generate universal share URL for any JohnMusic playlist
-export function generatePlaylistShareUrl(playlist: Playlist): string {
-  const payload: SharePlaylistPayload = {
-    n: playlist.name,
-    desc: playlist.description || '',
-    cov: playlist.coverUrl || '',
-    tracks: playlist.tracks.map(t => ({
-      t: t.title,
-      a: t.artist,
-      c: t.coverUrl,
-      p: t.platform,
-      y: t.youtubeId,
-      s: t.streamUrl,
-      d: t.duration
-    }))
-  };
+// Shorten URL via public zero-auth shorteners (is.gd / tinyurl) with instant fallback
+export async function shortenUrl(longUrl: string): Promise<string> {
+  // 1. Try is.gd (super fast JSON API)
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 2000);
+    const res = await fetch(`https://is.gd/create.php?format=json&url=${encodeURIComponent(longUrl)}`, {
+      signal: controller.signal
+    });
+    clearTimeout(timeout);
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.shorturl) return data.shorturl;
+    }
+  } catch {}
 
-  const json = JSON.stringify(payload);
+  // 2. Try tinyurl
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 2000);
+    const res = await fetch(`https://tinyurl.com/api-create.php?url=${encodeURIComponent(longUrl)}`, {
+      signal: controller.signal
+    });
+    clearTimeout(timeout);
+    if (res.ok) {
+      const text = await res.text();
+      if (text && text.startsWith('http')) return text.trim();
+    }
+  } catch {}
+
+  // 3. Fallback: direct compact URL
+  return longUrl;
+}
+
+// Generate universal share URL for any JohnMusic playlist (ultra-compact + shortened)
+export async function generatePlaylistShareUrl(playlist: Playlist): Promise<string> {
+  // Ultra-compact array structure [name, [ [title, artist, ytId], ... ]]
+  const compactPayload = [
+    playlist.name,
+    playlist.tracks.map(t => [
+      t.title,
+      t.artist,
+      t.youtubeId || ''
+    ])
+  ];
+
+  const json = JSON.stringify(compactPayload);
   const b64 = toBase64Url(json);
   const origin = typeof window !== 'undefined' ? window.location.origin : 'https://johnmusic.netlify.app';
-  return `${origin}/?playlist=${b64}`;
+  const directUrl = `${origin}/?p=${b64}`;
+
+  // Shorten to ~20 characters via is.gd / tinyurl with automatic fallback to directUrl
+  return await shortenUrl(directUrl);
 }
 
 // Decode and import playlist from URL parameter
 export function decodeSharedPlaylist(param: string): Playlist | null {
   try {
     let b64 = param.trim();
-    if (b64.includes('playlist=')) {
-      const match = b64.match(/playlist=([a-zA-Z0-9_-]+)/);
-      if (match) b64 = match[1];
-    } else if (b64.includes('share=')) {
-      const match = b64.match(/share=([a-zA-Z0-9_-]+)/);
-      if (match) b64 = match[1];
-    }
+    const match = b64.match(/(?:[?&]|^)(?:p|playlist|share)=([a-zA-Z0-9_-]+)/);
+    if (match) b64 = match[1];
 
     if (!b64) return null;
 
     const json = fromBase64Url(b64);
     const parsed = JSON.parse(json);
 
-    // Support both new and legacy JohnMusic share formats
+    // Format 1: Ultra-compact format [name, [ [title, artist, ytId], ... ]]
+    if (Array.isArray(parsed) && typeof parsed[0] === 'string' && Array.isArray(parsed[1])) {
+      const name = parsed[0] || 'Playlist Compartilhada';
+      const rawTracks = parsed[1];
+      const tracks: Track[] = rawTracks.map((row: any, idx: number) => {
+        const title = Array.isArray(row) ? row[0] : (row.t || row.title || 'Música');
+        const artist = Array.isArray(row) ? row[1] : (row.a || row.artist || 'Artista');
+        const ytId = Array.isArray(row) ? (row[2] || undefined) : (row.y || row.videoId);
+        return {
+          id: `shared_trk_${Date.now()}_${idx}`,
+          title,
+          artist,
+          album: 'JohnMusic Share',
+          duration: 180,
+          coverUrl: ytId ? `https://i.ytimg.com/vi/${ytId}/hqdefault.jpg` : 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=600&q=80',
+          platform: 'youtube' as Platform,
+          youtubeId: ytId
+        };
+      });
+
+      return {
+        id: `pl_shared_${Date.now()}`,
+        name,
+        description: `Importada via link curto (${tracks.length} músicas)`,
+        coverUrl: tracks[0]?.coverUrl || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=600&q=80',
+        tracks,
+        createdAt: Date.now(),
+        isCustom: true
+      };
+    }
+
+    // Format 2 & 3: Legacy payloads
     const name = parsed.n || parsed.name || 'Playlist Compartilhada';
     const description = parsed.desc || parsed.description || 'Importada via link compartilhado';
     const coverUrl = parsed.cov || parsed.coverUrl || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=600&q=80';
@@ -94,8 +152,8 @@ export function decodeSharedPlaylist(param: string): Playlist | null {
       artist: item.a || item.subtitle || item.artist || 'Artista',
       album: item.album || 'JohnMusic Share',
       duration: item.d || (item.durationMs ? Math.round(item.durationMs / 1000) : 180),
-      coverUrl: item.c || item.img || item.imageUrl || coverUrl,
-      platform: (item.p || item.s || (item.v || item.videoId ? 'youtube' : 'spotify')) as Platform,
+      coverUrl: item.c || item.img || item.imageUrl || (item.y ? `https://i.ytimg.com/vi/${item.y}/hqdefault.jpg` : coverUrl),
+      platform: (item.p || (item.y ? 'youtube' : 'spotify')) as Platform,
       youtubeId: item.y || item.v || item.videoId,
       streamUrl: item.s || item.audioUrl
     }));
