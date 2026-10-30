@@ -242,6 +242,21 @@ export const PlaylistProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     coverUrl?: string,
     tracks?: Track[]
   ): Playlist => {
+    // If this name or ID was in deleted blacklist, remove it so the new playlist is not filtered out on reload
+    const trimmedName = name.toLowerCase().trim();
+    try {
+      const rawNames = localStorage.getItem(STORAGE_DELETED_NAMES_KEY) || getCookie(STORAGE_DELETED_NAMES_KEY);
+      if (rawNames) {
+        const nameSet = new Set<string>(JSON.parse(rawNames));
+        if (nameSet.has(trimmedName)) {
+          nameSet.delete(trimmedName);
+          const updatedJson = JSON.stringify(Array.from(nameSet));
+          localStorage.setItem(STORAGE_DELETED_NAMES_KEY, updatedJson);
+          setCookie(STORAGE_DELETED_NAMES_KEY, updatedJson);
+        }
+      }
+    } catch {}
+
     const newPl: Playlist = {
       id: `pl_custom_${Date.now()}`,
       name,
@@ -320,6 +335,22 @@ export const PlaylistProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   };
 
   const updatePlaylist = (id: string, updates: Partial<Playlist>) => {
+    if (updates.name) {
+      const trimmedName = updates.name.toLowerCase().trim();
+      try {
+        const rawNames = localStorage.getItem(STORAGE_DELETED_NAMES_KEY) || getCookie(STORAGE_DELETED_NAMES_KEY);
+        if (rawNames) {
+          const nameSet = new Set<string>(JSON.parse(rawNames));
+          if (nameSet.has(trimmedName)) {
+            nameSet.delete(trimmedName);
+            const updatedJson = JSON.stringify(Array.from(nameSet));
+            localStorage.setItem(STORAGE_DELETED_NAMES_KEY, updatedJson);
+            setCookie(STORAGE_DELETED_NAMES_KEY, updatedJson);
+          }
+        }
+      } catch {}
+    }
+
     setPlaylists(prev => {
       const next = prev.map(p => (p.id === id ? { ...p, ...updates, isCustom: true } : p));
       saveToLocalStorage(STORAGE_PLAYLISTS_KEY, next);
@@ -387,6 +418,20 @@ export const PlaylistProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         }
       }
     }
+
+    const trimmedName = newName.toLowerCase().trim();
+    try {
+      const rawNames = localStorage.getItem(STORAGE_DELETED_NAMES_KEY) || getCookie(STORAGE_DELETED_NAMES_KEY);
+      if (rawNames) {
+        const nameSet = new Set<string>(JSON.parse(rawNames));
+        if (nameSet.has(trimmedName)) {
+          nameSet.delete(trimmedName);
+          const updatedJson = JSON.stringify(Array.from(nameSet));
+          localStorage.setItem(STORAGE_DELETED_NAMES_KEY, updatedJson);
+          setCookie(STORAGE_DELETED_NAMES_KEY, updatedJson);
+        }
+      }
+    } catch {}
 
     const firstCover = selected.find(p => p.coverUrl)?.coverUrl;
     const merged: Playlist = {
