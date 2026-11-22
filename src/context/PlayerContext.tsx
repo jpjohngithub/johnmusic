@@ -90,8 +90,21 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const crossfadeTimerRef = useRef<number | null>(null);
   const playSessionIdRef = useRef<number>(0);
   const stableAudioRef = useRef<boolean>(stableAudio);
+  const currentTrackRef = useRef<Track | null>(null);
+  const silentAudioRef = useRef<HTMLAudioElement | null>(null);
+  const bgWorkerRef = useRef<Worker | null>(null);
 
   stableAudioRef.current = stableAudio;
+  currentTrackRef.current = currentTrack;
+
+  const ensureBackgroundKeepAlive = useCallback((play: boolean) => {
+    if (!silentAudioRef.current) return;
+    if (play) {
+      silentAudioRef.current.play().catch(() => {});
+    } else {
+      silentAudioRef.current.pause();
+    }
+  }, []);
 
   activeDeckRef.current = activeDeck;
   volumeRef.current = volume;
@@ -290,7 +303,8 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     isCrossfadingRef.current = true;
     setIsCrossfading(true);
 
-    const durationMs = Math.max(1000, crossfadeDurationRef.current * 1000);
+    const isHidden = typeof document !== 'undefined' && document.hidden;
+    const durationMs = isHidden ? 300 : Math.max(1000, crossfadeDurationRef.current * 1000);
     const startTime = Date.now();
     const masterVol = volumeRef.current;
 
@@ -312,6 +326,11 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       setIsCrossfading(false);
       isCrossfadingRef.current = false;
     };
+
+    if (isHidden) {
+      setTimeout(finishCrossfade, 300);
+      return;
+    }
 
     // Use setInterval instead of requestAnimationFrame so audio ramps smoothly even in background tabs
     const intervalId = window.setInterval(() => {
@@ -360,6 +379,7 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   // Start playback on a deck
   const startDeckPlayback = (deck: 'A' | 'B', track: Track, initialVol = volumeRef.current) => {
+    ensureBackgroundKeepAlive(true);
     const isYt = isTrackYouTube(track);
     const effectiveVol = Math.max(0, Math.min(1, initialVol * getStableVolumeMultiplier(track)));
 
@@ -544,6 +564,7 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const isYt = isTrackYouTube(currentTrack);
 
     if (isPlaying) {
+      ensureBackgroundKeepAlive(false);
       if (isYt) {
         const yt = targetDeck === 'A' ? ytDeckA.current : ytDeckB.current;
         yt?.pauseVideo?.();
@@ -553,6 +574,7 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       }
       setIsPlaying(false);
     } else {
+      ensureBackgroundKeepAlive(true);
       if (isYt) {
         const yt = targetDeck === 'A' ? ytDeckA.current : ytDeckB.current;
         yt?.playVideo?.();
@@ -562,7 +584,7 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       }
       setIsPlaying(true);
     }
-  }, [isPlaying, currentTrack]);
+  }, [isPlaying, currentTrack, ensureBackgroundKeepAlive]);
 
   // Seek
   const seek = useCallback((seconds: number) => {
@@ -589,50 +611,146 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }
   }, [currentTrack]);
 
-  // Time ticker & auto-crossfade trigger (3-8 seconds before track end)
+  // Check playback progress and advance track when finished or entering crossfade
+  const checkTrackProgress = useCallback(() => {
+    if (!isPlayingRef.current) return;
+
+    const deck = activeDeckRef.current;
+    const track = currentTrackRef.current;
+    const isYt = isTrackYouTube(track);
+
+    let cur = 0;
+    let dur = 0;
+
+    if (isYt) {
+      const yt = deck === 'A' ? ytDeckA.current : ytDeckB.current;
+      if (yt?.getCurrentTime && yt?.getDuration) {
+        cur = yt.getCurrentTime() || 0;
+        dur = yt.getDuration() || 0;
+      }
+    } else {
+      const audio = deck === 'A' ? audioDeckA.current : audioDeckB.current;
+      if (audio) {
+        cur = audio.currentTime || 0;
+        dur = audio.duration || track?.duration || 0;
+      }
+    }
+
+    if (dur > 0) {
+      setCurrentTime(cur);
+      setDuration(dur);
+
+      const remaining = dur - cur;
+      const triggerThreshold = Math.max(3, Math.min(8, crossfadeDurationRef.current));
+
+      // Advance if within crossfade window or reached end
+      const shouldAdvance = (
+        (cur > 4 && remaining <= triggerThreshold) ||
+        (cur >= dur - 0.8)
+      ) && !isCrossfadingRef.current;
+
+      if (shouldAdvance) {
+        const q = queueRef.current;
+        if (q.length > 0 && (queueIndexRef.current < q.length - 1 || isRepeatRef.current)) {
+          nextTrack();
+        }
+      }
+    }
+  }, [nextTrack]);
+
+  // Unthrottled Web Worker ticker for background tabs / locked phone screen
   useEffect(() => {
-    const interval = setInterval(() => {
-      if (!isPlayingRef.current) return;
-
-      const deck = activeDeckRef.current;
-      const isYt = isTrackYouTube(currentTrack);
-
-      let cur = 0;
-      let dur = 0;
-
-      if (isYt) {
-        const yt = deck === 'A' ? ytDeckA.current : ytDeckB.current;
-        if (yt?.getCurrentTime && yt?.getDuration) {
-          cur = yt.getCurrentTime() || 0;
-          dur = yt.getDuration() || 0;
-        }
-      } else {
-        const audio = deck === 'A' ? audioDeckA.current : audioDeckB.current;
-        if (audio) {
-          cur = audio.currentTime || 0;
-          dur = audio.duration || currentTrack?.duration || 0;
-        }
-      }
-
-      if (dur > 0) {
-        setCurrentTime(cur);
-        setDuration(dur);
-
-        // Dynamic early crossfade trigger between 3s and 8s before end (only after track is established)
-        const remaining = dur - cur;
-        const triggerThreshold = Math.max(3, Math.min(8, crossfadeDurationRef.current));
-
-        if (dur > 10 && cur > 5 && remaining <= triggerThreshold && remaining > 0.5 && !isCrossfadingRef.current) {
-          const q = queueRef.current;
-          if (q.length > 0 && (queueIndexRef.current < q.length - 1 || isRepeatRef.current)) {
-            nextTrack();
+    try {
+      const blob = new Blob([`
+        let timer = null;
+        self.onmessage = function(e) {
+          if (e.data === 'start') {
+            if (!timer) timer = setInterval(() => self.postMessage('tick'), 500);
+          } else if (e.data === 'stop') {
+            if (timer) { clearInterval(timer); timer = null; }
           }
-        }
-      }
-    }, 400);
+        };
+      `], { type: 'application/javascript' });
+      const workerUrl = URL.createObjectURL(blob);
+      const worker = new Worker(workerUrl);
+      worker.onmessage = () => {
+        checkTrackProgress();
+      };
+      bgWorkerRef.current = worker;
+      return () => {
+        worker.terminate();
+        URL.revokeObjectURL(workerUrl);
+      };
+    } catch (e) {
+      console.warn('Worker ticker init error:', e);
+    }
+  }, [checkTrackProgress]);
 
-    return () => clearInterval(interval);
-  }, [currentTrack, nextTrack]);
+  // Sync worker state with isPlaying
+  useEffect(() => {
+    if (isPlaying) {
+      bgWorkerRef.current?.postMessage('start');
+    } else {
+      bgWorkerRef.current?.postMessage('stop');
+    }
+  }, [isPlaying]);
+
+  // Standard interval fallback & visibilitychange catchup
+  useEffect(() => {
+    const interval = setInterval(checkTrackProgress, 400);
+
+    const handleVisibilityChange = () => {
+      if (!document.hidden && isPlayingRef.current) {
+        ensureBackgroundKeepAlive(true);
+        checkTrackProgress();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [checkTrackProgress, ensureBackgroundKeepAlive]);
+
+  // MediaSession API for OS lockscreen controls, notification drawer, and background execution priority
+  useEffect(() => {
+    if (!('mediaSession' in navigator)) return;
+
+    if (currentTrack) {
+      try {
+        navigator.mediaSession.metadata = new MediaMetadata({
+          title: currentTrack.title || 'Música',
+          artist: currentTrack.artist || 'Artista',
+          album: currentTrack.album || 'JohnMusic',
+          artwork: currentTrack.coverUrl
+            ? [
+                { src: currentTrack.coverUrl, sizes: '96x96', type: 'image/jpeg' },
+                { src: currentTrack.coverUrl, sizes: '128x128', type: 'image/jpeg' },
+                { src: currentTrack.coverUrl, sizes: '256x256', type: 'image/jpeg' },
+                { src: currentTrack.coverUrl, sizes: '512x512', type: 'image/jpeg' }
+              ]
+            : []
+        });
+      } catch (e) {
+        console.warn('MediaSession metadata error:', e);
+      }
+    }
+
+    try {
+      navigator.mediaSession.playbackState = isPlaying ? 'playing' : 'paused';
+    } catch {}
+
+    try {
+      navigator.mediaSession.setActionHandler('play', () => togglePlay());
+      navigator.mediaSession.setActionHandler('pause', () => togglePlay());
+      navigator.mediaSession.setActionHandler('nexttrack', () => nextTrack());
+      navigator.mediaSession.setActionHandler('previoustrack', () => prevTrack());
+    } catch (e) {
+      console.warn('MediaSession action handler error:', e);
+    }
+  }, [currentTrack, isPlaying, togglePlay, nextTrack, prevTrack]);
 
   const addToQueue = (track: Track) => {
     setQueue(prev => [...prev, track]);
@@ -742,8 +860,16 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         }}
       />
 
+      {/* Silent audio keep-alive to hold browser media session in background / screen off */}
+      <audio
+        ref={silentAudioRef}
+        loop
+        preload="auto"
+        src="data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA"
+      />
+
       {/* Background YouTube Players rendered in viewport with non-zero opacity to avoid Chrome offscreen iframe throttling */}
-      <div className="fixed bottom-1 right-1 w-[200px] h-[150px] pointer-events-none opacity-[0.005] z-[-1] overflow-hidden">
+      <div className="fixed bottom-1 right-1 w-[200px] h-[150px] pointer-events-none opacity-[0.02] z-[-1] overflow-hidden">
         <div id="yt-player-a" />
         <div id="yt-player-b" />
       </div>
